@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+CLAUDE.md
+AGENTS.md
+
+/require
+/scripts
+
+# One-off files & temporary directories
+/scratch
+build_log.txt
+*.log

@@ -1,0 +1,68 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getUserByEmail, validatePassword } from '@/lib/queries/auth';
+import { signToken, COOKIE_NAME } from '@/lib/auth';
+import { query } from '@/lib/db';
+
+export async function GET() {
+  try {
+    const result = await query('SELECT name, email, role, outlet_id FROM users ORDER BY id ASC');
+    return NextResponse.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Failed to fetch demo users:', err);
+    return NextResponse.json({ success: false, data: [] }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const { email, password } = await req.json();
+
+    if (!email || !password) {
+      return NextResponse.json({ success: false, message: 'Email dan password wajib diisi', data: null }, { status: 400 });
+    }
+
+    const user = await getUserByEmail(email.toLowerCase().trim());
+    if (!user) {
+      return NextResponse.json({ success: false, message: 'Email atau password salah', data: null }, { status: 401 });
+    }
+
+    const valid = await validatePassword(password, user.password_hash);
+    if (!valid) {
+      return NextResponse.json({ success: false, message: 'Email atau password salah', data: null }, { status: 401 });
+    }
+
+    const token = signToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      outletId: user.outlet_id ?? null,
+      name: user.name,
+    });
+
+    const response = NextResponse.json({
+      success: true,
+      message: 'Login berhasil',
+      data: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        outlet_id: user.outlet_id,
+        outlet_name: user.outlet_name,
+      },
+    });
+
+    response.cookies.set(COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: '/',
+    });
+
+    return response;
+  } catch (err) {
+    console.error('Login error:', err);
+    return NextResponse.json({ success: false, message: 'Server error', data: null }, { status: 500 });
+  }
+}

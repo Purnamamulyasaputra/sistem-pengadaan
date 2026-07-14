@@ -1,0 +1,467 @@
+'use client';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
+import { Table } from '@/components/ui/Table';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
+import { Toast } from '@/components/ui/Toast';
+
+interface DeliveryNote {
+  id: number; delivery_note_number: string; status: string;
+  order_id: number; delivery_date: string; driver_name: string;
+  proof_image_url?: string;
+}
+
+function getDisplayFormat(qty: number, unit: string) {
+  const u = (unit || '').trim().toLowerCase();
+  if (u === 'gr' && qty >= 1000) return { unit: 'kg', mult: 1000, value: qty / 1000 };
+  if (u === 'ml' && qty >= 1000) return { unit: 'Liter', mult: 1000, value: qty / 1000 };
+  return { unit, mult: 1, value: qty };
+}
+
+export default function ReceiveGoodsPage() {
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [scanModal, setScanModal] = useState<DeliveryNote | null>(null);
+
+  const [toast, setToast] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isOpen: false, message: '', type: 'info' });
+  const [itemsList, setItemsList] = useState<any[]>([]);
+
+  // Row states
+  const [qtys, setQtys] = useState<Record<number, number | ''>>({});
+  const [reasons, setReasons] = useState<Record<number, string>>({});
+  const [discNotes, setDiscNotes] = useState<Record<number, string>>({});
+
+  // Global barcode scanner
+  const [globalBarcode, setGlobalBarcode] = useState('');
+  const [scanning, setScanning] = useState(false);
+
+  // Finalization states
+  const [proofImage, setProofImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  function handlePhotoChange(file: File | undefined) {
+    if (!file) return;
+    setProofImage(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+
+  const fetchNotes = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/delivery-notes`);
+    const data = await res.json();
+    // Show DIKIRIM and DITERIMA, hide DRAFT and CANCELED
+    const allowed = (data.data ?? []).filter((d: any) => d.status === 'DIKIRIM' || d.status === 'DITERIMA');
+    setDeliveryNotes(allowed);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchNotes(); }, [fetchNotes]);
+
+  async function openScan(dn: DeliveryNote) {
+    setScanModal(dn);
+    setToast({ ...toast, isOpen: false });
+    setProofImage(null);
+    setPreviewUrl(dn.proof_image_url || null);
+    setGlobalBarcode('');
+    setQtys({});
+    setReasons({});
+    setDiscNotes({});
+
+    const res = await fetch(`/api/delivery-notes/${dn.id}`);
+    const data = await res.json();
+    setItemsList(data.data?.items ?? []);
+  }
+
+  async function handleGlobalScan(e: React.FormEvent) {
+    e.preventDefault();
+    if (!scanModal || !globalBarcode.trim()) return;
+
+    const barcode = globalBarcode.trim();
+    // Find matching item by unique_barcode or fallback to item.barcode
+    const matchedItem = itemsList.find(i => !i.scanned_in_at && (i.unique_barcode === barcode || i.barcode === barcode));
+
+    if (!matchedItem) {
+      // Check if it was already scanned
+      const alreadyScanned = itemsList.find(i => i.scanned_in_at && (i.unique_barcode === barcode || i.barcode === barcode));
+      if (alreadyScanned) {
+        setToast({ isOpen: true, message: `Item ${alreadyScanned.item_name} has already been received!`, type: 'info' });
+      } else {
+        setToast({ isOpen: true, message: 'Barcode not found in this Delivery Order.', type: 'error' });
+      }
+      setGlobalBarcode('');
+      return;
+    }
+
+    const inputQty = qtys[matchedItem.id];
+    if (inputQty === undefined || inputQty === '' || inputQty < 0) {
+      setToast({ isOpen: true, message: `Please input Actual Quantity for ${matchedItem.item_name} in the table first.`, type: 'error' });
+      return;
+    }
+
+    const shippedFmt = getDisplayFormat(Number(matchedItem.qty_shipped), matchedItem.smallest_unit);
+    const actualQtyReceivedBase = Number(inputQty) * shippedFmt.mult;
+
+    const isDiscrepancy = actualQtyReceivedBase !== Number(matchedItem.qty_shipped);
+    const notesStr = discNotes[matchedItem.id] || '';
+
+    if (isDiscrepancy && !notesStr.trim()) {
+      setToast({ isOpen: true, message: `Discrepancy reason/notes are required for ${matchedItem.item_name}.`, type: 'error' });
+      return;
+    }
+
+    setScanning(true);
+    setToast({ ...toast, isOpen: false });
+    try {
+      const res = await fetch(`/api/delivery-notes/${scanModal.id}/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delivery_note_item_id: matchedItem.id,
+          item_id: matchedItem.item_id,
+          barcode_scanned: barcode,
+          scan_type: 'IN',
+          device_info: 'Web Dashboard Outlet',
+          qty_received: actualQtyReceivedBase,
+          discrepancy_reason: isDiscrepancy ? notesStr.trim() : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setToast({ isOpen: true, message: data.message.replace(/^Error: /i, ''), type: 'error' });
+        return;
+      }
+
+      setToast({ isOpen: true, message: `${matchedItem.item_name} received successfully!`, type: 'success' });
+      setGlobalBarcode('');
+
+      // Refresh items list
+      const r = await fetch(`/api/delivery-notes/${scanModal.id}`);
+      const d = await r.json();
+      setItemsList(d.data?.items ?? []);
+
+      const updatedItems = d.data?.items ?? [];
+      const allDone = updatedItems.every((i: any) => i.scanned_in_at);
+
+      if (allDone) {
+        // Auto-finalize — pass values directly to avoid stale state closure
+        await doFinalize(scanModal.id, proofImage);
+      } else {
+        setTimeout(() => barcodeInputRef.current?.focus(), 100);
+      }
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function doFinalize(dnId: number, photo: File | null) {
+    if (!photo) {
+      setToast({ isOpen: true, message: 'Proof of delivery photo is required.', type: 'error' });
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', photo);
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      const uploadData = await uploadRes.json();
+      if (!uploadData.success) {
+        setToast({ isOpen: true, message: `Error uploading photo: ${uploadData.message}`, type: 'error' });
+        return;
+      }
+      const confirmRes = await fetch(`/api/delivery-notes/${dnId}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proof_image_url: uploadData.url }),
+      });
+      const confirmData = await confirmRes.json();
+      if (!confirmData.success) {
+        setToast({ isOpen: true, message: `Error finalizing: ${confirmData.message}`, type: 'error' });
+        return;
+      }
+      setScanModal(null);
+      setToast({ isOpen: true, message: 'Delivery Order received and finalized!', type: 'success' });
+      fetchNotes();
+    } catch (e: any) {
+      setToast({ isOpen: true, message: e.message, type: 'error' });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const allScannedIn = itemsList.length > 0 && itemsList.every(i => i.scanned_in_at);
+
+  return (
+    <section className="screen">
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <h3>Purchase Request Outlet</h3>
+          </div>
+        </div>
+        <div style={{ background: '#f0fdf4', borderBottom: '1px solid #bbf7d0', padding: '16px 20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <Link href="/outlet/requests/create" style={{ textDecoration: 'none' }}>
+            <Button variant="outline" style={{ background: 'white', borderColor: '#86efac' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M12 5v14M5 12h14" /></svg>
+              Create Request
+            </Button>
+          </Link>
+          <Link href="/outlet/requests" style={{ textDecoration: 'none' }}>
+            <Button variant="outline" style={{ background: 'white', borderColor: '#86efac' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+              Request History
+            </Button>
+          </Link>
+          <Link href="/outlet/receive-goods" style={{ textDecoration: 'none' }}>
+            <Button variant="primary">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              Receive Goods (Scan IN)
+            </Button>
+          </Link>
+        </div>
+
+        <div className="card-body flush">
+          {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Loading Delivery Orders...</div> : deliveryNotes.length === 0 ? (
+            <div className="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1 3h15v13H1z M16 8h4l3 3v5h-7V8z" /></svg>
+              <h4>No deliveries</h4>
+              <p>No Delivery Orders in SHIPPED status for your outlet yet</p>
+            </div>
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <th>DO No.</th>
+                  <th>Ref PO No.</th>
+                  <th>Delivery Date</th>
+                  <th>Driver</th>
+                  <th className="center">Status</th>
+                  <th className="right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deliveryNotes.map(dn => (
+                  <tr key={dn.id}>
+                    <td className="font-mono text-primary font-bold">{dn.delivery_note_number}</td>
+                    <td className="font-mono font-bold">
+                      PO-{new Date(dn.delivery_date).getFullYear()}-{String(dn.order_id).padStart(5, '0')}
+                    </td>
+                    <td>{new Date(dn.delivery_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                    <td className="muted">{dn.driver_name || '-'}</td>
+                    <td className="center">
+                      <Badge variant={dn.status === 'DITERIMA' ? 'green' : 'amber'}>{dn.status}</Badge>
+                    </td>
+                    <td className="right">
+                      <Button variant={dn.status === 'DITERIMA' ? 'outline' : 'primary'} size="sm" onClick={() => openScan(dn)}>
+                        {dn.status === 'DITERIMA' ? 'View Receipt' : 'Verify Item'}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </div>
+      </div>
+
+      <Modal isOpen={!!scanModal} onClose={() => setScanModal(null)} title={`Receive Goods - ${scanModal?.delivery_note_number}`} maxWidth={900}>
+        <div className="modal-body" style={{ padding: '16px 20px' }}>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h5 style={{ margin: 0, color: 'var(--primary)', fontSize: 16 }}>Items Verification</h5>
+            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 8 }}>
+            </div>
+          </div>
+
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 24, overflowX: 'auto' }}>
+            <Table>
+              <thead><tr><th>Item Data</th><th className="center">Qty Shipped</th><th>Actual Qty Received</th><th>Discrepancy (If Any)</th><th className="center">Status</th></tr></thead>
+              <tbody>
+                {itemsList.map(item => {
+                  const shippedFmt = getDisplayFormat(Number(item.qty_shipped), item.smallest_unit);
+                  const isScanned = !!item.scanned_in_at;
+
+                  if (isScanned) {
+                    const received = item.qty_received != null ? getDisplayFormat(Number(item.qty_received), item.smallest_unit) : null;
+                    return (
+                      <tr key={item.id}>
+                        <td className="font-bold">
+                          {item.item_name}
+                        </td>
+                        <td className="center num">{shippedFmt.value.toLocaleString('en-US', { maximumFractionDigits: 3 })} {shippedFmt.unit}</td>
+                        <td className="center num font-bold" style={{ color: item.qty_received != null && Number(item.qty_received) !== Number(item.qty_shipped) ? 'var(--danger)' : 'inherit' }}>
+                          {received != null ? `${received.value.toLocaleString('en-US', { maximumFractionDigits: 3 })} ${received.unit}` : '-'}
+                        </td>
+                        <td>
+                          {item.discrepancy_reason ? (
+                            <div style={{ fontSize: 12, color: 'var(--danger)', lineHeight: 1.3 }}>
+                              {item.discrepancy_reason}
+                            </div>
+                          ) : (
+                            <span className="muted" style={{ fontSize: 12 }}>-</span>
+                          )}
+                        </td>
+                        <td className="center">
+                          <Badge variant="green">✓ Received</Badge>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  const inputQty = qtys[item.id] !== undefined ? qtys[item.id] : '';
+                  const isDiscrepancy = inputQty !== '' && Number(inputQty) !== shippedFmt.value;
+
+                  return (
+                    <tr key={item.id}>
+                      <td style={{ verticalAlign: 'top', paddingTop: 16 }}>
+                        <div className="font-bold">{item.item_name}</div>
+                      </td>
+                      <td className="center num" style={{ verticalAlign: 'top', paddingTop: 16 }}>
+                        {shippedFmt.value.toLocaleString('en-US', { maximumFractionDigits: 3 })} {shippedFmt.unit}
+                      </td>
+                      <td style={{ verticalAlign: 'top', paddingTop: 12, paddingBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Input
+                            type="number"
+                            step="any"
+                            min={0}
+                            placeholder="Qty"
+                            value={inputQty}
+                            onChange={e => setQtys({ ...qtys, [item.id]: e.target.value === '' ? '' : Number(e.target.value) })}
+                            style={{ width: 100, fontSize: 13, padding: '6px 10px' }}
+                          />
+                          <span style={{ fontSize: 13 }}>{shippedFmt.unit}</span>
+                        </div>
+                      </td>
+                      <td style={{ verticalAlign: 'top', paddingTop: 12, paddingBottom: 16 }}>
+                        {isDiscrepancy ? (
+                          <div style={{ width: 160 }}>
+                            <Input
+                              value={discNotes[item.id] || ''}
+                              onChange={e => setDiscNotes({ ...discNotes, [item.id]: e.target.value })}
+                              placeholder="Write reason..."
+                              style={{ fontSize: 12, padding: '4px 8px', marginTop: 4, width: '100%' }}
+                            />
+                          </div>
+                        ) : (
+                          <span className="muted" style={{ fontSize: 12, marginTop: 4, display: 'inline-block' }}>-</span>
+                        )}
+                      </td>
+                      <td className="center" style={{ verticalAlign: 'top', paddingTop: 16 }}>
+                        <Badge variant="gray">Waiting Scan</Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {scanModal?.status !== 'DITERIMA' && (
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()} style={{ whiteSpace: 'nowrap' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                  {proofImage || previewUrl ? 'Change Photo' : 'Upload Photo'}
+                </Button>
+              )}
+              {scanModal?.status !== 'DITERIMA' && (
+                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" capture="environment" onChange={e => handlePhotoChange(e.target.files?.[0])} />
+              )}
+              {previewUrl && (
+                <img
+                  src={previewUrl}
+                  alt="Proof"
+                  onClick={() => setViewingPhoto(true)}
+                  style={{ height: 40, width: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'zoom-in' }}
+                />
+              )}
+              {scanModal?.status === 'DITERIMA' && previewUrl && (
+                <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>Proof of Delivery</span>
+              )}
+            </div>
+
+            {allScannedIn ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {scanModal?.status !== 'DITERIMA' && (
+                  <Button 
+                    variant="primary" 
+                    type="button" 
+                    onClick={() => { if (scanModal) doFinalize(scanModal.id, proofImage); }}
+                    disabled={uploading || !proofImage}
+                    style={{ flex: 1 }}
+                  >
+                    {uploading ? 'Finalizing...' : 'Finalize Receipt'}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <form onSubmit={handleGlobalScan} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Input
+                  ref={barcodeInputRef}
+                  value={globalBarcode}
+                  onChange={e => setGlobalBarcode(e.target.value)}
+                  placeholder={!proofImage ? 'Upload photo first...' : 'Scan barcode...'}
+                  disabled={scanning || !proofImage || uploading}
+                  autoFocus
+                  style={{ flex: 1 }}
+                />
+                <Button variant="primary" type="submit" disabled={scanning || !globalBarcode.trim() || !proofImage || uploading}>
+                  {uploading ? 'Finalizing...' : scanning ? 'Verifying...' : 'Submit Scan'}
+                </Button>
+              </form>
+            )}
+          </div>
+
+        </div>
+
+        <div className="modal-actions" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button variant="outline" onClick={() => setScanModal(null)}>Close</Button>
+        </div>
+      </Modal>
+
+      {/* Inline Photo Viewer Overlay */}
+      {viewingPhoto && previewUrl && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 99999,
+            background: 'rgba(0,0,0,0.92)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <button
+            onClick={() => setViewingPhoto(false)}
+            style={{
+              position: 'absolute', top: 20, left: 20,
+              background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8,
+              color: '#fff', cursor: 'pointer', padding: '8px 16px',
+              fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+            Kembali
+          </button>
+          <img
+            src={previewUrl}
+            alt="Proof of delivery"
+            style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
+          />
+        </div>
+      )}
+
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isOpen: false })}
+      />
+    </section>
+  );
+}
