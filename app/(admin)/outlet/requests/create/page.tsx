@@ -20,7 +20,7 @@ export default function CreateRequestPage() {
   const [selectedUnit, setSelectedUnit] = useState('');
   const [qty, setQty] = useState('');
   const [note, setNote] = useState('');
-  
+
   const [orderDate] = useState(new Date().toISOString().split('T')[0]);
   const [deliveryDate, setDeliveryDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +28,7 @@ export default function CreateRequestPage() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   // Hardcoded for Phase 1 demo
-  const OUTLET_ID = 1; 
+  const OUTLET_ID = 1;
   const CREATED_BY = 2; // Assuming 2 is an outlet admin
 
   useEffect(() => {
@@ -54,15 +54,15 @@ export default function CreateRequestPage() {
       return;
     }
     const isSmallest = selectedUnit === foundItem.smallest_unit && selectedUnit !== foundItem.purchase_unit;
-    setCart([...cart, { 
-      id: Date.now(), 
-      item_id: foundItem.id, 
-      name: foundItem.name, 
+    setCart([...cart, {
+      id: Date.now(),
+      item_id: foundItem.id,
+      name: foundItem.name,
       uom: selectedUnit,
       smallest_unit: foundItem.smallest_unit,
       ratio: isSmallest ? 1 : foundItem.conversion_ratio,
-      qty: parseFloat(qty) || 1, 
-      note 
+      qty: parseFloat(qty) || 1,
+      note
     }]);
     setSearchTerm(''); setSelectedItemId(null); setSelectedUnit(''); setQty(''); setNote('');
   };
@@ -102,8 +102,8 @@ export default function CreateRequestPage() {
       router.push('/outlet/requests');
     } catch (err: any) {
       setError(err.message);
-    } finally { 
-      setSubmitting(false); 
+    } finally {
+      setSubmitting(false);
       setShowConfirm(false);
     }
   }
@@ -119,13 +119,13 @@ export default function CreateRequestPage() {
         <div style={{ background: '#f0fdf4', borderBottom: '1px solid #bbf7d0', padding: '16px 20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <Link href="/outlet/requests/create" style={{ textDecoration: 'none' }}>
             <Button variant="primary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M12 5v14M5 12h14"/></svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M12 5v14M5 12h14" /></svg>
               Create Request
             </Button>
           </Link>
           <Link href="/outlet/requests" style={{ textDecoration: 'none' }}>
             <Button variant="outline" style={{ background: 'white', borderColor: '#86efac' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
               Request History
             </Button>
           </Link>
@@ -147,14 +147,14 @@ export default function CreateRequestPage() {
             </div>
             <div className="form-group">
               <label>Expected Delivery</label>
-              <Input 
-                type="date" 
-                value={deliveryDate} 
+              <Input
+                type="date"
+                value={deliveryDate}
                 min={orderDate}
-                onChange={(e) => setDeliveryDate(e.target.value)} 
+                onChange={(e) => setDeliveryDate(e.target.value)}
                 onKeyDown={(e) => e.preventDefault()}
                 onClick={(e) => {
-                  try { (e.target as HTMLInputElement).showPicker(); } catch (err) {}
+                  try { (e.target as HTMLInputElement).showPicker(); } catch (err) { }
                 }}
               />
             </div>
@@ -163,10 +163,10 @@ export default function CreateRequestPage() {
           <h4 style={{ marginBottom: 12 }}>Add Items</h4>
           <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
             <div style={{ flex: 2, position: 'relative' }}>
-              <Input 
-                type="text" 
-                placeholder="Type to search item..." 
-                value={searchTerm} 
+              <Input
+                type="text"
+                placeholder="Type to search item..."
+                value={searchTerm}
                 onChange={e => { setSearchTerm(e.target.value); setShowDropdown(true); setSelectedItemId(null); }}
                 onFocus={() => setShowDropdown(true)}
                 onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
@@ -174,8 +174,8 @@ export default function CreateRequestPage() {
               {showDropdown && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                   {items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase())).map(i => (
-                    <div 
-                      key={i.id} 
+                    <div
+                      key={i.id}
                       style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}
                       onMouseDown={() => { setSearchTerm(i.name); setSelectedItemId(i.id); setSelectedUnit(i.purchase_unit); setShowDropdown(false); }}
                       onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
@@ -193,13 +193,13 @@ export default function CreateRequestPage() {
               )}
             </div>
             <div style={{ flex: 1, position: 'relative' }}>
-              <Input 
-                type="number" 
-                placeholder="Qty" 
-                value={qty} 
+              <Input
+                type="number"
+                placeholder="Qty"
+                value={qty}
                 onChange={e => setQty(e.target.value)}
                 onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                style={{ width: '100%' }} 
+                style={{ width: '100%' }}
               />
               {selectedItemId && qty && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, fontSize: 11, color: 'var(--muted)', marginTop: 4, whiteSpace: 'nowrap' }}>
@@ -215,8 +215,8 @@ export default function CreateRequestPage() {
               )}
             </div>
             <div style={{ width: 100 }}>
-              <select 
-                className="input" 
+              <select
+                className="input"
                 disabled={!selectedItemId}
                 value={selectedUnit}
                 onChange={e => setSelectedUnit(e.target.value)}
@@ -263,7 +263,7 @@ export default function CreateRequestPage() {
                   <td>{c.note}</td>
                   <td className="center">
                     <Button size="sm" onClick={() => removeCartItem(c.id)} title="Delete" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                     </Button>
                   </td>
                 </tr>

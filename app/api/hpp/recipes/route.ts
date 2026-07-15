@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHppRecipes, getHppKitchenSummary, createRecipe } from '@/lib/queries/hpp';
+import { getOutletHppRecipes, getOutletHppKitchenSummary } from '@/lib/queries/outlet-menus';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -12,18 +14,27 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit;
 
   try {
+    const session = await getSession();
+    const isOutlet = session?.role === 'ADMIN_OUTLET' && session.outletId;
+
     if (tab === 'kitchen') {
-      const data = await getHppKitchenSummary();
+      const data = isOutlet ? await getOutletHppKitchenSummary(session.outletId as number) : await getHppKitchenSummary();
       return NextResponse.json({ data });
     }
 
-    const result = await getHppRecipes({
-      venueId: venueId ? parseInt(venueId) : undefined,
-      sourceSheet: sourceSheet ?? undefined,
-      search,
-      limit,
-      offset,
-    });
+    const result = isOutlet
+      ? await getOutletHppRecipes(session.outletId as number, {
+          search,
+          limit,
+          offset,
+        })
+      : await getHppRecipes({
+          venueId: venueId ? parseInt(venueId) : undefined,
+          sourceSheet: sourceSheet ?? undefined,
+          search,
+          limit,
+          offset,
+        });
 
     return NextResponse.json({
       data: result.data,

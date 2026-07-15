@@ -61,12 +61,16 @@ const CENTRAL_MENU: NavItem[] = [
 const OUTLET_MENU: NavItem[] = [
   { section: 'MAIN' },
   { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
+  { section: 'CATALOG & MENUS' },
+  { href: '/outlet/menus', label: 'POS Menus & COGS', icon: <Icon name="hpp" /> },
   { section: 'SALES & DATA' },
   { href: '/outlet/sales', label: 'Sales Analytics', icon: <Icon name="trend" /> },
-  { section: 'REQUESTS' },
-  { href: '/outlet/requests', label: 'Requests', icon: <Icon name="list" /> },
+  { section: 'PURCHASING' },
+  { href: '/outlet/requests', label: 'Purchase Order', icon: <Icon name="cart" /> },
   { section: 'INVENTORY' },
-  { href: '/opname/outlet', label: 'Inventory', icon: <Icon name="box" /> },
+  { href: '/outlet/inventory/stock', label: 'Stock & Items', icon: <Icon name="db" /> },
+  { href: '/outlet/receive-goods', label: 'Receive Goods', icon: <Icon name="truck" /> },
+  { href: '/opname/outlet', label: 'Stock Opname', icon: <Icon name="clipboard" /> },
   { section: 'ACCOUNT' },
   { href: '/settings/profile', label: 'Profile & Account', icon: <Icon name="user" /> },
 ];
@@ -111,10 +115,17 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             setLiveRequestCount(data.count ?? 0);
           }
         } else if (role === 'ADMIN_OUTLET') {
-          const res = await fetch('/api/delivery-notes/shipped-count', { cache: 'no-store' });
-          if (res.ok) {
-            const data = await res.json();
+          const [reqRes, alertsRes] = await Promise.all([
+            fetch('/api/delivery-notes/shipped-count', { cache: 'no-store' }),
+            fetch('/api/outlet/alerts/count', { cache: 'no-store' })
+          ]);
+          if (reqRes.ok) {
+            const data = await reqRes.json();
             setLiveRequestCount(data.count ?? 0);
+          }
+          if (alertsRes.ok) {
+            const data = await alertsRes.json();
+            setLiveAlertCount(data.count ?? 0);
           }
         }
       } catch (e) {
@@ -129,7 +140,9 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
 
   const menuWithBadge = menu.map(item => {
     if (item.href === '/alerts') return { ...item, badge: liveAlertCount };
-    if (item.href === '/requests' || item.href === '/outlet/requests') return { ...item, badge: liveRequestCount };
+    if (item.href === '/requests') return { ...item, badge: liveRequestCount };
+    if (item.href === '/outlet/inventory/stock') return { ...item, badge: liveAlertCount };
+    if (item.href === '/outlet/requests') return { ...item, badge: liveRequestCount };
     return item;
   });
 
@@ -173,10 +186,8 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             if (item.href === '/purchase-orders' && pathname.startsWith('/goods-receipt')) isActive = true;
             if (item.href === '/stock-card' && (pathname.startsWith('/delivery-orders') || pathname.startsWith('/opname/central'))) isActive = true;
             if (item.href === '/reports' && pathname.startsWith('/price-history')) isActive = true;
-            if (item.href === '/opname/outlet' && pathname.startsWith('/outlet/items')) isActive = true;
             if (item.href === '/master-data/items' && pathname.startsWith('/master-data')) isActive = true;
             if (item.href === '/hpp' && pathname.startsWith('/hpp')) isActive = true;
-            if (item.href === '/outlet/requests' && pathname.startsWith('/outlet/receive-goods')) isActive = true;
             return (
               <Link
                 key={item.href}

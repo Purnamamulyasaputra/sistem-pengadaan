@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHppMenus, getHppVenues, getHppCategories, getHppVsSale } from '@/lib/queries/hpp';
+import { getOutletHppMenus } from '@/lib/queries/outlet-menus';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -12,6 +14,9 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit;
 
   try {
+    const session = await getSession();
+    const isOutlet = session?.role === 'ADMIN_OUTLET' && session.outletId;
+
     if (tab === 'margin') {
       const data = await getHppVsSale({
         marginFlag: marginFlag ?? undefined,
@@ -20,14 +25,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    const menusPromise = isOutlet 
+      ? getOutletHppMenus(session.outletId as number, {
+          categoryId: categoryId ? parseInt(categoryId) : undefined,
+          marginFlag: marginFlag ?? undefined,
+          search,
+          limit,
+          offset,
+        })
+      : getHppMenus({
+          categoryId: categoryId ? parseInt(categoryId) : undefined,
+          marginFlag: marginFlag ?? undefined,
+          search,
+          limit,
+          offset,
+        });
+
     const [menusResult, venues, categories] = await Promise.all([
-      getHppMenus({
-        categoryId: categoryId ? parseInt(categoryId) : undefined,
-        marginFlag: marginFlag ?? undefined,
-        search,
-        limit,
-        offset,
-      }),
+      menusPromise,
       getHppVenues(),
       getHppCategories(),
     ]);

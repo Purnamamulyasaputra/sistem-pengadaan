@@ -123,41 +123,41 @@ export default function OutletRequestsPage() {
         <div className="modal-body" style={{ padding: '16px 20px' }}>
           <p className="muted" style={{ marginBottom: 20 }}>Created on {selectedOrder ? new Date(selectedOrder.order.order_date).toLocaleDateString('id-ID') : ''}</p>
 
-        <div style={{ border: '1px solid var(--border)', borderRadius: 8 }}>
-          {selectedOrder?.items?.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>
-              Item data is empty or not found.
-            </div>
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <th>Item</th><th>Category</th><th className="right">Qty Requested</th>
-                  <th className="center">Fulfillment</th><th className="center">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedOrder?.items?.map(item => (
-                  <tr key={item.id}>
-                    <td className="font-bold">{item.item_name}</td>
-                    <td className="muted">{item.category_name}</td>
-                    <td className="right">
-                      <div className="font-bold num">{parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
-                    </td>
-                    <td className="center">
-                      <Badge variant={item.fulfillment_status === 'SANGGUP' ? 'green' : item.fulfillment_status === 'TIDAK' ? 'red' : 'amber'}>
-                        {item.fulfillment_status === 'SANGGUP' ? 'Available' : item.fulfillment_status === 'TIDAK' ? 'Unavailable' : 'Pending'}
-                      </Badge>
-                    </td>
-                    <td className="center">
-                      <Badge variant="gray">{ITEM_STATUS_LABELS[item.item_status] ?? item.item_status}</Badge>
-                    </td>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8 }}>
+            {selectedOrder?.items?.length === 0 ? (
+              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>
+                Item data is empty or not found.
+              </div>
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Item</th><th>Category</th><th className="right">Qty Requested</th>
+                    <th className="center">Fulfillment</th><th className="center">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {selectedOrder?.items?.map(item => (
+                    <tr key={item.id}>
+                      <td className="font-bold">{item.item_name}</td>
+                      <td className="muted">{item.category_name}</td>
+                      <td className="right">
+                        <div className="font-bold num">{parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
+                      </td>
+                      <td className="center">
+                        <Badge variant={item.fulfillment_status === 'SANGGUP' ? 'green' : item.fulfillment_status === 'TIDAK' ? 'red' : 'amber'}>
+                          {item.fulfillment_status === 'SANGGUP' ? 'Available' : item.fulfillment_status === 'TIDAK' ? 'Unavailable' : 'Pending'}
+                        </Badge>
+                      </td>
+                      <td className="center">
+                        <Badge variant="gray">{ITEM_STATUS_LABELS[item.item_status] ?? item.item_status}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </div>
         </div>
         <div className="modal-actions" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Button variant="primary" onClick={() => setSelectedOrder(null)}>Close</Button>

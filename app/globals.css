@@ -29,6 +29,22 @@
   box-sizing: border-box;
 }
 
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(101, 120, 111, 0.25);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(101, 120, 111, 0.4);
+}
+
+
 html,
 body {
   margin: 0;
@@ -1160,13 +1176,18 @@ select:disabled,
 .modal-box,
 .modal {
   background: #fff;
-  border-radius: 8px;
+  border-radius: 12px;
   max-width: 500px;
   width: 100%;
   box-shadow: 0 16px 48px rgba(0, 0, 0, .2);
   animation: popIn .22s cubic-bezier(.22, .9, .32, 1) both;
   max-height: 90vh;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* Fix Webkit bug where scrollbar child ignores parent border-radius */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  isolation: isolate;
 }
 
 .modal-header,
@@ -1182,6 +1203,10 @@ select:disabled,
 
 .modal-body {
   padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .modal-footer,

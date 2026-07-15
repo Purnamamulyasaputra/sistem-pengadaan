@@ -14,8 +14,15 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 600 }: Moda
   return (
     <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box" style={{ maxWidth }}>
-        {title && <h4 style={{ marginBottom: 16 }}>{title}</h4>}
-        {children}
+        {title && (
+          <div className="modal-header">
+            <span>{title}</span>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--muted)', fontSize: 18, lineHeight: 1 }}>×</button>
+          </div>
+        )}
+        <div className="modal-body">
+          {children}
+        </div>
       </div>
     </div>
   );
