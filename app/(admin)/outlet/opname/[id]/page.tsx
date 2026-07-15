@@ -21,14 +21,16 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
     setLoading(true);
     // Fetch header
     const hRes = await fetch(`/api/opname/${id}`);
+    let locId = 1;
     if (hRes.ok) {
       const hData = await hRes.json();
       setHeader(hData.data);
       setIsLocked(hData.data?.status === 'LOCKED');
+      if (hData.data?.location_id) locId = hData.data.location_id;
     }
     
     // Fetch all items for input
-    const iRes = await fetch(`/api/opname/items?location_type=OUTLET`);
+    const iRes = await fetch(`/api/opname/items?location_type=OUTLET&location_id=${locId}`);
     const iData = await iRes.json();
     setItems(iData.data ?? []);
 
@@ -45,14 +47,14 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
 
   const handleQtyChange = (itemId: number, systemBalance: number, actualQty: string) => {
     if (isLocked) return;
-    const qty = parseFloat(actualQty);
-    if (isNaN(qty)) return;
+    const numericVal = actualQty.replace(/[^0-9.]/g, '');
+    const qty = numericVal === '' ? 0 : parseFloat(numericVal);
 
     const existing = details.find(d => d.item_id === itemId);
     if (existing) {
-      setDetails(details.map(d => d.item_id === itemId ? { ...d, actual_physical_qty: qty, variance: qty - systemBalance } : d));
+      setDetails(details.map(d => d.item_id === itemId ? { ...d, actual_physical_qty: numericVal, variance: qty - systemBalance } : d));
     } else {
-      setDetails([...details, { item_id: itemId, system_balance: systemBalance, actual_physical_qty: qty, variance: qty - systemBalance }]);
+      setDetails([...details, { item_id: itemId, system_balance: systemBalance, actual_physical_qty: numericVal, variance: qty - systemBalance }]);
     }
   };
 
@@ -61,10 +63,14 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
     try {
       // Upsert all details
       for (const detail of details) {
+        const payload = {
+          ...detail,
+          actual_physical_qty: detail.actual_physical_qty === '' ? 0 : parseFloat(detail.actual_physical_qty)
+        };
         await fetch(`/api/opname/${id}/detail`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(detail)
+          body: JSON.stringify(payload)
         });
       }
 
@@ -133,13 +139,12 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                     <td className="right num">{Number(item.system_balance).toFixed(2)} {item.smallest_unit}</td>
                     <td className="right">
                       <input 
-                        type="number" 
+                        type="text" 
                         className="input right" 
                         value={actual} 
                         onChange={(e) => handleQtyChange(item.item_id, item.system_balance, e.target.value)} 
                         disabled={isLocked}
                         placeholder="0.00"
-                        step="0.01"
                         style={{ height: 32, width: '100%', borderColor: actual === '' ? '#fca5a5' : 'var(--border)' }} 
                       />
                     </td>

@@ -127,7 +127,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
       if (res.ok) {
         const d = await res.json();
         setDetailData(d);
-        setNewPrice(d.menu.sale_price?.toString() || '0');
+        setNewPrice(d.menu.sale_price ? Math.round(Number(d.menu.sale_price)).toString() : '0');
       }
     } finally {
       setDetailLoading(false);
@@ -259,9 +259,12 @@ function MenusTab({ categories }: { categories: Category[] }) {
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <div style={{ flex: 1 }}>
                   <Input
-                    type="number"
-                    value={newPrice}
-                    onChange={e => setNewPrice(e.target.value)}
+                    type="text"
+                    value={newPrice ? Number(newPrice.replace(/\D/g, '')).toLocaleString('id-ID') : ''}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/\D/g, '');
+                      setNewPrice(raw);
+                    }}
                     placeholder="Enter sale price..."
                   />
                 </div>
@@ -270,7 +273,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 </button>
               </div>
               <div style={{ fontSize: 11, color: '#166534', marginTop: 8 }}>
-                Central Default Price: <strong>{rp(detailData.menu.master_price)}</strong> · Enter <strong>0</strong> to revert to default.
+                Enter <strong>0</strong> to revert to default.
               </div>
             </div>
 
@@ -289,7 +292,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                         <th>Ingredient</th>
                         <th className="right">Qty</th>
                         <th className="center">Unit</th>
-                        <th className="right">Harga/Unit</th>
+                        <th className="right">Price/Unit</th>
                         <th className="right">Extension</th>
                       </tr>
                     </thead>
@@ -338,6 +341,10 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [deleting, setDeleting] = useState(false);
   const limit = 20;
 
+  const [viewRecipeModal, setViewRecipeModal] = useState<number | null>(null);
+  const [viewRecipeData, setViewRecipeData] = useState<any>(null);
+  const [viewRecipeLoading, setViewRecipeLoading] = useState(false);
+
   const SHEETS = ['Bar 1', 'Bar 2', 'Kitchen 2025', 'Turangga'];
 
   const load = useCallback(() => {
@@ -351,6 +358,18 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
       .then(d => { setData(d.data ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
   }, [search, venueId, sheet, page]);
+
+  const openViewRecipe = async (id: number) => {
+    setViewRecipeModal(id);
+    setViewRecipeLoading(true);
+    setViewRecipeData(null);
+    try {
+      const res = await fetch(`/api/hpp/recipes/${id}`);
+      if (res.ok) setViewRecipeData(await res.json());
+    } finally {
+      setViewRecipeLoading(false);
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -400,6 +419,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                 <th className="right">Ingredients Subtotal</th>
                 <th className="right">Total COGS</th>
                 <th className="right">Sale Price</th>
+                <th className="right" style={{ width: 80 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -414,6 +434,11 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                   <td className="right ">{rp(row.subtotal)}</td>
                   <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost)}</td>
                   <td className="right ">{row.sale_price ? rp(row.sale_price) : <span className="muted">Base Prep</span>}</td>
+                  <td className="right">
+                    <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6 }} onClick={() => openViewRecipe(row.id)}>
+                      <Eye size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -444,6 +469,53 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm(null)}
       />
+
+      {/* Recipe Viewer Modal */}
+      <Modal isOpen={!!viewRecipeModal} onClose={() => setViewRecipeModal(null)} title="Recipe Details" maxWidth={680}>
+        {viewRecipeLoading ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading recipe...</div>
+        ) : viewRecipeData ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 4px' }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{viewRecipeData.recipe.name}</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+                  {viewRecipeData.recipe.venue_name} &middot; {viewRecipeData.recipe.source_sheet}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Yield</div>
+                <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>
+                  {Number(viewRecipeData.recipe.yield).toLocaleString('id-ID')} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>{viewRecipeData.recipe.yield_unit ?? 'pcs'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Ingredient</th>
+                    <th className="right">Qty</th>
+                    <th className="center">Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(viewRecipeData.ingredients || []).map((ing: any) => (
+                    <tr key={ing.id}>
+                      <td style={{ fontWeight: 500 }}>{ing.ingredient_name}</td>
+                      <td className="right">{Number(ing.quantity).toLocaleString('id-ID')}</td>
+                      <td className="center" style={{ color: 'var(--muted)', fontSize: 12 }}>{ing.unit}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Failed to load recipe.</div>
+        )}
+      </Modal>
     </>
   );
 }
@@ -753,7 +825,7 @@ export default function HppPage() {
               Menu list and Cost of Goods Sold (COGS) specifically for your outlet. (Read-Only)
             </p>
           </div>
-      </div>
+        </div>
       </div>
 
       {/* Main content */}

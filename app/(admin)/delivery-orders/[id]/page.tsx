@@ -81,10 +81,15 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!barcodeInput.trim()) return;
+    const inputTrimmed = barcodeInput.trim();
+    if (inputTrimmed === dn.delivery_note_number) {
+      setConfirmBulk({ open: true, type: 'OUT' });
+      setBarcodeInput('');
+      return;
+    }
 
     // Find the item matching this barcode that hasn't been scanned OUT yet
-    const targetItem = dn.items.find((i: any) => (i.unique_barcode === barcodeInput.trim() || i.barcode === barcodeInput.trim()) && !i.scanned_out_at);
+    const targetItem = dn.items.find((i: any) => (i.unique_barcode === inputTrimmed || i.barcode === inputTrimmed) && !i.scanned_out_at);
 
     if (!targetItem) {
       const alreadyScanned = dn.items.find((i: any) => (i.unique_barcode === barcodeInput.trim() || i.barcode === barcodeInput.trim()) && i.scanned_out_at);
@@ -282,10 +287,8 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
             <div>
               <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Tracking Code</p>
               <div className="font-bold font-mono" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {dn.items?.[0]?.unique_barcode || dn.items?.[0]?.barcode || '-'}
-                {(dn.items?.[0]?.unique_barcode || dn.items?.[0]?.barcode) && (
-                  <CopyButton text={dn.items?.[0]?.unique_barcode || dn.items?.[0]?.barcode} />
-                )}
+                {dn.delivery_note_number}
+                <CopyButton text={dn.delivery_note_number} />
               </div>
             </div>
           </div>

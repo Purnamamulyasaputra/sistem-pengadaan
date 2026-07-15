@@ -133,72 +133,36 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   doc.line(colX[7], y, colX[7], y + footerRowH);
   doc.text(totalBelanja.toLocaleString('id-ID'), colX[7] - 1, y + 4.5, { align: 'right' });
 
-  // Section for QR Codes outside the table
+  // Section for QR Code (Single Tracking Code per Delivery Order)
   y += 15;
   if (y > 250) {
     doc.addPage();
     y = 20;
   }
 
-  const qrCols = 5; // Ubah jadi 5 kolom agar muat di portrait
-  const qrSize = 25; // 25x25 mm
-  const qrSpacingX = 35; // Jarak antar barcode
-
-  let currentQrCol = 0;
-  let qrY = y;
-
-  const validItems = dn.items.filter(i => i.unique_barcode || i.barcode);
-
-  const calculateStartQrX = (itemsCount: number, currentIndex: number) => {
-    const remainingInRow = Math.min(itemsCount - currentIndex, qrCols);
-    return (210 - ((remainingInRow - 1) * qrSpacingX + qrSize)) / 2;
-  };
-
-  let startQrX = calculateStartQrX(validItems.length, 0);
-
-  for (let idx = 0; idx < validItems.length; idx++) {
-    const item = validItems[idx];
-    const code = item.unique_barcode || item.barcode;
-
-    if (qrY > 250) {
-      doc.addPage();
-      qrY = 20;
-      currentQrCol = 0;
-      startQrX = calculateStartQrX(validItems.length, idx);
-    } else if (currentQrCol === 0 && idx > 0) {
-      startQrX = calculateStartQrX(validItems.length, idx);
-    }
-
-    const xPos = startQrX + (currentQrCol * qrSpacingX);
-
-    try {
-      const barcodeBuffer = await bwipjs.toBuffer({
-        bcid: 'qrcode',
-        text: code,
-        scale: 3,
-        height: 10,
-        includetext: false,
-      });
-      const barcodeBase64 = `data:image/png;base64,${barcodeBuffer.toString('base64')}`;
-      doc.addImage(barcodeBase64, 'PNG', xPos, qrY, qrSize, qrSize);
-    } catch (err) {
-      doc.text("Error QR", xPos, qrY + 15);
-    }
-
-    // Teks nama barang di bawah barcode dihilangkan demi keamanan
-    // doc.setFontSize(7);
-    // doc.setFont("helvetica", "bold");
-    // const splitName = doc.splitTextToSize(item.item_name, 35);
-    // doc.text(splitName, xPos + (qrSize / 2), qrY + qrSize + 4, { align: 'center' });
-
-    currentQrCol++;
-    if (currentQrCol >= qrCols) {
-      currentQrCol = 0;
-      qrY += 45; // Next row down
-    }
+  const qrSize = 35; // 35x35 mm (Make it slightly larger for easy scanning)
+  const qrX = (210 - qrSize) / 2; // Centered
+  
+  try {
+    const barcodeBuffer = await bwipjs.toBuffer({
+      bcid: 'qrcode',
+      text: dn.delivery_note_number,
+      scale: 3,
+      height: 10,
+      includetext: false,
+    });
+    const barcodeBase64 = `data:image/png;base64,${barcodeBuffer.toString('base64')}`;
+    doc.addImage(barcodeBase64, 'PNG', qrX, y, qrSize, qrSize);
+    
+    // Add text label below the QR
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Tracking Code: ${dn.delivery_note_number}`, 105, y + qrSize + 5, { align: 'center' });
+  } catch (err) {
+    doc.text("Error generating QR", 105, y + 15, { align: 'center' });
   }
 
-  y = qrY + (currentQrCol > 0 ? 45 : 0);
+  y += qrSize + 15;
 
   // Signatures
   if (y > 260) {

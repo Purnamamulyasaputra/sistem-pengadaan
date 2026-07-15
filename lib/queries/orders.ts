@@ -117,7 +117,7 @@ export async function createOrder(data: {
       await client.query(
         `INSERT INTO order_items (order_id, item_id, qty_request, additional_notes, smallest_unit_qty)
          VALUES ($1,$2,$3,$4,$5)`,
-        [order.id, item.item_id, item.qty_request, item.additional_notes ?? null, smallest_unit_qty]
+        [order.id, item.item_id, Math.max(0.001, item.qty_request), item.additional_notes ?? null, smallest_unit_qty]
       );
     }
 

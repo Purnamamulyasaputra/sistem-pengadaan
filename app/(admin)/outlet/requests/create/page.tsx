@@ -1,25 +1,22 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { Toast } from '@/components/ui/Toast';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ChevronLeft } from 'lucide-react';
 
 interface Item { id: number; name: string; category_name: string; purchase_unit: string; smallest_unit: string; conversion_ratio: number; }
-interface RequestLine { id: number; item_id: number; name: string; uom: string; qty: number; note: string; smallest_unit: string; ratio: number; }
+interface RequestLine { id: number; item_id: number | null; name: string; uom: string; qty: string; note: string; smallest_unit: string; purchase_unit: string; ratio: number; }
 
 export default function CreateRequestPage() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [cart, setCart] = useState<RequestLine[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
-  const [selectedUnit, setSelectedUnit] = useState('');
-  const [qty, setQty] = useState('');
-  const [note, setNote] = useState('');
+  const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success'|'error'|'info' });
 
   const [orderDate] = useState(new Date().toISOString().split('T')[0]);
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -32,43 +29,103 @@ export default function CreateRequestPage() {
   const CREATED_BY = 2; // Assuming 2 is an outlet admin
 
   useEffect(() => {
-    fetch('/api/items').then(r => r.json()).then(d => setItems(d.data ?? []));
+    const fetchAll = async () => {
+      try {
+        const itemsRes = await fetch('/api/items');
+        const itemsJson = await itemsRes.json();
+        const itemsList = itemsJson.data ?? [];
+        setItems(itemsList);
+
+        const invRes = await fetch('/api/outlet/inventory');
+        const invJson = await invRes.json();
+        
+        if (invJson.success && invJson.data) {
+          const lowStockItems = invJson.data
+            .filter((d: any) => {
+              if (d.minimum_threshold === null) return false;
+              const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
+              // Only auto-add if effective balance is completely below minimum (don't auto add if they already ordered)
+              return effectiveBalance <= d.minimum_threshold && Number(d.incoming_balance || 0) === 0;
+            })
+            .map((d: any) => {
+              const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
+              let shortage = d.minimum_threshold - effectiveBalance;
+              if (shortage <= 0) shortage = d.minimum_threshold;
+              
+              const matchedMaster = itemsList.find((i: any) => i.id === d.item_id);
+              if (!matchedMaster) return null;
+
+              return {
+                id: Date.now() + Math.random(),
+                item_id: d.item_id,
+                name: d.item_name,
+                uom: d.smallest_unit,
+                smallest_unit: d.smallest_unit,
+                purchase_unit: matchedMaster.purchase_unit,
+                ratio: 1, 
+                qty: shortage.toString(),
+                note: 'Low Stock Auto-Add'
+              };
+            })
+            .filter(Boolean);
+
+          if (lowStockItems.length > 0) {
+             setCart(lowStockItems);
+             setToast({ open: true, message: `${lowStockItems.length} item Low Stock otomatis ditambahkan!`, type: 'info' });
+          }
+        }
+      } catch (e) {
+         console.error(e);
+      }
+    };
+    fetchAll();
+
     const d = new Date();
     d.setDate(d.getDate() + 3);
     setDeliveryDate(d.toISOString().split('T')[0]);
   }, []);
 
-  const addItem = () => {
-    if (!selectedItemId) {
-      alert("Please select an item from the list!");
-      return;
-    }
-    const foundItem = items.find(i => i.id === selectedItemId);
-    if (!foundItem) {
-      alert("Item not found.");
-      return;
-    }
-    const exists = cart.some(c => c.item_id === foundItem.id);
-    if (exists) {
-      alert("Item already exists in the cart.");
-      return;
-    }
-    const isSmallest = selectedUnit === foundItem.smallest_unit && selectedUnit !== foundItem.purchase_unit;
+  const addEmptyRow = () => {
     setCart([...cart, {
-      id: Date.now(),
-      item_id: foundItem.id,
-      name: foundItem.name,
-      uom: selectedUnit,
-      smallest_unit: foundItem.smallest_unit,
-      ratio: isSmallest ? 1 : foundItem.conversion_ratio,
-      qty: parseFloat(qty) || 1,
-      note
+      id: Date.now() + Math.random(),
+      item_id: null,
+      name: '',
+      uom: '',
+      smallest_unit: '',
+      purchase_unit: '',
+      ratio: 1,
+      qty: '',
+      note: ''
     }]);
-    setSearchTerm(''); setSelectedItemId(null); setSelectedUnit(''); setQty(''); setNote('');
+  };
+
+  const updateCartItemSelect = (rowId: number, selectedItemId: string) => {
+    const id = parseInt(selectedItemId);
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    setCart(cart.map(c => c.id === rowId ? {
+      ...c,
+      item_id: item.id,
+      name: item.name,
+      uom: item.purchase_unit,
+      smallest_unit: item.smallest_unit,
+      purchase_unit: item.purchase_unit,
+      ratio: item.conversion_ratio
+    } : c));
   };
 
   const updateCartQty = (id: number, val: string) => {
-    setCart(cart.map(c => c.id === id ? { ...c, qty: parseFloat(val) || 1 } : c));
+    const numericVal = val.replace(/[^0-9.]/g, '');
+    setCart(cart.map(c => c.id === id ? { ...c, qty: numericVal } : c));
+  };
+
+  const updateCartNote = (id: number, val: string) => {
+    setCart(cart.map(c => c.id === id ? { ...c, note: val } : c));
+  };
+
+  const updateCartUnit = (id: number, val: string) => {
+    setCart(cart.map(c => c.id === id ? { ...c, uom: val } : c));
   };
 
   const removeCartItem = (id: number) => {
@@ -88,11 +145,12 @@ export default function CreateRequestPage() {
           order_date: orderDate,
           delivery_date: deliveryDate,
           created_by: CREATED_BY,
-          items: cart.map(l => {
+          items: cart.filter(l => l.item_id !== null && parseFloat(l.qty) > 0).map(l => {
             const itemData = items.find(i => i.id === l.item_id);
             const isSmallest = l.uom === itemData?.smallest_unit && l.uom !== itemData?.purchase_unit;
             const ratio = itemData?.conversion_ratio || 1;
-            const finalQty = isSmallest ? l.qty / ratio : l.qty;
+            const floatQty = parseFloat(l.qty) || 0;
+            const finalQty = isSmallest ? floatQty / ratio : floatQty;
             return { item_id: l.item_id, qty_request: finalQty, additional_notes: l.note };
           }),
         }),
@@ -110,32 +168,20 @@ export default function CreateRequestPage() {
 
   return (
     <section className="screen">
-      <div className="card">
-        <div className="card-head">
-          <div>
-            <h3>Purchase Request Outlet</h3>
+      <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({...toast, open: false})} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+        <button className="btn" onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px' }}>
+          <ChevronLeft size={18} /> Back
+        </button>
+        <div>
+          <h2 style={{ margin: 0 }}>Create Manual Request</h2>
+          <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+            Create a purchase request manually or review auto-suggested low stock items.
           </div>
         </div>
-        <div style={{ background: '#f0fdf4', borderBottom: '1px solid #bbf7d0', padding: '16px 20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Link href="/outlet/requests/create" style={{ textDecoration: 'none' }}>
-            <Button variant="primary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M12 5v14M5 12h14" /></svg>
-              Create Request
-            </Button>
-          </Link>
-          <Link href="/outlet/requests" style={{ textDecoration: 'none' }}>
-            <Button variant="outline" style={{ background: 'white', borderColor: '#86efac' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
-              Request History
-            </Button>
-          </Link>
-          <Link href="/outlet/receive-goods" style={{ textDecoration: 'none' }}>
-            <Button variant="outline" style={{ background: 'white', borderColor: '#86efac' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-              Receive Goods
-            </Button>
-          </Link>
-        </div>
+      </div>
+
+      <div className="card">
 
         <div className="card-body">
           {error && <div className="alert-banner alert-danger" style={{ marginBottom: 20 }}>{error}</div>}
@@ -160,82 +206,11 @@ export default function CreateRequestPage() {
             </div>
           </div>
 
-          <h4 style={{ marginBottom: 12 }}>Add Items</h4>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-            <div style={{ flex: 2, position: 'relative' }}>
-              <Input
-                type="text"
-                placeholder="Type to search item..."
-                value={searchTerm}
-                onChange={e => { setSearchTerm(e.target.value); setShowDropdown(true); setSelectedItemId(null); }}
-                onFocus={() => setShowDropdown(true)}
-                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-              />
-              {showDropdown && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                  {items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase())).map(i => (
-                    <div
-                      key={i.id}
-                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}
-                      onMouseDown={() => { setSearchTerm(i.name); setSelectedItemId(i.id); setSelectedUnit(i.purchase_unit); setShowDropdown(false); }}
-                      onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
-                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      {i.name} <span className="muted">({i.purchase_unit})</span>
-                    </div>
-                  ))}
-                  {items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                    <div style={{ padding: '8px 12px', fontSize: 13, color: 'var(--muted)', fontStyle: 'italic' }}>
-                      No items found
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <Input
-                type="number"
-                placeholder="Qty"
-                value={qty}
-                onChange={e => setQty(e.target.value)}
-                onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                style={{ width: '100%' }}
-              />
-              {selectedItemId && qty && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, fontSize: 11, color: 'var(--muted)', marginTop: 4, whiteSpace: 'nowrap' }}>
-                  {(() => {
-                    const item = items.find(i => i.id === selectedItemId);
-                    if (!item || item.conversion_ratio === 1) return null;
-                    const isSmallest = selectedUnit === item.smallest_unit && selectedUnit !== item.purchase_unit;
-                    if (isSmallest) return null;
-                    const total = parseFloat(qty) * item.conversion_ratio;
-                    return `≈ ${Number.isInteger(total) ? total : total.toFixed(1)} ${item.smallest_unit}`;
-                  })()}
-                </div>
-              )}
-            </div>
-            <div style={{ width: 100 }}>
-              <select
-                className="input"
-                disabled={!selectedItemId}
-                value={selectedUnit}
-                onChange={e => setSelectedUnit(e.target.value)}
-                style={{ width: '100%', appearance: 'none', background: !selectedItemId ? '#f8fafc' : 'white', color: 'var(--foreground)' }}
-              >
-                {!selectedItemId && <option value="">Unit</option>}
-                {selectedItemId && (() => {
-                  const item = items.find(i => i.id === selectedItemId);
-                  if (!item) return null;
-                  const opts = [<option key={item.purchase_unit} value={item.purchase_unit}>{item.purchase_unit}</option>];
-                  if (item.smallest_unit && item.smallest_unit !== item.purchase_unit) {
-                    opts.push(<option key={item.smallest_unit} value={item.smallest_unit}>{item.smallest_unit}</option>);
-                  }
-                  return opts;
-                })()}
-              </select>
-            </div>
-            <Input type="text" placeholder="Notes (Optional)" value={note} onChange={e => setNote(e.target.value)} style={{ flex: 2 }} />
-            <Button variant="primary" onClick={addItem}>Add to Cart</Button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h4 style={{ margin: 0 }}>Items</h4>
+            <Button variant="outline" size="sm" onClick={addEmptyRow} style={{ borderColor: '#86efac', background: '#f0fdf4' }}>
+              + Tambah Data
+            </Button>
           </div>
 
           <Table>
@@ -252,15 +227,35 @@ export default function CreateRequestPage() {
             <tbody>
               {cart.map(c => (
                 <tr key={c.id}>
-                  <td className="font-bold">{c.name}</td>
+                  <td className={c.item_id ? "font-bold" : ""}>
+                    {!c.item_id ? (
+                      <select className="input" style={{ width: '100%', maxWidth: 300 }} value={c.item_id || ''} onChange={e => updateCartItemSelect(c.id, e.target.value)}>
+                        <option value="">-- Pilih Barang --</option>
+                        {items.map(i => (
+                          <option key={i.id} value={i.id} disabled={cart.some(cartItem => cartItem.item_id === i.id)}>{i.name}</option>
+                        ))}
+                      </select>
+                    ) : c.name}
+                  </td>
                   <td>
-                    <input type="number" className="input right" value={c.qty} onChange={(e) => updateCartQty(c.id, e.target.value)} onWheel={(e) => e.currentTarget.blur()} style={{ height: 32, width: '100%' }} />
+                    <input type="text" className="input right" value={c.qty} onChange={(e) => updateCartQty(c.id, e.target.value)} style={{ height: 32, width: '100%', minWidth: 60 }} placeholder="0" />
                   </td>
-                  <td>{c.uom}</td>
+                  <td>
+                    {c.item_id ? (
+                       <select className="input" value={c.uom} onChange={e => updateCartUnit(c.id, e.target.value)} style={{ width: '100%', height: 32 }}>
+                          <option value={c.purchase_unit}>{c.purchase_unit}</option>
+                          {c.smallest_unit && c.smallest_unit !== c.purchase_unit && (
+                            <option value={c.smallest_unit}>{c.smallest_unit}</option>
+                          )}
+                       </select>
+                    ) : '-'}
+                  </td>
                   <td className="muted" style={{ fontSize: 13 }}>
-                    {c.uom !== c.smallest_unit ? `= ${c.qty * c.ratio} ${c.smallest_unit}` : '-'}
+                    {c.item_id && c.uom !== c.smallest_unit ? `≈ ${parseFloat(c.qty || '0') * c.ratio} ${c.smallest_unit}` : '-'}
                   </td>
-                  <td>{c.note}</td>
+                  <td>
+                     <Input type="text" value={c.note} onChange={e => updateCartNote(c.id, e.target.value)} placeholder="Notes (Optional)" style={{ height: 32, minWidth: 150 }} />
+                  </td>
                   <td className="center">
                     <Button size="sm" onClick={() => removeCartItem(c.id)} title="Delete" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
@@ -269,7 +264,7 @@ export default function CreateRequestPage() {
                 </tr>
               ))}
               {cart.length === 0 && (
-                <tr><td colSpan={6} className="center muted" style={{ padding: 40 }}>Your cart is empty.</td></tr>
+                <tr><td colSpan={6} className="center muted" style={{ padding: 40 }}>Your cart is empty. Click "+ Tambah Data" to add items.</td></tr>
               )}
             </tbody>
           </Table>

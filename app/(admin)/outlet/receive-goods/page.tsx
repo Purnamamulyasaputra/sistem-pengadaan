@@ -85,77 +85,72 @@ export default function ReceiveGoodsPage() {
     if (!scanModal || !globalBarcode.trim()) return;
 
     const barcode = globalBarcode.trim();
-    // Find matching item by unique_barcode or fallback to item.barcode
-    const matchedItem = itemsList.find(i => !i.scanned_in_at && (i.unique_barcode === barcode || i.barcode === barcode));
 
-    if (!matchedItem) {
-      // Check if it was already scanned
-      const alreadyScanned = itemsList.find(i => i.scanned_in_at && (i.unique_barcode === barcode || i.barcode === barcode));
-      if (alreadyScanned) {
-        setToast({ isOpen: true, message: `Item ${alreadyScanned.item_name} has already been received!`, type: 'info' });
-      } else {
-        setToast({ isOpen: true, message: 'Barcode not found in this Delivery Order.', type: 'error' });
+    if (barcode !== scanModal.delivery_note_number) {
+       setToast({ isOpen: true, message: `Please scan the Tracking Code from the Surat Jalan (${scanModal.delivery_note_number}) to validate the entire delivery.`, type: 'error' });
+       setGlobalBarcode('');
+       return;
+    }
+
+    // Validate inputs
+    for (const item of itemsList) {
+      if (item.scanned_in_at) continue;
+
+      const inputQty = qtys[item.id];
+      if (inputQty === undefined || inputQty === '' || inputQty < 0) {
+        setToast({ isOpen: true, message: `Please input Actual Quantity for ${item.item_name}.`, type: 'error' });
+        return;
       }
-      setGlobalBarcode('');
-      return;
-    }
 
-    const inputQty = qtys[matchedItem.id];
-    if (inputQty === undefined || inputQty === '' || inputQty < 0) {
-      setToast({ isOpen: true, message: `Please input Actual Quantity for ${matchedItem.item_name} in the table first.`, type: 'error' });
-      return;
-    }
+      const shippedFmt = getDisplayFormat(Number(item.qty_shipped), item.smallest_unit);
+      const actualQtyReceivedBase = Number(inputQty) * shippedFmt.mult;
+      const isDiscrepancy = actualQtyReceivedBase !== Number(item.qty_shipped);
+      const notesStr = discNotes[item.id] || '';
 
-    const shippedFmt = getDisplayFormat(Number(matchedItem.qty_shipped), matchedItem.smallest_unit);
-    const actualQtyReceivedBase = Number(inputQty) * shippedFmt.mult;
-
-    const isDiscrepancy = actualQtyReceivedBase !== Number(matchedItem.qty_shipped);
-    const notesStr = discNotes[matchedItem.id] || '';
-
-    if (isDiscrepancy && !notesStr.trim()) {
-      setToast({ isOpen: true, message: `Discrepancy reason/notes are required for ${matchedItem.item_name}.`, type: 'error' });
-      return;
+      if (isDiscrepancy && !notesStr.trim()) {
+        setToast({ isOpen: true, message: `Discrepancy reason is required for ${item.item_name}.`, type: 'error' });
+        return;
+      }
     }
 
     setScanning(true);
     setToast({ ...toast, isOpen: false });
     try {
-      const res = await fetch(`/api/delivery-notes/${scanModal.id}/scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          delivery_note_item_id: matchedItem.id,
-          item_id: matchedItem.item_id,
-          barcode_scanned: barcode,
-          scan_type: 'IN',
-          device_info: 'Web Dashboard Outlet',
-          qty_received: actualQtyReceivedBase,
-          discrepancy_reason: isDiscrepancy ? notesStr.trim() : undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        setToast({ isOpen: true, message: data.message.replace(/^Error: /i, ''), type: 'error' });
-        return;
+      // Process all items
+      for (const item of itemsList) {
+        if (item.scanned_in_at) continue;
+
+        const inputQty = qtys[item.id];
+        const shippedFmt = getDisplayFormat(Number(item.qty_shipped), item.smallest_unit);
+        const actualQtyReceivedBase = Number(inputQty) * shippedFmt.mult;
+        const isDiscrepancy = actualQtyReceivedBase !== Number(item.qty_shipped);
+        const notesStr = discNotes[item.id] || '';
+
+        const res = await fetch(`/api/delivery-notes/${item.id}/scan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            delivery_note_item_id: item.id,
+            item_id: item.item_id,
+            barcode_scanned: item.unique_barcode || item.barcode || scanModal.delivery_note_number,
+            scan_type: 'IN',
+            device_info: 'Web Dashboard Outlet',
+            qty_received: actualQtyReceivedBase,
+            discrepancy_reason: isDiscrepancy ? notesStr.trim() : undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(`Failed on ${item.item_name}: ${data.message}`);
+        }
       }
 
-      setToast({ isOpen: true, message: `${matchedItem.item_name} received successfully!`, type: 'success' });
+      setToast({ isOpen: true, message: `All items verified! Finalizing Receipt...`, type: 'info' });
       setGlobalBarcode('');
 
-      // Refresh items list
-      const r = await fetch(`/api/delivery-notes/${scanModal.id}`);
-      const d = await r.json();
-      setItemsList(d.data?.items ?? []);
-
-      const updatedItems = d.data?.items ?? [];
-      const allDone = updatedItems.every((i: any) => i.scanned_in_at);
-
-      if (allDone) {
-        // Auto-finalize — pass values directly to avoid stale state closure
-        await doFinalize(scanModal.id, proofImage);
-      } else {
-        setTimeout(() => barcodeInputRef.current?.focus(), 100);
-      }
+      await doFinalize(scanModal.id, proofImage);
+    } catch (e: any) {
+      setToast({ isOpen: true, message: e.message, type: 'error' });
     } finally {
       setScanning(false);
     }
@@ -203,28 +198,8 @@ export default function ReceiveGoodsPage() {
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Purchase Request Outlet</h3>
+            <h3>Receive Goods (Scan IN)</h3>
           </div>
-        </div>
-        <div style={{ background: '#f0fdf4', borderBottom: '1px solid #bbf7d0', padding: '16px 20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Link href="/outlet/requests/create" style={{ textDecoration: 'none' }}>
-            <Button variant="outline" style={{ background: 'white', borderColor: '#86efac' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M12 5v14M5 12h14" /></svg>
-              Create Request
-            </Button>
-          </Link>
-          <Link href="/outlet/requests" style={{ textDecoration: 'none' }}>
-            <Button variant="outline" style={{ background: 'white', borderColor: '#86efac' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
-              Request History
-            </Button>
-          </Link>
-          <Link href="/outlet/receive-goods" style={{ textDecoration: 'none' }}>
-            <Button variant="primary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-              Receive Goods (Scan IN)
-            </Button>
-          </Link>
         </div>
 
         <div className="card-body flush">

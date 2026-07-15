@@ -117,6 +117,14 @@ export async function lockStockCount(headerId: number, locationType: string) {
             reference_id: headerId,
             client,
           });
+        } else if (locationType === 'OUTLET' && header.location_id) {
+          // Update outlet_stocks directly
+          await client.query(`
+            INSERT INTO outlet_stocks (outlet_id, item_id, current_balance)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (outlet_id, item_id)
+            DO UPDATE SET current_balance = outlet_stocks.current_balance + EXCLUDED.current_balance
+          `, [header.location_id, detail.item_id, detail.variance]);
         }
         totalValue += Math.abs(parseFloat(detail.value_amount ?? '0'));
       }
@@ -150,15 +158,27 @@ export async function getItemsForOpname(locationType: string, locationId?: numbe
        WHERE i.is_active = TRUE
        ORDER BY c.name, i.name`
     ).then(r => r.rows);
-  } else if (locationType === 'OUTLET') {
+  } else if (locationType === 'OUTLET' && locationId) {
     return query(
-      `SELECT i.id AS item_id, i.name AS item_name, i.smallest_unit, c.name AS category_name,
-              i.current_average_price,
-              0 AS system_balance
+      `SELECT DISTINCT
+         i.id AS item_id, i.name AS item_name, i.smallest_unit, c.name AS category_name,
+         i.current_average_price,
+         COALESCE(os.current_balance, 0) AS system_balance
        FROM items i
        LEFT JOIN categories c ON c.id = i.category_id
+       LEFT JOIN outlet_stocks os ON os.item_id = i.id AND os.outlet_id = $1
+       LEFT JOIN outlet_item_settings ois ON ois.item_id = i.id AND ois.outlet_id = $1
+       LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = i.id
+       LEFT JOIN recipes r ON r.id = ri.recipe_id
+       LEFT JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $1
        WHERE i.is_active = TRUE
-       ORDER BY c.name, i.name`
+         AND (
+           os.outlet_id IS NOT NULL OR 
+           ois.outlet_id IS NOT NULL OR 
+           ov.outlet_id IS NOT NULL
+         )
+       ORDER BY c.name, i.name`,
+       [locationId]
     ).then(r => r.rows);
   }
   return [];

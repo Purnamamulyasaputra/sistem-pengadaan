@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
 
 // ─── Types ───────────────────────────────────────────────────
 type Category = { id: number; name: string };
@@ -43,7 +44,7 @@ const rp = (v: number | null) =>
 const pct = (v: number | null) =>
   v == null ? '—' : `${(Number(v) * 100).toFixed(1)}%`;
 
-import { CheckCircle2, AlertCircle, XCircle, Calculator, PackageSearch, FileText, ChevronLeft, ChevronRight, X, Pencil, Trash2, Package, Save } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, Calculator, PackageSearch, FileText, ChevronLeft, ChevronRight, X, Pencil, Trash2, Package, Save, Eye } from 'lucide-react';
 
 function MarginBadge({ flag }: { flag: string | null }) {
   if (!flag) return <span style={{ color: 'var(--muted)', fontSize: 11 }}>—</span>;
@@ -77,6 +78,11 @@ function MenusTab({ categories }: { categories: Category[] }) {
   const [page, setPage] = useState(1);
   const limit = 20;
 
+  const [detailModal, setDetailModal] = useState<number | null>(null);
+  const [detailData, setDetailData] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [newPrice, setNewPrice] = useState<string>('');
+
   const load = useCallback(() => {
     setLoading(true);
     let url = `/api/hpp?limit=${limit}&page=${page}`;
@@ -88,6 +94,45 @@ function MenusTab({ categories }: { categories: Category[] }) {
       .then(d => { setData(d.data ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
   }, [search, catId, marginFlag, page]);
+
+  const openDetail = async (menuId: number) => {
+    setDetailModal(menuId);
+    setDetailLoading(true);
+    setDetailData(null);
+    try {
+      const res = await fetch(`/api/hpp/menus/${menuId}`);
+      if (res.ok) {
+        const d = await res.json();
+        setDetailData(d);
+        setNewPrice(d.menu.sale_price ? Math.round(Number(d.menu.sale_price)).toString() : '0');
+      }
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleSavePrice = async () => {
+    if (!detailModal || !detailData) return;
+    const sale_price = parseFloat(newPrice);
+    if (isNaN(sale_price) || sale_price < 0) return alert('Nominal harga tidak valid');
+
+    try {
+      const res = await fetch(`/api/hpp/menus/${detailModal}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sale_price })
+      });
+      if (res.ok) {
+        setDetailModal(null);
+        load();
+      } else {
+        const err = await res.json();
+        alert('Gagal: ' + (err.error || 'Unknown error'));
+      }
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -137,6 +182,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 <th className="right">COGS %</th>
                 <th className="right">Margin %</th>
                 <th className="center">Status</th>
+                <th className="right" style={{ width: 80 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -159,6 +205,16 @@ function MenusTab({ categories }: { categories: Category[] }) {
                     {row.hpp_ratio == null ? '—' : pct(1 - row.hpp_ratio)}
                   </td>
                   <td className="center"><MarginBadge flag={row.margin_flag} /></td>
+                  <td className="right">
+                    <button
+                      className="btn btn-outline"
+                      title="View Detail"
+                      style={{ padding: '6px' }}
+                      onClick={() => openDetail(row.id)}
+                    >
+                      <Eye size={16} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -178,6 +234,97 @@ function MenusTab({ categories }: { categories: Category[] }) {
           </button>
         </div>
       )}
+
+      {/* Detail & Price Override Modal */}
+      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Detail Menu & HPP" maxWidth={680}>
+        {detailLoading ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading detail...</div>
+        ) : detailData ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Header Info */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 4px' }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{detailData.menu.display_name ?? detailData.menu.name}</div>
+                {detailData.menu.variant && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{detailData.menu.variant}</div>}
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Modal (Raw Cost)</div>
+                <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{rp(detailData.menu.hpp)}</div>
+              </div>
+            </div>
+
+            {/* Price Set Section */}
+            <div style={{ background: '#f8fafc', padding: '16px 20px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 10 }}>Set Central Master Price</div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ flex: 1 }}>
+                  <Input
+                    type="text"
+                    value={newPrice ? Number(newPrice.replace(/\D/g, '')).toLocaleString('id-ID') : ''}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/\D/g, '');
+                      setNewPrice(raw);
+                    }}
+                    placeholder="Enter sale price..."
+                  />
+                </div>
+                <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={handleSavePrice}>
+                  <Save size={15} /> Save Price
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: '#475569', marginTop: 8 }}>
+                This changes the default price. Local overrides at outlets will not be affected.
+              </div>
+            </div>
+
+            {/* Ingredients Table */}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Raw Material Composition <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(Read-Only)</span></div>
+              {detailData.ingredients?.length === 0 ? (
+                <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                  No recipes linked to this menu.
+                </div>
+              ) : (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                  <Table>
+                    <thead>
+                      <tr>
+                        <th>Ingredient</th>
+                        <th className="right">Qty</th>
+                        <th className="center">Unit</th>
+                        <th className="right">Price/Unit</th>
+                        <th className="right">Extension</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailData.ingredients.map((ing: any) => (
+                        <tr key={ing.id}>
+                          <td style={{ fontWeight: 500 }}>{ing.ingredient_name}</td>
+                          <td className="right">{Number(ing.qty).toLocaleString('id-ID')}</td>
+                          <td className="center" style={{ color: 'var(--muted)', fontSize: 12 }}>{ing.unit}</td>
+                          <td className="right" style={{ color: 'var(--muted)' }}>{Math.round(ing.cost_per_unit || 0).toLocaleString('id-ID')}</td>
+                          <td className="right" style={{ fontWeight: 600 }}>{Math.round(ing.cost || 0).toLocaleString('id-ID')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: '#f8fafc', borderTop: '2px solid var(--border)' }}>
+                        <td colSpan={3} style={{ padding: '10px 14px', fontSize: 13 }}></td>
+                        <td className="right" style={{ fontWeight: 600, fontSize: 13, padding: '10px 14px' }}>Total Raw Cost</td>
+                        <td className="right" style={{ fontWeight: 700, color: '#0f172a', fontSize: 14, padding: '10px 14px' }}>
+                          {Math.round(detailData.ingredients.reduce((sum: number, i: any) => sum + Number(i.cost || 0), 0)).toLocaleString('id-ID')}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </Table>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Failed to load data.</div>
+        )}
+      </Modal>
     </>
   );
 }
@@ -194,6 +341,10 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [deleting, setDeleting] = useState(false);
   const limit = 20;
 
+  const [viewRecipeModal, setViewRecipeModal] = useState<number | null>(null);
+  const [viewRecipeData, setViewRecipeData] = useState<any>(null);
+  const [viewRecipeLoading, setViewRecipeLoading] = useState(false);
+
   const SHEETS = ['Bar 1', 'Bar 2', 'Kitchen 2025', 'Turangga'];
 
   const load = useCallback(() => {
@@ -207,6 +358,18 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
       .then(d => { setData(d.data ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
   }, [search, venueId, sheet, page]);
+
+  const openViewRecipe = async (id: number) => {
+    setViewRecipeModal(id);
+    setViewRecipeLoading(true);
+    setViewRecipeData(null);
+    try {
+      const res = await fetch(`/api/hpp/recipes/${id}`);
+      if (res.ok) setViewRecipeData(await res.json());
+    } finally {
+      setViewRecipeLoading(false);
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -257,7 +420,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                 <th className="right">Ingredients Subtotal</th>
                 <th className="right">Total COGS</th>
                 <th className="right">Sale Price</th>
-                <th className="right">Actions</th>
+                <th className="right" style={{ width: 120 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -312,6 +475,53 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm(null)}
       />
+
+      {/* Recipe Viewer Modal */}
+      <Modal isOpen={!!viewRecipeModal} onClose={() => setViewRecipeModal(null)} title="Recipe Details" maxWidth={680}>
+        {viewRecipeLoading ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading recipe...</div>
+        ) : viewRecipeData ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 4px' }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{viewRecipeData.recipe.name}</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+                  {viewRecipeData.recipe.venue_name} &middot; {viewRecipeData.recipe.source_sheet}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Yield</div>
+                <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>
+                  {Number(viewRecipeData.recipe.yield).toLocaleString('id-ID')} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>{viewRecipeData.recipe.yield_unit ?? 'pcs'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Ingredient</th>
+                    <th className="right">Qty</th>
+                    <th className="center">Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(viewRecipeData.ingredients || []).map((ing: any) => (
+                    <tr key={ing.id}>
+                      <td style={{ fontWeight: 500 }}>{ing.ingredient_name}</td>
+                      <td className="right">{Number(ing.quantity).toLocaleString('id-ID')}</td>
+                      <td className="center" style={{ color: 'var(--muted)', fontSize: 12 }}>{ing.unit}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Failed to load recipe.</div>
+        )}
+      </Modal>
     </>
   );
 }

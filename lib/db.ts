@@ -13,6 +13,8 @@ export const pool =
     connectionString: process.env.DATABASE_URL,
     max: 3, // small, because primary pooling is handled by PgBouncer on Neon's side
     ssl: { rejectUnauthorized: false },
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
   });
 
 if (process.env.NODE_ENV !== 'production') {

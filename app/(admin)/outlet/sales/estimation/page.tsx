@@ -27,7 +27,7 @@ export default function ProcurementEstimationPage() {
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
   
-  const outletId = 1;
+  const [outletId, setOutletId] = useState<number | null>(null);
 
   const [data, setData] = useState<EstimationRow[]>([]);
   const [allMasterItems, setAllMasterItems] = useState<any[]>([]);
@@ -40,10 +40,19 @@ export default function ProcurementEstimationPage() {
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (dateFrom && dateTo) {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.outlet_id) setOutletId(d.data.outlet_id);
+      })
+      .catch(err => console.error('Error fetching session:', err));
+  }, []);
+
+  useEffect(() => {
+    if (dateFrom && dateTo && outletId) {
       loadData();
     }
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, outletId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -121,11 +130,15 @@ export default function ProcurementEstimationPage() {
       // Note: This matches the structure expected by POST /api/orders
       
       const itemsPayload = [
-        ...selectedData.map(d => ({
-          item_id: d.item_id,
-          qty_request: d.final_qty,
-          additional_notes: 'Sales Estimation Buffer +10%'
-        })),
+        ...selectedData.map(d => {
+          const itemMaster = allMasterItems.find(i => i.id === d.item_id);
+          const ratio = itemMaster?.conversion_ratio || 1;
+          return {
+            item_id: d.item_id,
+            qty_request: d.final_qty / ratio,
+            additional_notes: 'Sales Estimation Buffer +10%'
+          };
+        }),
         ...validAdditional.map(a => ({
           item_id: a.item_id || null, 
           qty_request: a.qty,
@@ -244,7 +257,7 @@ export default function ProcurementEstimationPage() {
                         transition: 'all 0.2s'
                       }}>
                         <input 
-                          type="number" 
+                          type="text" 
                           style={{ 
                             width: '100%', 
                             border: 'none', 
@@ -256,7 +269,7 @@ export default function ProcurementEstimationPage() {
                             color: row.selected ? 'var(--foreground)' : 'var(--muted)'
                           }} 
                           value={row.final_qty}
-                          onChange={e => handleQtyChange(row.ingredient_id, e.target.value)}
+                          onChange={e => handleQtyChange(row.ingredient_id, e.target.value.replace(/[^0-9.]/g, ''))}
                           onWheel={e => (e.target as HTMLInputElement).blur()}
                           disabled={!row.selected}
                         />
@@ -345,9 +358,10 @@ export default function ProcurementEstimationPage() {
                       </div>
                     </td>
                     <td style={{ padding: '4px 12px' }}>
-                        <input type="number" className="input" min="1" style={{ width: '100%', background: '#f8fafc', textAlign: 'center', padding: '4px 8px', fontSize: 13 }} value={item.qty} onChange={e => {
+                        <input type="text" className="input" style={{ width: '100%', background: '#f8fafc', textAlign: 'center', padding: '4px 8px', fontSize: 13 }} value={item.qty} onChange={e => {
                         const newArr = [...additionalItems];
-                        newArr.find(a => a.id === item.id)!.qty = Number(e.target.value);
+                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                        newArr.find(a => a.id === item.id)!.qty = val ? Number(val) : 0;
                         setAdditionalItems(newArr);
                       }} onWheel={e => (e.target as HTMLInputElement).blur()} />
                     </td>

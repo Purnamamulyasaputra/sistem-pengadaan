@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSalesSummary } from '@/lib/queries/sales-transactions';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_OUTLET' || !session.outletId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const outletId = searchParams.get('outlet_id');
+    const outletId = session.outletId;
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
 
-    if (!outletId || !dateFrom || !dateTo) {
-      return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+    if (!dateFrom || !dateTo) {
+      return NextResponse.json({ error: 'Missing date parameters' }, { status: 400 });
     }
 
     const data = await getSalesSummary(Number(outletId), dateFrom, dateTo);

@@ -212,6 +212,37 @@ export async function recordScan(data: {
         [data.scanned_by, qty_recv, data.discrepancy_reason || null, data.discrepancy_notes || null, data.delivery_note_item_id]
       );
 
+      // Increase outlet stock
+      const dnRes = await client.query(`SELECT outlet_id FROM delivery_notes WHERE id = $1`, [dni.delivery_note_id]);
+      const outletId = dnRes.rows[0].outlet_id;
+
+      const stockRes = await client.query(
+        `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
+        [outletId, data.item_id]
+      );
+      
+      let oldBalance = 0;
+      if (stockRes.rows.length > 0) {
+        oldBalance = parseFloat(stockRes.rows[0].current_balance);
+        const newBalance = oldBalance + qty_recv;
+        await client.query(
+          `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() WHERE outlet_id = $2 AND item_id = $3`,
+          [newBalance, outletId, data.item_id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
+          [outletId, data.item_id, qty_recv]
+        );
+      }
+
+      const logBalance = oldBalance + qty_recv;
+      await client.query(
+        `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         VALUES ($1, $2, 'IN', $3, $4, 'BARCODE_SCAN', $5)`,
+        [outletId, data.item_id, qty_recv, logBalance, data.delivery_note_item_id]
+      );
+
       // Update order item status to SELESAI
       await client.query(
         `UPDATE order_items SET item_status = 'SELESAI', updated_at = now() WHERE id = $1`,
@@ -308,10 +339,43 @@ export async function bulkRecordScan(data: {
         processed_count++;
       } else if (data.scan_type === 'IN' && !dni.scanned_in_at) {
         // update dni
+        const qty_recv = dni.qty_shipped;
         await client.query(
-          `UPDATE delivery_note_items SET scanned_in_at = now(), scanned_in_by = $1, qty_received = qty_shipped WHERE id = $2`, 
-          [data.scanned_by, dni.id]
+          `UPDATE delivery_note_items SET scanned_in_at = now(), scanned_in_by = $1, qty_received = $2 WHERE id = $3`, 
+          [data.scanned_by, qty_recv, dni.id]
         );
+        
+        // Increase outlet stock
+        const dnRes = await client.query(`SELECT outlet_id FROM delivery_notes WHERE id = $1`, [data.delivery_note_id]);
+        const outletId = dnRes.rows[0].outlet_id;
+
+        const stockRes = await client.query(
+          `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
+          [outletId, dni.item_id]
+        );
+        
+        let oldBalance = 0;
+        if (stockRes.rows.length > 0) {
+          oldBalance = parseFloat(stockRes.rows[0].current_balance);
+          const newBalance = oldBalance + qty_recv;
+          await client.query(
+            `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() WHERE outlet_id = $2 AND item_id = $3`,
+            [newBalance, outletId, dni.item_id]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
+            [outletId, dni.item_id, qty_recv]
+          );
+        }
+
+        const logBalance = oldBalance + qty_recv;
+        await client.query(
+          `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+           VALUES ($1, $2, 'IN', $3, $4, 'BARCODE_SCAN', $5)`,
+          [outletId, dni.item_id, qty_recv, logBalance, dni.id]
+        );
+
         // update order item
         await client.query(`UPDATE order_items SET item_status = 'SELESAI', updated_at = now() WHERE id = $1`, [dni.order_item_id]);
         processed_count++;

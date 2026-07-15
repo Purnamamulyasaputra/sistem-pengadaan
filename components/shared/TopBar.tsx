@@ -18,7 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/stock-card': 'Stock Card',
   '/delivery-orders': 'Delivery Orders',
   '/opname/central': 'Central Stock Opname',
-  '/opname/outlet': 'Outlet Stock Opname',
+  '/outlet/opname': 'Outlet Stock Opname',
   '/alerts': 'Reorder Point',
   '/price-history': 'Price History',
   '/reports': 'Financial Report',

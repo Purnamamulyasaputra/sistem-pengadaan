@@ -16,8 +16,8 @@ type SalesSummaryRow = {
 
 export default function SalesAnalyticsPage() {
   const router = useRouter();
-  const outletId = 1; // Default to ER Edhos BDG for safety
 
+  const [outletId, setOutletId] = useState<number | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [data, setData] = useState<SalesSummaryRow[]>([]);
@@ -41,10 +41,19 @@ export default function SalesAnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    if (dateFrom && dateTo) {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.outlet_id) setOutletId(d.data.outlet_id);
+      })
+      .catch(err => console.error('Error fetching session:', err));
+  }, []);
+
+  useEffect(() => {
+    if (dateFrom && dateTo && outletId) {
       loadData();
     }
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, outletId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -124,14 +133,6 @@ export default function SalesAnalyticsPage() {
               onClick={e => (e.target as HTMLInputElement).showPicker?.()}
               onKeyDown={e => e.preventDefault()}
             />
-            <button
-              className="btn btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', fontWeight: 600, marginLeft: 8 }}
-              onClick={handleGenerateEstimation}
-              disabled={data.length === 0}
-            >
-              Create Purchase Estimate <ArrowRight size={16} />
-            </button>
           </div>
         </div>
 

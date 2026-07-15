@@ -8,7 +8,9 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const locationType = searchParams.get('location_type') ?? 'PUSAT';
+  const locationIdParam = searchParams.get('location_id');
+  const locationId = locationIdParam ? parseInt(locationIdParam, 10) : undefined;
   
-  const items = await getItemsForOpname(locationType);
+  const items = await getItemsForOpname(locationType, locationId);
   return NextResponse.json({ success: true, message: 'OK', data: items });
 }
