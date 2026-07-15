@@ -3,14 +3,10 @@ import { query } from '@/lib/db';
 
 export async function GET() {
   try {
-    await query(`
-      ALTER TABLE delivery_note_items 
-      ADD COLUMN IF NOT EXISTS qty_received NUMERIC(10,3),
-      ADD COLUMN IF NOT EXISTS discrepancy_reason VARCHAR(100),
-      ADD COLUMN IF NOT EXISTS discrepancy_notes TEXT;
-    `);
-    return NextResponse.json({ success: true });
+    await query(`ALTER TABLE items ADD COLUMN package_unit VARCHAR(50)`);
+    await query(`ALTER TABLE items ADD COLUMN package_qty INT`);
+    return NextResponse.json({ success: true, message: 'Columns added' });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message });
+    return NextResponse.json({ success: false, message: err.message });
   }
 }

@@ -118,6 +118,9 @@ export async function createPurchaseOrder(data: {
     unit_price?: number;
     tax_percent?: number;
     disc_percent?: number;
+    purchase_unit?: string;
+    package_inner_size?: number;
+    conversion_ratio?: number;
     sort_order?: number;
   }>;
 }) {
@@ -152,10 +155,10 @@ export async function createPurchaseOrder(data: {
       totalTax += lineSubtotal * (t / 100);
 
       await client.query(
-        `INSERT INTO purchase_order_items (purchase_order_id, line_type, item_id, description, qty, package_qty, package_unit, unit_price, tax_percent, discount_percent, subtotal, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        `INSERT INTO purchase_order_items (purchase_order_id, line_type, item_id, description, qty, package_qty, package_unit, purchase_unit, package_inner_size, conversion_ratio, unit_price, tax_percent, discount_percent, subtotal, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [po.id, item.line_type, item.item_id ?? null, item.description ?? null, item.qty ?? null,
-         item.package_qty ?? null, item.package_unit ?? null, item.unit_price ?? null,
+         item.package_qty ?? null, item.package_unit ?? null, item.purchase_unit ?? null, item.package_inner_size ?? null, item.conversion_ratio ?? null, item.unit_price ?? null,
          item.tax_percent ?? 0, item.disc_percent ?? 0, lineSubtotal, item.sort_order ?? idx]
       );
     }
@@ -201,10 +204,10 @@ export async function updatePurchaseOrder(id: number, data: Parameters<typeof cr
       totalTax += lineSubtotal * (t / 100);
 
       await client.query(
-        `INSERT INTO purchase_order_items (purchase_order_id, line_type, item_id, description, qty, package_qty, package_unit, unit_price, tax_percent, discount_percent, subtotal, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        `INSERT INTO purchase_order_items (purchase_order_id, line_type, item_id, description, qty, package_qty, package_unit, purchase_unit, package_inner_size, conversion_ratio, unit_price, tax_percent, discount_percent, subtotal, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [id, item.line_type, item.item_id ?? null, item.description ?? null, item.qty ?? null,
-         item.package_qty ?? null, item.package_unit ?? null, item.unit_price ?? null,
+         item.package_qty ?? null, item.package_unit ?? null, item.purchase_unit ?? null, item.package_inner_size ?? null, item.conversion_ratio ?? null, item.unit_price ?? null,
          item.tax_percent ?? 0, item.disc_percent ?? 0, lineSubtotal, item.sort_order ?? idx]
       );
     }
@@ -234,7 +237,7 @@ export async function updatePurchaseOrderStatus(id: number, status: string, user
 
     if (status === 'SELESAI') {
       const { rows: items } = await client.query(
-        `SELECT poi.item_id, poi.qty, poi.unit_price, i.conversion_ratio, i.current_average_price, i.current_stock
+        `SELECT poi.item_id, poi.qty, poi.unit_price, COALESCE(poi.conversion_ratio, i.conversion_ratio) as conversion_ratio, i.current_average_price, i.current_stock
          FROM purchase_order_items poi
          JOIN items i ON i.id = poi.item_id
          WHERE poi.purchase_order_id = $1 AND poi.line_type = 'product'`,

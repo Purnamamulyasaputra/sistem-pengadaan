@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
 
@@ -90,16 +91,18 @@ export default function ReportsPage() {
             <p className="muted" style={{ margin: 0, marginTop: 4 }}>Values calculated using Moving Average algorithm.</p>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <select className="input" value={month} onChange={e => setMonth(Number(e.target.value))}>
-              {Array.from({length: 12}).map((_, i) => (
-                <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('id-ID', { month: 'long' })}</option>
-              ))}
-            </select>
-            <select className="input" value={year} onChange={e => setYear(Number(e.target.value))}>
-              {[year-1, year, year+1].map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+            <Select 
+              value={month} 
+              onChange={(val) => setMonth(Number(val))}
+              options={Array.from({length: 12}).map((_, i) => ({ value: i+1, label: new Date(0, i).toLocaleString('id-ID', { month: 'long' }) }))}
+              style={{ width: 140 }}
+            />
+            <Select 
+              value={year} 
+              onChange={(val) => setYear(Number(val))}
+              options={[year-1, year, year+1].map(y => ({ value: y, label: String(y) }))}
+              style={{ width: 100 }}
+            />
             <Button variant="outline" size="sm" onClick={exportExcel}>⬇ Export Excel</Button>
           </div>
         </div>
@@ -107,18 +110,18 @@ export default function ReportsPage() {
         {chartData.length > 0 && (
           <div style={{ padding: '24px 24px 0 24px' }}>
             <h4 style={{ marginBottom: 16 }}>Current Inventory Value by Category</h4>
-            <div style={{ height: 300, width: '100%' }}>
+            <div style={{ height: 220, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} interval={0} angle={-25} textAnchor="end" />
+                  <XAxis dataKey="name" tickFormatter={(val) => val.length > 20 ? val.substring(0, 20) + '...' : val} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} interval={0} />
                   <YAxis tickFormatter={(val) => `Rp${(val/1000000).toFixed(1)}M`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
                   <Tooltip 
                     formatter={(value: any) => [`Rp ${Number(value).toLocaleString('id-ID')}`, undefined]}
-                    cursor={{ fill: '#f1f5f9' }}
+                    cursor={false}
                     contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
-                  <Bar dataKey="Inventory Value" fill="#016e3f" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Inventory Value" fill="#016e3f" radius={[4, 4, 0, 0]} maxBarSize={60} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -134,15 +137,15 @@ export default function ReportsPage() {
             <Table>
               <thead>
                 <tr>
-                  <th>Item Name</th>
-                  <th>Category</th>
-                  <th className="right">Total IN Value</th>
-                  <th className="right">Distributed Value</th>
-                  <th className="right" style={{ color: '#dc2626' }}>Adjusted Value</th>
-                  <th className="right" style={{ background: '#f8fafc' }}>Current Stock Value</th>
+                  <th style={{ padding: '8px 12px', fontSize: 12 }}>Item Name</th>
+                  <th style={{ padding: '8px 12px', fontSize: 12 }}>Category</th>
+                  <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Total IN Value</th>
+                  <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Distributed Value</th>
+                  <th className="right" style={{ padding: '8px 12px', fontSize: 12, color: '#dc2626' }}>Adjusted Value</th>
+                  <th className="right" style={{ padding: '8px 12px', fontSize: 12, background: '#f8fafc' }}>Current Stock Value</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody style={{ fontSize: 13 }}>
                 {reportData.map((r, i) => {
                   const ma = Number(r.current_average_price);
                   const valIn = Number(r.total_in_qty) * ma;
@@ -152,14 +155,14 @@ export default function ReportsPage() {
                   
                   return (
                     <tr key={i}>
-                      <td className="font-bold">{r.item_name}</td>
-                      <td className="muted">{r.category_name}</td>
-                      <td className="right num">Rp {valIn.toLocaleString('id-ID')}</td>
-                      <td className="right num">Rp {valDist.toLocaleString('id-ID')}</td>
-                      <td className="right num" style={{ color: valAdj > 0 ? '#dc2626' : 'inherit' }}>
+                      <td className="font-bold" style={{ padding: '6px 12px' }}>{r.item_name}</td>
+                      <td className="muted" style={{ padding: '6px 12px' }}>{r.category_name}</td>
+                      <td className="right num" style={{ padding: '6px 12px' }}>Rp {valIn.toLocaleString('id-ID')}</td>
+                      <td className="right num" style={{ padding: '6px 12px' }}>Rp {valDist.toLocaleString('id-ID')}</td>
+                      <td className="right num" style={{ padding: '6px 12px', color: valAdj > 0 ? '#dc2626' : 'inherit' }}>
                         Rp {valAdj.toLocaleString('id-ID')}
                       </td>
-                      <td className="right num font-bold" style={{ background: '#f8fafc', color: '#016e3f' }}>
+                      <td className="right num font-bold" style={{ padding: '6px 12px', background: '#f8fafc', color: '#016e3f' }}>
                         Rp {valCurrent.toLocaleString('id-ID')}
                       </td>
                     </tr>
@@ -167,12 +170,12 @@ export default function ReportsPage() {
                 })}
               </tbody>
               <tfoot>
-                <tr style={{ background: '#f1f5f9', fontWeight: 700, borderTop: '2px solid var(--border)' }}>
-                  <td colSpan={2} className="right">GRAND TOTAL</td>
-                  <td className="right num">Rp {grandTotalIn.toLocaleString('id-ID')}</td>
-                  <td className="right num">Rp {grandTotalDist.toLocaleString('id-ID')}</td>
-                  <td className="right num" style={{ color: '#dc2626' }}>Rp {grandTotalAdj.toLocaleString('id-ID')}</td>
-                  <td className="right num" style={{ color: '#016e3f', fontSize: 15 }}>Rp {grandTotalValue.toLocaleString('id-ID')}</td>
+                <tr style={{ background: '#f1f5f9', fontWeight: 700, borderTop: '2px solid var(--border)', fontSize: 13 }}>
+                  <td colSpan={2} className="right" style={{ padding: '8px 12px' }}>GRAND TOTAL</td>
+                  <td className="right num" style={{ padding: '8px 12px' }}>Rp {grandTotalIn.toLocaleString('id-ID')}</td>
+                  <td className="right num" style={{ padding: '8px 12px' }}>Rp {grandTotalDist.toLocaleString('id-ID')}</td>
+                  <td className="right num" style={{ padding: '8px 12px', color: '#dc2626' }}>Rp {grandTotalAdj.toLocaleString('id-ID')}</td>
+                  <td className="right num" style={{ padding: '8px 12px', color: '#016e3f', fontSize: 15 }}>Rp {grandTotalValue.toLocaleString('id-ID')}</td>
                 </tr>
               </tfoot>
             </Table>

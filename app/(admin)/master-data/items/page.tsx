@@ -13,7 +13,7 @@ import { Toast } from '@/components/ui/Toast';
 
 interface Item {
   id: number; name: string; category_id: number; category_name: string; barcode?: string;
-  purchase_unit: string; smallest_unit: string; conversion_ratio: number;
+  purchase_unit: string; package_unit?: string | null; package_qty?: number | null; smallest_unit: string; conversion_ratio: number;
   minimum_threshold: number; threshold_type: string; is_perishable: boolean;
   is_active: boolean; current_average_price: number; current_stock?: number;
   is_hpp?: boolean;
@@ -39,7 +39,7 @@ export default function ItemsPage() {
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [form, setForm] = useState({ name: '', category_id: '', purchase_unit: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, current_average_price: '0', ingredient_id: '' });
+  const [form, setForm] = useState({ name: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, current_average_price: '0', ingredient_id: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
@@ -80,7 +80,7 @@ export default function ItemsPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ name: '', category_id: '', purchase_unit: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, current_average_price: '0', ingredient_id: '' });
+    setForm({ name: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, current_average_price: '0', ingredient_id: '' });
     setError('');
     setShowModal(true);
   }
@@ -88,7 +88,7 @@ export default function ItemsPage() {
   function openEdit(item: Item) {
     setEditing(item);
     setForm({
-      name: item.name, category_id: String(item.category_id ?? ''), purchase_unit: item.purchase_unit,
+      name: item.name, category_id: String(item.category_id ?? ''), purchase_unit: item.purchase_unit, package_unit: item.package_unit || '', package_qty: String(item.package_qty || ''), package_inner_size: '',
       smallest_unit: item.smallest_unit, conversion_ratio: String(Number(item.conversion_ratio)),
       minimum_threshold: String(Number(item.minimum_threshold)), threshold_type: item.threshold_type,
       is_perishable: item.is_perishable, is_active: item.is_active, current_average_price: String(Number(item.current_average_price ?? 0)),
@@ -107,8 +107,9 @@ export default function ItemsPage() {
     try {
       const url = editing ? `/api/items/${editing.id}` : '/api/items';
       const method = editing ? 'PATCH' : 'POST';
+      const { package_unit, package_qty, package_inner_size, ...cleanForm } = form;
       const payload = {
-        ...form,
+        ...cleanForm,
         category_id: Number(form.category_id),
         conversion_ratio: Number(form.conversion_ratio),
         minimum_threshold: Number(form.minimum_threshold),

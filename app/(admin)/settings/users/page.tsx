@@ -1,0 +1,207 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
+import { Table } from '@/components/ui/Table';
+import { Toast } from '@/components/ui/Toast';
+import { SettingsTabs } from '@/components/ui/SettingsTabs';
+
+export default function UsersManagementPage() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [outlets, setOutlets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [toast, setToast] = useState({ open: false, message: '', type: 'info' as any });
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    role: 'ADMIN_OUTLET',
+    outlet_id: ''
+  });
+
+  function openAddUser() {
+    setEditingUserId(null);
+    setFormData({ name: '', email: '', role: 'ADMIN_OUTLET', outlet_id: '' });
+    setModalOpen(true);
+  }
+
+  function openEditUser(user: any) {
+    setEditingUserId(user.id);
+    setFormData({
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || 'ADMIN_OUTLET',
+      outlet_id: user.outlet_id ? String(user.outlet_id) : ''
+    });
+    setModalOpen(true);
+  }
+
+  useEffect(() => {
+    fetchUsers();
+    fetchOutlets();
+  }, []);
+
+  async function fetchUsers() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/users');
+      const data = await res.json();
+      if (data.success) setUsers(data.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchOutlets() {
+    try {
+      const res = await fetch('/api/outlets');
+      const data = await res.json();
+      if (data.success) setOutlets(data.data);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const url = editingUserId ? `/api/users/${editingUserId}` : '/api/users';
+      const method = editingUserId ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+          outlet_id: formData.outlet_id ? parseInt(formData.outlet_id) : null
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToast({ open: true, message: data.message, type: 'success' });
+        setModalOpen(false);
+        setFormData({ name: '', email: '', role: 'ADMIN_OUTLET', outlet_id: '' });
+        fetchUsers();
+      } else {
+        setToast({ open: true, message: data.message || 'Failed to save user', type: 'error' });
+      }
+    } catch (err) {
+      setToast({ open: true, message: 'System error occurred', type: 'error' });
+    }
+  }
+
+  return (
+    <section className="screen">
+      <SettingsTabs />
+      <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, open: false })} />
+      
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <h3>User Management</h3>
+            <p className="text-muted">Manage Super Admin and Outlet Admin accounts</p>
+          </div>
+          <Button variant="primary" onClick={openAddUser}>+ Add User</Button>
+        </div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {loading ? (
+            <p style={{ padding: 24 }}>Loading...</p>
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '12px 24px', background: '#f1f5f9' }}>Name</th>
+                  <th style={{ textAlign: 'left', padding: '12px 24px', background: '#f1f5f9' }}>Google Email</th>
+                  <th style={{ textAlign: 'left', padding: '12px 24px', background: '#f1f5f9' }}>Role</th>
+                  <th style={{ textAlign: 'left', padding: '12px 24px', background: '#f1f5f9' }}>Outlet</th>
+                  <th style={{ textAlign: 'center', padding: '12px 24px', background: '#f1f5f9' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(user => (
+                  <tr key={user.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px 24px' }}>{user.name}</td>
+                    <td style={{ padding: '12px 24px' }}>{user.email}</td>
+                    <td style={{ padding: '12px 24px' }}>
+                      <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: user.role === 'ADMIN_PUSAT' ? '#fef3c7' : '#e0e7ff', color: user.role === 'ADMIN_PUSAT' ? '#92400e' : '#3730a3', fontWeight: 600 }}>
+                        {user.role === 'ADMIN_PUSAT' ? 'Super Admin (HQ)' : user.role === 'ADMIN_OUTLET' ? 'Outlet Admin' : user.role}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 24px', color: '#64748b' }}>{user.outlet_name || '-'}</td>
+                    <td style={{ padding: '12px 24px', textAlign: 'center' }}>
+                      <Button variant="outline" size="sm" onClick={() => openEditUser(user)}>
+                        Edit
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>No users found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          )}
+        </div>
+      </div>
+
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingUserId ? "Edit User" : "Add User"} maxWidth={500}>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="alert-banner alert-info" style={{ fontSize: '13px', marginBottom: 20, alignItems: 'flex-start' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginTop: 2 }}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              <div>
+                New users will log in using <strong>Google SSO</strong> (passwordless). Please ensure the email address is correct and active.
+              </div>
+            </div>
+            
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: '#475569', marginBottom: 6, display: 'block' }}>Full Name</label>
+              <Input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+            </div>
+            
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: '#475569', marginBottom: 6, display: 'block' }}>Google Email Address</label>
+              <Input type="email" required value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: formData.role === 'ADMIN_OUTLET' ? '1fr 1fr' : '1fr', gap: 16 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: '#475569', marginBottom: 6, display: 'block' }}>Role</label>
+                <select className="form-control" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value, outlet_id: '' })}>
+                  <option value="ADMIN_OUTLET">Outlet Admin</option>
+                  <option value="ADMIN_PUSAT">Super Admin (HQ)</option>
+                </select>
+              </div>
+              
+              {formData.role === 'ADMIN_OUTLET' && (
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: '#475569', marginBottom: 6, display: 'block' }}>Outlet Location</label>
+                  <select className="form-control" required value={formData.outlet_id} onChange={e => setFormData({ ...formData, outlet_id: e.target.value })}>
+                    <option value="">-- Select Outlet --</option>
+                    {outlets.map(o => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="modal-actions" style={{ background: '#f8fafc', borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }}>
+            <Button variant="outline" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button variant="primary" type="submit" style={{ padding: '0 24px' }}>Save User</Button>
+          </div>
+        </form>
+      </Modal>
+    </section>
+  );
+}

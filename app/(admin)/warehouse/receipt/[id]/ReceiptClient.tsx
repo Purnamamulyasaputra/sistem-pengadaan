@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { BrowserMultiFormatReader } from '@zxing/browser';
+import { Toast } from '@/components/ui/Toast';
 
 interface POItem {
   id: number;
@@ -11,6 +12,7 @@ interface POItem {
   qty: number;
   unit_price: number;
   total_received?: number;
+  purchase_unit?: string;
 }
 
 interface PO {
@@ -27,12 +29,9 @@ export default function ReceiptClient({ poId }: { poId: number }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [receivedQtys, setReceivedQtys] = useState<Record<number, number>>({});
+  const [receivedQtys, setReceivedQtys] = useState<Record<number, string>>({});
   const [deliveryNote, setDeliveryNote] = useState('');
-  
-  // Barcode scanner state
-  const [scanning, setScanning] = useState(false);
-  const [cameraError, setCameraError] = useState('');
+  const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' as 'success' | 'error' });
 
   useEffect(() => {
     fetch(`/api/purchase-orders/${poId}`)
@@ -40,12 +39,10 @@ export default function ReceiptClient({ poId }: { poId: number }) {
       .then(d => {
         if (d.success) {
           setPo(d.data);
-          const initialQtys: Record<number, number> = {};
+          const initialQtys: Record<number, string> = {};
           d.data.items.forEach((item: any) => {
             if (item.line_type === 'PRODUK') {
-              // Fetch how much was previously received.
-              // For simplicity, we assume this is the first receipt, or we just init with 0
-              initialQtys[item.id] = 0;
+              initialQtys[item.id] = '';
             }
           });
           setReceivedQtys(initialQtys);
@@ -56,19 +53,28 @@ export default function ReceiptClient({ poId }: { poId: number }) {
       .finally(() => setLoading(false));
   }, [poId]);
 
+  const handleQtyChange = (id: number, value: string) => {
+    // Allow digits, single comma or dot for decimals
+    if (value === '' || /^[0-9]+([.,][0-9]*)?$/.test(value)) {
+      // We store the raw string the user types to allow '4.' or '4,5' naturally
+      setReceivedQtys(prev => ({ ...prev, [id]: value }));
+    }
+  };
+
   async function handleValidate() {
     if (!po) return;
     
-    // Check if there's any shortfall
     let hasShortfall = false;
     let hasExcess = false;
     let totalReceived = 0;
-    
     const itemsPayload = [];
     
     for (const item of po.items) {
       if (item.item_id) {
-        const rQty = receivedQtys[item.id] || 0;
+        const rawStr = receivedQtys[item.id] || '';
+        // Convert comma to dot for parsing
+        const rQty = Number(rawStr.replace(/,/g, '.')) || 0;
+        
         totalReceived += rQty;
         if (rQty < item.qty) hasShortfall = true;
         if (rQty > item.qty) hasExcess = true;
@@ -95,10 +101,7 @@ export default function ReceiptClient({ poId }: { poId: number }) {
 
     if (hasShortfall) {
       const confirmBackorder = confirm('Ada pesanan yang belum datang sepenuhnya (kurang). Apakah Anda ingin membuat Backorder untuk sisanya?\n\n- OK: Buat Backorder (Status: DITERIMA SEBAGIAN)\n- Cancel: Anggap selesai (Status: SELESAI)');
-      // If true, backorder. It's handled by backend automatically setting status based on qty.
-      // Wait, our backend auto sets SELESAI if fully received, and DITERIMA_SEBAGIAN if shortfall.
-      // But if user wants to close it permanently despite shortfall, we'd need to tell backend to force SELESAI.
-      // For now, let backend handle it natively.
+      // Backend handles automatically
     }
     
     setSaving(true);
@@ -117,22 +120,14 @@ export default function ReceiptClient({ poId }: { poId: number }) {
       const d = await res.json();
       if (!d.success) throw new Error(d.message);
       
-      alert('Penerimaan barang berhasil!');
-      router.push('/purchase-orders'); // or /warehouse if built
+      setToast({ isOpen: true, message: 'Penerimaan barang berhasil!', type: 'success' });
+      setTimeout(() => {
+        router.push('/warehouse');
+      }, 1000);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setSaving(false);
-    }
-  }
-
-  // Very simplified barcode scanner toggle
-  function toggleScanner() {
-    if (scanning) {
-      setScanning(false);
-    } else {
-      setScanning(true);
-      // In a real implementation, you would attach BrowserMultiFormatReader to a video element here
     }
   }
 
@@ -141,80 +136,89 @@ export default function ReceiptClient({ poId }: { poId: number }) {
   if (!po) return null;
 
   return (
-    <div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
-      <button onClick={() => router.back()} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary)', fontWeight: 600, marginBottom: 16 }}>&larr; Kembali</button>
-      
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--primary)', margin: 0 }}>Penerimaan: {po.po_number}</h1>
-        <button 
-          onClick={handleValidate}
-          disabled={saving}
-          style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 24px', borderRadius: 4, fontWeight: 600, cursor: 'pointer' }}
-        >
-          {saving ? 'Menyimpan...' : 'Validate Receipt'}
-        </button>
-      </div>
-      
-      {error && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: 12, borderRadius: 4, marginBottom: 16 }}>{error}</div>}
-      
-      <div style={{ background: '#fff', borderRadius: 8, padding: 24, border: '1px solid var(--border)', marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 24, marginBottom: 24 }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Vendor</label>
-            <div style={{ fontWeight: 500 }}>{po.vendor_name}</div>
+    <section className="screen">
+      <Toast 
+        isOpen={toast.isOpen} 
+        message={toast.message} 
+        type={toast.type} 
+        onClose={() => setToast({ ...toast, isOpen: false })} 
+      />
+      <div className="card">
+        <div className="card-head" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button onClick={() => router.back()} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary)', fontWeight: 600, alignSelf: 'flex-start', padding: 0, fontSize: 14 }}>&larr; Kembali</button>
+            <h3 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--primary)' }}>Penerimaan: {po.po_number}</h3>
           </div>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 4 }}>No. Surat Jalan Vendor</label>
-            <input 
-              type="text" 
-              value={deliveryNote}
-              onChange={e => setDeliveryNote(e.target.value)}
-              placeholder="e.g. SJ-12345"
-              style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: 4, width: '100%' }}
-            />
-          </div>
-        </div>
-        
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Daftar Barang</h2>
-          <button onClick={toggleScanner} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '6px 12px', borderRadius: 4, cursor: 'pointer' }}>
-            {scanning ? 'Stop Scanner' : '📷 Scan Barcode'}
+          <button 
+            className="btn btn-primary"
+            onClick={handleValidate}
+            disabled={saving}
+            style={{ fontWeight: 600, padding: '8px 24px' }}
+          >
+            {saving ? 'Menyimpan...' : 'Validate Receipt'}
           </button>
         </div>
         
-        {scanning && (
-          <div style={{ background: '#000', height: 200, borderRadius: 8, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-            [Area Kamera Scanner Aktif - Simulasi]
+        <div className="card-body flush" style={{ padding: 24 }}>
+          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 24 }}>{error}</div>}
+          
+          <div style={{ display: 'flex', gap: 24, marginBottom: 32 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Vendor</label>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{po.vendor_name}</div>
+            </div>
+            <div style={{ flex: 1, maxWidth: 400 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>No. Surat Jalan Vendor</label>
+              <input 
+                className="input"
+                type="text" 
+                value={deliveryNote}
+                onChange={e => setDeliveryNote(e.target.value)}
+                placeholder="e.g. SJ-12345"
+                style={{ width: '100%' }}
+              />
+            </div>
           </div>
-        )}
-        
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #cbd5e1', textAlign: 'left' }}>
-              <th style={{ padding: '12px 8px', fontSize: 13, color: '#64748b' }}>PRODUK</th>
-              <th style={{ padding: '12px 8px', fontSize: 13, color: '#64748b', textAlign: 'right' }}>DIPESAN</th>
-              <th style={{ padding: '12px 8px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 150 }}>DITERIMA</th>
-            </tr>
-          </thead>
-          <tbody>
-            {po.items.filter(i => i.item_id).map(item => (
-              <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '12px 8px', fontWeight: 500 }}>{item.description}</td>
-                <td style={{ padding: '12px 8px', textAlign: 'right', color: '#64748b' }}>{item.qty}</td>
-                <td style={{ padding: '12px 8px', textAlign: 'right' }}>
-                  <input 
-                    type="number"
-                    min="0"
-                    value={receivedQtys[item.id] !== undefined ? receivedQtys[item.id] : ''}
-                    onChange={e => setReceivedQtys(prev => ({ ...prev, [item.id]: parseFloat(e.target.value) || 0 }))}
-                    style={{ width: 100, padding: '6px 8px', textAlign: 'right', border: '1px solid #cbd5e1', borderRadius: 4 }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          
+          <h4 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px 0', color: '#1e293b' }}>Daftar Barang</h4>
+          
+          <div className="table-responsive">
+            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'left' }}>PRODUK</th>
+                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 150 }}>DIPESAN</th>
+                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 180 }}>DITERIMA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {po.items.filter(i => i.item_id).map(item => (
+                  <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px', fontWeight: 600, color: '#334155' }}>{item.description}</td>
+                    <td className="right" style={{ padding: '12px', color: '#64748b', fontWeight: 500 }}>
+                      {Number(item.qty).toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{item.purchase_unit || 'pcs'}</span>
+                    </td>
+                    <td className="right" style={{ padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                        <input 
+                          type="text"
+                          className="input right num font-bold"
+                          placeholder="0"
+                          value={receivedQtys[item.id] !== undefined ? receivedQtys[item.id] : ''}
+                          onChange={e => handleQtyChange(item.id, e.target.value)}
+                          onFocus={e => e.target.select()}
+                          style={{ width: '80px', padding: '6px 10px', background: '#f8fafc', border: '1px solid #cbd5e1' }}
+                        />
+                        <span className="muted" style={{ fontSize: 12, minWidth: 32, textAlign: 'left' }}>{item.purchase_unit || 'pcs'}</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

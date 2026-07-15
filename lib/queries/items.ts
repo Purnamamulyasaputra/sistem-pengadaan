@@ -8,6 +8,8 @@ export interface Item {
   category_name?: string;
   barcode?: string;
   purchase_unit: string;
+  package_unit?: string;
+  package_qty?: number;
   smallest_unit: string;
   conversion_ratio: number;
   minimum_threshold: number;
@@ -71,6 +73,8 @@ export async function createItem(data: {
   name: string;
   category_id: number;
   purchase_unit: string;
+  package_unit?: string | null;
+  package_qty?: number | null;
   smallest_unit: string;
   conversion_ratio: number;
   minimum_threshold: number;
@@ -81,10 +85,10 @@ export async function createItem(data: {
   ingredient_id?: number | null;
 }) {
   const result = await query<Item>(
-    `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, threshold_type, is_perishable, barcode, current_average_price, ingredient_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    `INSERT INTO items (name, category_id, purchase_unit, package_unit, package_qty, smallest_unit, conversion_ratio, minimum_threshold, threshold_type, is_perishable, barcode, current_average_price, ingredient_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING *`,
-    [data.name, data.category_id, data.purchase_unit, data.smallest_unit, data.conversion_ratio, data.minimum_threshold, data.threshold_type, data.is_perishable, data.barcode ?? null, data.current_average_price ?? 0, data.ingredient_id ?? null]
+    [data.name, data.category_id, data.purchase_unit, data.package_unit ?? null, data.package_qty ?? null, data.smallest_unit, data.conversion_ratio, data.minimum_threshold, data.threshold_type, data.is_perishable, data.barcode ?? null, data.current_average_price ?? 0, data.ingredient_id ?? null]
   );
   return result.rows[0];
 }
@@ -93,6 +97,8 @@ export async function updateItem(id: number, data: Partial<{
   name: string;
   category_id: number;
   purchase_unit: string;
+  package_unit: string | null;
+  package_qty: number | null;
   smallest_unit: string;
   conversion_ratio: number;
   minimum_threshold: number;

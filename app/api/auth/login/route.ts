@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserByEmail, validatePassword } from '@/lib/queries/auth';
-import { signToken, COOKIE_NAME } from '@/lib/auth';
+import { signToken, COOKIE_NAME, getSecondsToNextMidnight } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 export async function GET() {
@@ -26,6 +26,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Email atau password salah', data: null }, { status: 401 });
     }
 
+    if (!user.password_hash) {
+      return NextResponse.json({ success: false, message: 'Akun ini hanya dapat masuk menggunakan Login dengan Google', data: null }, { status: 401 });
+    }
+
     const valid = await validatePassword(password, user.password_hash);
     if (!valid) {
       return NextResponse.json({ success: false, message: 'Email atau password salah', data: null }, { status: 401 });
@@ -38,6 +42,8 @@ export async function POST(req: NextRequest) {
       outletId: user.outlet_id ?? null,
       name: user.name,
     });
+
+    const secondsToMidnight = getSecondsToNextMidnight();
 
     const response = NextResponse.json({
       success: true,
@@ -56,7 +62,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24, // 24 hours
+      maxAge: secondsToMidnight,
       path: '/',
     });
 

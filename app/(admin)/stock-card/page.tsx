@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
+import { Select } from '@/components/ui/Select';
 
 interface LogEntry {
   id: number;
@@ -42,7 +43,7 @@ export default function StockCardPage() {
 
   // Derive summaries from the logs (since logs are returned in desc order by created_at)
   const currentBalance = logs.length > 0 ? logs[0].ending_balance : (selectedItem?.current_stock ?? 0);
-  
+
   const lastIn = logs.find(l => l.movement_type === 'IN')?.created_at;
   const lastOut = logs.find(l => l.movement_type === 'OUT')?.created_at;
 
@@ -50,6 +51,7 @@ export default function StockCardPage() {
     <section className="screen">
       <div className="card">
         <div className="tabs" style={{ marginBottom: 0 }}>
+          <a href="/warehouse" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Goods Receipts</a>
           <a href="/stock-card" className="tab active" style={{ textDecoration: 'none' }}>Stock Card</a>
           <a href="/delivery-orders" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Delivery Orders</a>
           <a href="/opname/central" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Central Opname</a>
@@ -60,15 +62,13 @@ export default function StockCardPage() {
             <p className="muted" style={{ margin: 0, marginTop: 4 }}>Global Inventory Movements</p>
           </div>
           <div>
-            <select 
-              className="input" 
+            <Select 
               value={selectedItemId} 
-              onChange={e => setSelectedItemId(e.target.value)}
+              onChange={setSelectedItemId}
+              options={items.map(i => ({ value: String(i.id), label: `${i.name} (${i.smallest_unit})` }))}
               style={{ minWidth: 300 }}
-            >
-              <option value="">-- Select Item --</option>
-              {items.map(i => <option key={i.id} value={i.id}>{i.name} ({i.smallest_unit})</option>)}
-            </select>
+              searchable={true}
+            />
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export default function StockCardPage() {
             <div>
               <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Current Balance</p>
               <div style={{ fontSize: 20, fontWeight: 700 }}>
-                {Number(currentBalance).toFixed(2)} <span className="muted" style={{ fontSize: 14 }}>{selectedItem?.smallest_unit}</span>
+                {Number(currentBalance).toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 14 }}>{selectedItem?.smallest_unit}</span>
               </div>
             </div>
             <div>
@@ -130,10 +130,10 @@ export default function StockCardPage() {
                       </Badge>
                     </td>
                     <td className="right font-mono font-bold" style={{ color: log.movement_type === 'OUT' || log.qty_change < 0 ? '#dc2626' : '#16a34a' }}>
-                      {log.qty_change > 0 ? '+' : ''}{Number(log.qty_change).toFixed(2)}
+                      {log.qty_change > 0 ? '+' : ''}{Number(log.qty_change).toLocaleString('id-ID')} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)' }}>{selectedItem?.smallest_unit}</span>
                     </td>
                     <td className="right font-mono font-bold">
-                      {Number(log.ending_balance).toFixed(2)}
+                      {Number(log.ending_balance).toLocaleString('id-ID')} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)' }}>{selectedItem?.smallest_unit}</span>
                     </td>
                     <td>
                       <div className="font-bold">{log.reference_type}</div>

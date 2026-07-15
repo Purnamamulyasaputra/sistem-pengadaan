@@ -47,11 +47,11 @@ export async function getUsers() {
 export async function createUser(data: {
   name: string;
   email: string;
-  password: string;
+  password?: string;
   role: string;
   outlet_id?: number;
 }) {
-  const hash = await hashPassword(data.password);
+  const hash = data.password ? await hashPassword(data.password) : null;
   const result = await query(
     `INSERT INTO users (name, email, password_hash, role, outlet_id) VALUES ($1,$2,$3,$4,$5) RETURNING id, name, email, role, outlet_id, created_at`,
     [data.name, data.email, hash, data.role, data.outlet_id ?? null]

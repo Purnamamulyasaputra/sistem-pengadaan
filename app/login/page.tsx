@@ -2,7 +2,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { signIn } from 'next-auth/react';
 import { FullScreenLoader } from '@/components/ui/FullScreenLoader';
+import { Toast } from '@/components/ui/Toast';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,10 +12,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [demoUsers, setDemoUsers] = useState<{ name: string; email: string }[]>([]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('error');
+    if (err) {
+      setToastMessage(err);
+      setToastOpen(true);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
     fetch('/api/auth/login')
       .then(r => r.json())
       .then(d => { if (d.success) setDemoUsers(d.data); })
@@ -46,6 +58,7 @@ export default function LoginPage() {
 
   return (
     <>
+      <Toast isOpen={toastOpen} message={toastMessage} type="error" onClose={() => setToastOpen(false)} />
       <FullScreenLoader open={loading} />
       <div style={{ minHeight: '100dvh', background: 'linear-gradient(135deg, #014f2d 0%, #016e3f 50%, #1a7a4a 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
         {/* Background decoration */}
@@ -55,21 +68,21 @@ export default function LoginPage() {
           <div style={{ position: 'absolute', top: '30%', left: '5%', width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.02)' }} />
         </div>
 
-        <div className="animate-fade-in" style={{ display: 'flex', gap: 40, alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 860, flexWrap: 'wrap' }}>
-          <div style={{ width: '100%', maxWidth: 420 }}>
+        <div className="animate-fade-in" style={{ display: 'flex', gap: 20, alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 680, flexWrap: 'wrap' }}>
+          <div style={{ width: '100%', maxWidth: 320 }}>
             {/* Card */}
-            <div style={{ background: 'white', borderRadius: 20, padding: '40px 36px', boxShadow: '0 24px 80px rgba(0,0,0,0.25)' }}>
+            <div style={{ background: 'white', borderRadius: 16, padding: '24px', boxShadow: '0 24px 80px rgba(0,0,0,0.25)' }}>
               {/* Logo */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 32 }}>
-                <div style={{ width: 72, height: 72, background: '#f0f9f4', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, overflow: 'hidden' }}>
-                  <Image src="/logo.png" alt="Sunrise Daily" width={100} height={100} style={{ objectFit: 'contain' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 20 }}>
+                <div style={{ width: 'auto', height: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: -20 }}>
+                  <Image src="/logo-warna.png" alt="Sunrise Daily" width={80} height={80} priority style={{ objectFit: 'contain', width: 'auto', height: 'auto' }} />
                 </div>
-                <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-cabin, Cabin, sans-serif)', color: '#1a2e25', marginBottom: 4 }}>Sunrise Daily</h1>
-                <p style={{ fontSize: 12.5, color: '#8aaa9a', textAlign: 'center', lineHeight: 1.5 }}>Centralized Procurement &amp; Inventory System</p>
+                <h1 style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-cabin, Cabin, sans-serif)', color: '#1a2e25', marginBottom: 2 }}>Sunrise Daily</h1>
+                <p style={{ fontSize: 11, color: '#8aaa9a', textAlign: 'center', lineHeight: 1.4 }}>Centralized Procurement &amp; Inventory System</p>
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {error && (
                   <div className="alert-banner alert-danger" style={{ borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
@@ -84,7 +97,7 @@ export default function LoginPage() {
                     <input
                       type="email"
                       className="form-control"
-                      style={{ paddingLeft: 38 }}
+                      style={{ paddingLeft: 36, fontSize: 13, height: 38 }}
                       placeholder="admin@sunrisedaily.id"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
@@ -101,7 +114,7 @@ export default function LoginPage() {
                     <input
                       type={showPass ? 'text' : 'password'}
                       className="form-control"
-                      style={{ paddingLeft: 38, paddingRight: 38 }}
+                      style={{ paddingLeft: 36, paddingRight: 36, fontSize: 13, height: 38 }}
                       placeholder="••••••••"
                       value={password}
                       onChange={e => setPassword(e.target.value)}
@@ -118,15 +131,41 @@ export default function LoginPage() {
 
                 <button
                   type="submit"
-                  className="btn btn-primary btn-lg"
+                  className="btn btn-primary"
                   disabled={loading}
-                  style={{ width: '100%', marginTop: 4, fontSize: 14.5, fontWeight: 600, letterSpacing: 0.3 }}
+                  style={{ width: '100%', marginTop: 2, padding: '10px', fontSize: 13.5, fontWeight: 600, letterSpacing: 0.3 }}
                 >
                   Masuk
                 </button>
               </form>
 
-              <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: '#8aaa9a' }}>
+              <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0' }}>
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }}></div>
+                <div style={{ padding: '0 8px', fontSize: 11, color: '#94a3b8' }}>ATAU</div>
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }}></div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setLoading(true);
+                  signIn('google', { callbackUrl: '/dashboard' });
+                }}
+                disabled={loading}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px', fontSize: 13.5, fontWeight: 600, color: '#1e293b', cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseOver={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                onMouseOut={(e) => (e.currentTarget.style.background = 'white')}
+              >
+                <svg width="20" height="20" viewBox="0 0 48 48">
+                  <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z" />
+                  <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z" />
+                  <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.222,0-9.653-3.343-11.303-8l-6.571,4.819C9.656,39.663,16.318,44,24,44z" />
+                  <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z" />
+                </svg>
+                <span style={{ fontSize: 13.5 }}>Masuk dengan Google</span>
+              </button>
+
+              <p style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: '#8aaa9a' }}>
                 Hanya untuk pengguna internal Sunrise Daily
               </p>
 
@@ -138,19 +177,19 @@ export default function LoginPage() {
           </div>
 
           {/* Demo Credentials Box */}
-          <div style={{ width: '100%', maxWidth: 360, background: 'rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: 20, padding: 32, color: 'white', boxShadow: '0 24px 80px rgba(0,0,0,0.1)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-              <div style={{ background: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 10 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
+          <div style={{ width: '100%', maxWidth: 300, background: 'rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: 16, padding: 20, color: 'white', boxShadow: '0 24px 80px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <div style={{ background: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 8 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
               </div>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Demo Login</h3>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Demo Login</h3>
             </div>
 
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 20, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginBottom: 16, lineHeight: 1.5 }}>
               Semua akun menggunakan password: <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 6px', borderRadius: 4 }}>admin123</code>
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '350px', overflowY: 'auto', paddingRight: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '300px', overflowY: 'auto', paddingRight: 4 }}>
               {demoUsers.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>Memuat data akun...</div>
               ) : (

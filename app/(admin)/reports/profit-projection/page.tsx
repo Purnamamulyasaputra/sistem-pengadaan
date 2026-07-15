@@ -81,16 +81,16 @@ export default function ProfitProjectionPage() {
               <Table>
                 <thead>
                   <tr>
-                    <th>Item Name</th>
-                    <th className="right">Current Stock</th>
-                    <th className="right">Avg Cost/Unit</th>
-                    <th className="right">Total Cost (Modal)</th>
-                    <th className="right" style={{ width: 140 }}>Est. Sale Price/Unit</th>
-                    <th className="right" style={{ color: '#016e3f' }}>Total Revenue</th>
-                    <th className="right" style={{ color: '#0ea5e9' }}>Projected Profit</th>
+                    <th style={{ padding: '8px 12px', fontSize: 12 }}>Item Name</th>
+                    <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Current Stock</th>
+                    <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Avg Cost/Unit</th>
+                    <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Total Cost (Modal)</th>
+                    <th className="right" style={{ padding: '8px 12px', fontSize: 12, width: 140 }}>Est. Sale Price/Unit</th>
+                    <th className="right" style={{ padding: '8px 12px', fontSize: 12, color: '#016e3f' }}>Total Revenue</th>
+                    <th className="right" style={{ padding: '8px 12px', fontSize: 12, color: '#0ea5e9' }}>Projected Profit</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody style={{ fontSize: 13 }}>
                   {items.map((item, i) => {
                     const cost = item.current_stock * item.current_average_price;
                     const rev = item.current_stock * item.estimated_sale_price;
@@ -98,33 +98,33 @@ export default function ProfitProjectionPage() {
                     
                     return (
                       <tr key={item.id}>
-                        <td className="font-bold">{item.name}</td>
-                        <td className="right num">{item.current_stock} <span className="muted" style={{ fontSize: 11 }}>{item.smallest_unit}</span></td>
-                        <td className="right num muted">{rp(item.current_average_price)}</td>
-                        <td className="right num">{rp(cost)}</td>
-                        <td className="right">
+                        <td className="font-bold" style={{ padding: '6px 12px' }}>{item.name}</td>
+                        <td className="right num" style={{ padding: '6px 12px' }}>{Number(item.current_stock).toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{item.smallest_unit}</span></td>
+                        <td className="right num muted" style={{ padding: '6px 12px' }}>{rp(item.current_average_price)}</td>
+                        <td className="right num" style={{ padding: '6px 12px' }}>{rp(cost)}</td>
+                        <td className="right" style={{ padding: '4px 12px' }}>
                           <input 
                             className="input right num" 
                             type="number" 
-                            style={{ width: '100px', padding: '4px 8px', height: 32 }}
+                            style={{ width: '90px', padding: '2px 8px', height: 28, fontSize: 13 }}
                             value={item.estimated_sale_price === 0 ? '' : item.estimated_sale_price}
                             onChange={(e) => updateSalePrice(i, e.target.value)}
                             onFocus={e => e.target.select()}
                           />
                         </td>
-                        <td className="right num font-bold" style={{ color: '#016e3f' }}>{rp(rev)}</td>
-                        <td className="right num font-bold" style={{ color: '#0ea5e9' }}>{rp(profit)}</td>
+                        <td className="right num font-bold" style={{ padding: '6px 12px', color: '#016e3f' }}>{rp(rev)}</td>
+                        <td className="right num font-bold" style={{ padding: '6px 12px', color: '#0ea5e9' }}>{rp(profit)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid var(--border)' }}>
-                    <td colSpan={3} className="right">GRAND TOTAL PROJECTION</td>
-                    <td className="right num">{rp(totalCost)}</td>
-                    <td></td>
-                    <td className="right num" style={{ color: '#016e3f', fontSize: 14 }}>{rp(totalRevenue)}</td>
-                    <td className="right num" style={{ color: '#0ea5e9', fontSize: 16 }}>{rp(totalProfit)}</td>
+                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid var(--border)', fontSize: 13 }}>
+                    <td colSpan={3} className="right" style={{ padding: '8px 12px' }}>GRAND TOTAL PROJECTION</td>
+                    <td className="right num" style={{ padding: '8px 12px' }}>{rp(totalCost)}</td>
+                    <td style={{ padding: '8px 12px' }}></td>
+                    <td className="right num" style={{ padding: '8px 12px', color: '#016e3f' }}>{rp(totalRevenue)}</td>
+                    <td className="right num" style={{ padding: '8px 12px', color: '#0ea5e9' }}>{rp(totalProfit)}</td>
                   </tr>
                 </tfoot>
               </Table>

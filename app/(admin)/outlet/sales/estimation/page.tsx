@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
+import { Toast } from '@/components/ui/Toast';
 import { ChevronLeft, Plus, Trash2, Send } from 'lucide-react';
 
 type EstimationRow = {
@@ -32,6 +33,7 @@ export default function ProcurementEstimationPage() {
   const [allMasterItems, setAllMasterItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success'|'error'|'info' });
   
   // For additional items (Sapu, Sabun, etc)
   const [additionalItems, setAdditionalItems] = useState<{ id: string; item_id: number | null; name: string; qty: number; unit: string }[]>([]);
@@ -109,7 +111,7 @@ export default function ProcurementEstimationPage() {
     const validAdditional = additionalItems.filter(a => a.name.trim() !== '' && a.qty > 0);
     
     if (selectedData.length === 0 && validAdditional.length === 0) {
-      alert('Pilih minimal 1 barang untuk direquest.');
+      setToast({ open: true, message: 'Pilih minimal 1 barang untuk direquest.', type: 'error' });
       return;
     }
 
@@ -149,11 +151,13 @@ export default function ProcurementEstimationPage() {
 
       if (!res.ok) throw new Error('Gagal membuat request');
       
-      alert('Draft Request Pengadaan berhasil dibuat!');
-      router.push('/outlet/requests');
+      setToast({ open: true, message: 'Draft Request Pengadaan berhasil dibuat!', type: 'success' });
+      setTimeout(() => {
+        router.push('/outlet/requests');
+      }, 1500);
       
     } catch (err: any) {
-      alert(err.message);
+      setToast({ open: true, message: err.message, type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -163,6 +167,7 @@ export default function ProcurementEstimationPage() {
 
   return (
     <section className="screen" style={{ paddingBottom: 100 }}>
+      <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, open: false })} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <button className="btn" onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px' }}>
           <ChevronLeft size={18} /> Back

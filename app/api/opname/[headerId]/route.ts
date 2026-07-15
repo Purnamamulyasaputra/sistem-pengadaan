@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ head
   // Wait, getStockCountHeaders doesn't accept headerId.
   // Actually, we can fetch all and find, or just create a quick query here.
   const headers = await getStockCountHeaders();
-  const header = headers.find(h => h.id === Number(headerId));
+  const header = headers.find(h => String(h.id) === String(headerId));
   
   if (!header) return NextResponse.json({ success: false, message: 'Not found', data: null }, { status: 404 });
   

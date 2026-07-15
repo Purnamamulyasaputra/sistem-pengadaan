@@ -55,7 +55,11 @@ export async function createGoodsReceipt(data: {
     );
     const receipt = receiptRes.rows[0];
 
-    // Insert items and update inventory
+    // Fetch PO vendor
+    const poRes = await client.query(`SELECT vendor_id FROM purchase_orders WHERE id = $1`, [data.purchase_order_id]);
+    const vendorId = poRes.rows[0]?.vendor_id;
+
+    // Insert items and update inventory & price history
     for (const item of data.items) {
       await client.query(
         `INSERT INTO goods_receipt_items (goods_receipt_id, purchase_order_item_id, item_id, qty_received)
@@ -63,22 +67,48 @@ export async function createGoodsReceipt(data: {
         [receipt.id, item.purchase_order_item_id, item.item_id, item.qty_received]
       );
       
-      // Fetch conversion ratio for this item
-      const itemRes = await client.query(`SELECT conversion_ratio FROM items WHERE id = $1`, [item.item_id]);
-      const ratio = itemRes.rows.length > 0 ? parseFloat(itemRes.rows[0].conversion_ratio) : 1;
+      // Get unit_price and conversion_ratio from PO item
+      const poiRes = await client.query(`SELECT unit_price, conversion_ratio FROM purchase_order_items WHERE id = $1`, [item.purchase_order_item_id]);
+      const unit_price = poiRes.rows.length > 0 ? parseFloat(poiRes.rows[0].unit_price) : 0;
+      const poRatio = poiRes.rows.length > 0 && poiRes.rows[0].conversion_ratio ? parseFloat(poiRes.rows[0].conversion_ratio) : null;
+
+      // Fetch current average price (and fallback ratio) from items
+      const itemRes = await client.query(`SELECT conversion_ratio, current_average_price FROM items WHERE id = $1 FOR UPDATE`, [item.item_id]);
+      const fallbackRatio = itemRes.rows.length > 0 ? parseFloat(itemRes.rows[0].conversion_ratio || 1) : 1;
+      const ratio = poRatio !== null ? poRatio : fallbackRatio;
+      const oldAvg = itemRes.rows.length > 0 ? parseFloat(itemRes.rows[0].current_average_price || 0) : 0;
       
       const qtyInSmallestUnit = item.qty_received * ratio;
+      const unitPriceInSmallestUnit = unit_price / ratio; // Price per smallest unit
 
       // Get current stock
       const stockRes = await client.query(`SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`, [item.item_id]);
       const currentStock = stockRes.rows.length > 0 ? parseFloat(stockRes.rows[0].ending_balance) : 0;
       const newStock = currentStock + qtyInSmallestUnit;
       
+      // Calculate new Moving Average
+      const oldValue = oldAvg * currentStock;
+      const newValue = unitPriceInSmallestUnit * qtyInSmallestUnit;
+      const newAvgPrice = newStock > 0 ? (oldValue + newValue) / newStock : 0;
+
+      // Update price cache in items
+      await client.query(
+        `UPDATE items SET current_average_price = $1, updated_at = now() WHERE id = $2`,
+        [newAvgPrice, item.item_id]
+      );
+      
       // Insert inventory log
       await client.query(
         `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
          VALUES ($1, 'IN', $2, $3, 'RECEIPT', $4)`,
         [item.item_id, qtyInSmallestUnit, newStock, receipt.id]
+      );
+
+      // Insert price history
+      await client.query(
+        `INSERT INTO price_history (item_id, vendor_id, purchase_date, purchase_qty, unit_purchase_price, new_average_price, purchase_order_item_id)
+         VALUES ($1, $2, CURRENT_DATE, $3, $4, $5, $6)`,
+        [item.item_id, vendorId, item.qty_received, unit_price, newAvgPrice, item.purchase_order_item_id]
       );
     }
     

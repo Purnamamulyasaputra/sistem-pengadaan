@@ -31,6 +31,7 @@ export default function DeliveryOrdersPage() {
     <section className="screen">
       <div className="card">
         <div className="tabs" style={{ marginBottom: 0 }}>
+          <a href="/warehouse" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Goods Receipts</a>
           <a href="/stock-card" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Stock Card</a>
           <a href="/delivery-orders" className="tab active" style={{ textDecoration: 'none' }}>Delivery Orders</a>
           <a href="/opname/central" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Central Opname</a>

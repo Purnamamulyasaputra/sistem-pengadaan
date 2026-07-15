@@ -43,10 +43,10 @@ function Icon({ name, ...props }: { name: string } & React.SVGProps<SVGSVGElemen
 
 const CENTRAL_MENU: NavItem[] = [
   { section: 'MAIN' },
-  { href: '/dashboard', label: 'Central Dashboard', icon: <Icon name="dashboard" /> },
+  { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
   { section: 'INVENTORY' },
   { href: '/purchase-orders', label: 'Purchase Order', icon: <Icon name="cart" /> },
-  { href: '/stock-card', label: 'Warehouse', icon: <Icon name="box" /> },
+  { href: '/warehouse', label: 'Warehouse', icon: <Icon name="box" /> },
   { section: 'REQUESTS' },
   { href: '/requests', label: 'Request Recap', icon: <Icon name="list" /> },
   { section: 'DATA & REPORTS' },
@@ -60,7 +60,7 @@ const CENTRAL_MENU: NavItem[] = [
 
 const OUTLET_MENU: NavItem[] = [
   { section: 'MAIN' },
-  { href: '/dashboard', label: 'Outlet Dashboard', icon: <Icon name="dashboard" /> },
+  { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
   { section: 'SALES & DATA' },
   { href: '/outlet/sales', label: 'Sales Analytics', icon: <Icon name="trend" /> },
   { section: 'REQUESTS' },

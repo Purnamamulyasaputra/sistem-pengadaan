@@ -6,10 +6,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 export default function PriceHistoryPage() {
   const [items, setItems] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);
-  
+
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
-  
+
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +23,7 @@ export default function PriceHistoryPage() {
     let url = '/api/price-history?limit=100';
     if (selectedItemId) url += `&item_id=${selectedItemId}`;
     if (selectedVendorId) url += `&vendor_id=${selectedVendorId}`;
-    
+
     fetch(url)
       .then(r => r.json())
       .then(d => {
@@ -53,20 +53,20 @@ export default function PriceHistoryPage() {
             <p className="muted" style={{ margin: 0, marginTop: 4 }}>Track item price fluctuations and moving average updates.</p>
           </div>
         </div>
-        
+
         <div style={{ padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16 }}>
-          <select 
-            className="input" 
-            value={selectedItemId} 
+          <select
+            className="input"
+            value={selectedItemId}
             onChange={e => setSelectedItemId(e.target.value)}
             style={{ minWidth: 250 }}
           >
             <option value="">All Items</option>
             {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
-          <select 
-            className="input" 
-            value={selectedVendorId} 
+          <select
+            className="input"
+            value={selectedVendorId}
             onChange={e => setSelectedVendorId(e.target.value)}
             style={{ minWidth: 250 }}
           >
@@ -83,8 +83,8 @@ export default function PriceHistoryPage() {
                 <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
-                  <YAxis tickFormatter={(val) => `Rp${(val/1000)}k`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <Tooltip 
+                  <YAxis tickFormatter={(val) => `Rp${(val / 1000)}k`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Tooltip
                     formatter={(value: any) => [`Rp ${Number(value).toLocaleString('id-ID')}`, undefined]}
                     contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />

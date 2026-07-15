@@ -12,8 +12,21 @@ export interface JwtPayload {
   name: string;
 }
 
-export function signToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+export function getSecondsToNextMidnight(): number {
+  const now = new Date();
+  const offset = 7 * 60 * 60 * 1000; // WIB (UTC+7)
+  const nowWIB = new Date(now.getTime() + offset);
+  
+  const nextMidnightWIB = new Date(nowWIB);
+  nextMidnightWIB.setUTCHours(24, 0, 0, 0);
+  
+  const nextMidnightAbsolute = new Date(nextMidnightWIB.getTime() - offset);
+  return Math.max(1, Math.floor((nextMidnightAbsolute.getTime() - now.getTime()) / 1000));
+}
+
+export function signToken(payload: JwtPayload, expiresInSeconds?: number): string {
+  const expiresIn = expiresInSeconds ?? getSecondsToNextMidnight();
+  return jwt.sign(payload, JWT_SECRET, { expiresIn });
 }
 
 export function verifyToken(token: string): JwtPayload | null {

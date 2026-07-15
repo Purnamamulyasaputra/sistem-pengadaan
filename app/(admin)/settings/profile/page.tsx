@@ -8,8 +8,8 @@ export default function ProfilePage() {
   const [outlet, setOutlet] = useState<Outlet | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/session').then(r => r.json()).then(async d => {
-      if (d.data) {
+    fetch('/api/auth/me').then(r => r.json()).then(async d => {
+      if (d.success && d.data) {
         setProfile(d.data);
         if (d.data.outlet_id) {
           const res = await fetch('/api/outlets');
@@ -18,6 +18,8 @@ export default function ProfilePage() {
           setOutlet(outletObj);
         }
       }
+    }).catch(err => {
+      console.error(err);
     });
   }, []);
 

@@ -8,7 +8,7 @@ interface PO {
 }
 
 interface Vendor { id: number; name: string; is_active?: boolean; }
-interface Item { id: number; name: string; purchase_unit: string; conversion_ratio: number; current_average_price: number; }
+interface Item { id: number; name: string; purchase_unit: string; smallest_unit?: string; conversion_ratio: number; current_average_price: number; }
 interface Outlet { id: number; name: string; is_active?: boolean; }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
@@ -35,7 +35,7 @@ export default function PurchaseOrdersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
-  const [lines, setLines] = useState([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
+  const [lines, setLines] = useState<any[]>([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
   const [draftPO, setDraftPO] = useState<PO | null>(null);
   const [activeTab, setActiveTab] = useState('Ingredients');
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
@@ -91,7 +91,7 @@ export default function PurchaseOrdersPage() {
   function handleItemTextChange(lineIdx: number, text: string) {
     const item = items.find(i => i.name === text);
     if (item) {
-      setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: String(item.id), description: text, unit_price: String(Math.round(item.current_average_price * (item.conversion_ratio || 1))) } : line));
+      setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: String(item.id), description: text, unit_price: String(Math.round(item.current_average_price * (item.conversion_ratio || 1))), purchase_unit: item.purchase_unit || '', package_qty: '', package_inner_size: '', conversion_ratio: item.conversion_ratio ? String(item.conversion_ratio) : '' } : line));
     } else {
       setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: '', description: text } : line));
     }
@@ -130,7 +130,7 @@ export default function PurchaseOrdersPage() {
         body: JSON.stringify({
           ...form,
           vendor_id: Number(form.vendor_id),
-          items: validLines.map((l, idx) => ({
+          items: validLines.map((l: any, idx) => ({
             line_type: l.type === 'note' ? 'CATATAN' : 'PRODUK',
             item_id: l.type === 'product' ? Number(l.item_id) : null,
             description: l.description,
@@ -138,6 +138,10 @@ export default function PurchaseOrdersPage() {
             unit_price: l.type === 'product' ? Number(l.unit_price) : 0,
             tax_percent: l.type === 'product' ? Number(l.tax_percent) : 0,
             discount_percent: l.type === 'product' ? Number(l.disc_percent) : 0,
+            purchase_unit: l.type === 'product' ? l.purchase_unit : null,
+            package_qty: l.type === 'product' ? Number(l.package_qty) || null : null,
+            package_inner_size: l.type === 'product' ? Number(l.package_inner_size) || null : null,
+            conversion_ratio: l.type === 'product' ? Number(l.conversion_ratio) || null : null,
             sort_order: idx,
           })),
         }),
@@ -187,10 +191,14 @@ export default function PurchaseOrdersPage() {
       qty: String(i.qty || ''),
       unit_price: String(i.unit_price || ''),
       tax_percent: String(i.tax_percent || '0'),
-      disc_percent: String(i.discount_percent || '0')
+      disc_percent: String(i.discount_percent || '0'),
+      purchase_unit: i.purchase_unit || '',
+      package_qty: i.package_qty ? String(i.package_qty) : '',
+      package_inner_size: i.package_inner_size ? String(i.package_inner_size) : '',
+      conversion_ratio: i.conversion_ratio ? String(i.conversion_ratio) : ''
     }));
     
-    setLines(fetchedLines.length ? fetchedLines : [{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
+    setLines(fetchedLines.length ? fetchedLines : [{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
     setShowModal(true);
   }
 
@@ -219,10 +227,6 @@ export default function PurchaseOrdersPage() {
     <section className="screen">
       {!showModal ? (
         <div className="card">
-          <div className="tabs" style={{ marginBottom: 0 }}>
-            <a href="/purchase-orders" className="tab active" style={{ textDecoration: 'none' }}>Purchase Orders</a>
-            <a href="/goods-receipt" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Goods Receipt</a>
-          </div>
           <div className="card-head" style={{ paddingBottom: 10 }}>
             <div>
               <h3 style={{ fontSize: 18, margin: 0 }}>Requests for Quotation</h3>
@@ -231,7 +235,7 @@ export default function PurchaseOrdersPage() {
               setError(''); 
               setDraftPO(null);
               setForm({ vendor_id: '', vendor_reference: '', deliver_to: '', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
-              setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
+              setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
               setShowModal(true); 
             }}>Create PO</button>
           </div>
@@ -375,7 +379,7 @@ export default function PurchaseOrdersPage() {
                 {(draftPO?.status === 'PURCHASE_ORDER' || draftPO?.status === 'DITERIMA_SEBAGIAN') && (
                   <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => {
                     // Navigate to warehouse receipt module
-                    window.location.href = `/goods-receipt/receipt/${draftPO.id}`;
+                    window.location.href = `/warehouse/receipt/${draftPO.id}`;
                   }} disabled={saving}>Receive Products</button>
                 )}
                 <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={() => setShowModal(false)}>Back to list</button>
@@ -431,7 +435,8 @@ export default function PurchaseOrdersPage() {
                     {deliverToFocused && (
                       <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
                         {[{ name: 'Gudang Cihapit', id: 'gudang' }, ...outlets].filter(o => o.name.toLowerCase().includes(form.deliver_to.toLowerCase())).map((o: any) => (
-                          <div key={o.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onClick={() => {
+                          <div key={o.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onMouseDown={(e) => {
+                            e.preventDefault();
                             setForm(f => ({ ...f, deliver_to: o.name, destination_outlet_id: o.id === 'gudang' ? '' : String(o.id) }));
                             setDeliverToFocused(false);
                           }} onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -479,17 +484,17 @@ export default function PurchaseOrdersPage() {
 
                 {activeTab === 'Ingredients' && (
                   <div>
-                    <div className="table-responsive" style={{ overflow: 'visible', border: '1px solid var(--border)', borderRadius: 8, background: '#f8fafc' }}>
-                      <table style={{ margin: 0 }}>
+                    <div className="table-responsive" style={{ overflow: 'visible' }}>
+                      <table style={{ margin: 0, width: '100%' }}>
                         <thead>
-                          <tr style={{ background: '#f1f5f9', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                            <th style={{ padding: '12px 16px', minWidth: 350 }}>Ingredient</th>
-                            <th className="right">Quantity</th>
-                            <th className="right">Unit</th>
-                            <th className="right">Unit Price</th>
-                            <th className="right">Taxes %</th>
-                            <th className="right">Disc.%</th>
-                            <th className="right">Amount</th>
+                          <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
+                            <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200 }}>Ingredient</th>
+                            <th className="right" style={{ minWidth: 80 }}>Quantity</th>
+                            <th className="center" style={{ minWidth: 220 }}>Unit</th>
+                            <th className="right" style={{ minWidth: 100 }}>Unit Price</th>
+                            <th className="right" style={{ minWidth: 70 }}>Taxes %</th>
+                            <th className="right" style={{ minWidth: 70 }}>Disc.%</th>
+                            <th className="right" style={{ minWidth: 100 }}>Amount</th>
                             <th style={{ width: 40 }}></th>
                           </tr>
                         </thead>
@@ -522,9 +527,10 @@ export default function PurchaseOrdersPage() {
                                     placeholder="Ingredient name..."
                                   />
                                   {activeDropdown === idx && (
-                                    <div style={{ position: 'absolute', top: '100%', left: 16, right: 16, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
+                                    <div style={{ position: 'absolute', top: '100%', left: 16, right: 16, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 999, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
                                       {items.filter(i => i.name.toLowerCase().includes((line.item_id ? '' : line.description).toLowerCase())).map(i => (
-                                        <div key={i.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onClick={() => {
+                                        <div key={i.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onMouseDown={(e) => {
+                                          e.preventDefault();
                                           handleItemTextChange(idx, i.name);
                                           setActiveDropdown(null);
                                         }} onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -540,8 +546,71 @@ export default function PurchaseOrdersPage() {
                                 <td style={{ padding: '6px 16px' }}>
                                   <input type="text" className="po-table-input transparent-input right" value={line.qty === '0' ? '' : (line.qty ? Number(line.qty).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'qty', raw); }} onFocus={e => e.target.select()} placeholder="0" />
                                 </td>
-                                <td className="right" style={{ padding: '6px 16px', color: '#64748b' }}>
-                                  {line.item_id ? items.find(i => String(i.id) === line.item_id)?.purchase_unit : 'pcs'}
+                                <td style={{ padding: '8px 12px', minWidth: 240 }}>
+                                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                    <select className="po-table-input transparent-input" style={{ fontWeight: 600, color: 'var(--primary)', outline: 'none', cursor: 'pointer', padding: '2px 4px', border: '1px solid transparent', borderRadius: 4, transition: 'all 0.2s', width: 70 }}
+                                           onMouseEnter={e => e.currentTarget.style.border = '1px solid #cbd5e1'}
+                                           onMouseLeave={e => e.currentTarget.style.border = '1px solid transparent'}
+                                           value={line.purchase_unit || (line.item_id ? items.find(i => String(i.id) === line.item_id)?.purchase_unit : 'pcs') || ''}
+                                           onChange={e => updateLine(idx, 'purchase_unit', e.target.value)}>
+                                      <option value="">-</option>
+                                      {['Dus', 'Karton', 'Kotak', 'Pack', 'Karung', 'Bungkus', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Bal', 'Roll', 'Pcs', 'Ikat', 'Krat', 'Box'].map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                    
+                                    {line.item_id && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f8fafc', padding: '4px 8px', borderRadius: 6, fontSize: 11, border: '1px solid #e2e8f0' }}>
+                                        <input 
+                                          style={{ width: 26, background: 'transparent', border: 'none', borderBottom: '1px dashed #94a3b8', borderRadius: 0, textAlign: 'center', padding: '0 2px', outline: 'none' }} 
+                                          placeholder="Qty" 
+                                          value={line.package_qty || ''}
+                                          onChange={e => {
+                                            const qty = e.target.value;
+                                            const newRatio = (qty && line.package_inner_size) ? Number(qty) * Number(line.package_inner_size) : null;
+                                            const basePrice = items.find(i => String(i.id) === line.item_id)?.current_average_price ?? 0;
+                                            setLines(l => l.map((ln, i) => i === idx ? {
+                                              ...ln,
+                                              package_qty: qty,
+                                              ...(newRatio ? { conversion_ratio: String(newRatio), unit_price: String(Math.round(basePrice * newRatio)) } : {})
+                                            } : ln));
+                                          }} 
+                                        />
+                                        <span style={{ color: '#64748b', fontSize: 10 }}>×</span>
+                                        <input 
+                                          style={{ width: 34, background: 'transparent', border: 'none', borderBottom: '1px dashed #94a3b8', borderRadius: 0, textAlign: 'center', padding: '0 2px', outline: 'none' }} 
+                                          placeholder="Vol" 
+                                          value={line.package_inner_size || ''}
+                                          onChange={e => {
+                                            const size = e.target.value;
+                                            const newRatio = (size && line.package_qty) ? Number(line.package_qty) * Number(size) : null;
+                                            const basePrice = items.find(i => String(i.id) === line.item_id)?.current_average_price ?? 0;
+                                            setLines(l => l.map((ln, i) => i === idx ? {
+                                              ...ln,
+                                              package_inner_size: size,
+                                              ...(newRatio ? { conversion_ratio: String(newRatio), unit_price: String(Math.round(basePrice * newRatio)) } : {})
+                                            } : ln));
+                                          }} 
+                                        />
+                                        <span style={{ color: '#64748b', margin: '0 2px' }}>=</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', fontWeight: 600, color: 'var(--primary)' }}>
+                                          <input 
+                                            type="number"
+                                            style={{ width: 60, border: 'none', background: 'transparent', textAlign: 'right', fontWeight: 600, color: 'var(--primary)', padding: 0, outline: 'none' }}
+                                            value={line.conversion_ratio || (items.find(i => String(i.id) === line.item_id)?.conversion_ratio ? Number(items.find(i => String(i.id) === line.item_id)?.conversion_ratio) : '')}
+                                            onChange={e => {
+                                              const newRatio = e.target.value;
+                                              const basePrice = items.find(i => String(i.id) === line.item_id)?.current_average_price ?? 0;
+                                              setLines(l => l.map((ln, i) => i === idx ? {
+                                                ...ln,
+                                                conversion_ratio: newRatio,
+                                                unit_price: newRatio ? String(Math.round(basePrice * Number(newRatio))) : ln.unit_price
+                                              } : ln));
+                                            }}
+                                          />
+                                          <span style={{ fontSize: 10, marginLeft: 2 }}>{items.find(i => String(i.id) === line.item_id)?.smallest_unit}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 </td>
                                 <td style={{ padding: '6px 16px' }}>
                                   <input type="text" className="po-table-input transparent-input right" value={line.unit_price === '0' ? '' : (line.unit_price ? Number(line.unit_price).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'unit_price', raw); }} onFocus={e => e.target.select()} placeholder="0" />

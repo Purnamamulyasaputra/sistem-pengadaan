@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
+import { Select } from '@/components/ui/Select';
 import { Calculator, ShoppingBag, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 type SalesSummaryRow = {
@@ -25,6 +26,7 @@ export default function SalesAnalyticsPage() {
   // Filters and Pagination
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [sortBy, setSortBy] = useState('revenue_desc');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(15);
 
@@ -79,13 +81,20 @@ export default function SalesAnalyticsPage() {
     return matchSearch && matchCategory;
   });
 
-  const totalPages = Math.ceil(filteredData.length / limit);
-  const paginatedData = filteredData.slice((page - 1) * limit, page * limit);
+  const sortedData = [...filteredData].sort((a, b) => {
+    if (sortBy === 'revenue_desc') return Number(b.total_revenue) - Number(a.total_revenue);
+    if (sortBy === 'qty_desc') return Number(b.total_qty) - Number(a.total_qty);
+    if (sortBy === 'name_asc') return a.display_name.localeCompare(b.display_name);
+    return 0;
+  });
+
+  const totalPages = Math.ceil(sortedData.length / limit);
+  const paginatedData = sortedData.slice((page - 1) * limit, page * limit);
 
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, selectedCategory, limit]);
+  }, [searchQuery, selectedCategory, sortBy, limit]);
 
   return (
     <section className="screen">
@@ -133,7 +142,7 @@ export default function SalesAnalyticsPage() {
             display: 'flex', flexDirection: 'column', gap: 8
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Calculator size={16} strokeWidth={2.5} style={{ color: '#16a34a' }} />
+              <Calculator size={16} strokeWidth={2.5} style={{ color: '#016e3f' }} />
               <div className="muted" style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Total Revenue</div>
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--foreground)' }}>{rp(totalRevenue)}</div>
@@ -144,7 +153,7 @@ export default function SalesAnalyticsPage() {
             display: 'flex', flexDirection: 'column', gap: 8
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <ShoppingBag size={16} strokeWidth={2.5} style={{ color: '#2563eb' }} />
+              <ShoppingBag size={16} strokeWidth={2.5} style={{ color: '#016e3f' }} />
               <div className="muted" style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Portions Sold</div>
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--foreground)' }}>{totalItemsSold.toLocaleString('id-ID')}</div>
@@ -163,26 +172,36 @@ export default function SalesAnalyticsPage() {
             onChange={e => setSearchQuery(e.target.value)}
             style={{ width: 220 }}
           />
-          <select
-            className="input"
+          <Select
             value={selectedCategory}
-            onChange={e => setSelectedCategory(e.target.value)}
+            onChange={setSelectedCategory}
+            options={[
+              { value: '', label: 'All Categories' },
+              ...categories.map(c => ({ value: c, label: c }))
+            ]}
+            style={{ width: 160 }}
+          />
+          <Select
+            value={sortBy}
+            onChange={setSortBy}
+            options={[
+              { value: 'revenue_desc', label: 'Highest Revenue' },
+              { value: 'qty_desc', label: 'Most Qty Sold' },
+              { value: 'name_asc', label: 'Menu Name (A-Z)' }
+            ]}
             style={{ width: 180 }}
-          >
-            <option value="">All Categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select
-            className="input"
+          />
+          <Select
             value={limit}
-            onChange={e => setLimit(Number(e.target.value))}
+            onChange={setLimit}
+            options={[
+              { value: 8, label: '8' },
+              { value: 15, label: '15' },
+              { value: 32, label: '32' },
+              { value: 50, label: '50' }
+            ]}
             style={{ width: 80 }}
-          >
-            <option value={8}>8</option>
-            <option value={15}>15</option>
-            <option value={32}>32</option>
-            <option value={50}>50</option>
-          </select>
+          />
           <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>
             {filteredData.length} Menus found
           </span>
