@@ -68,11 +68,13 @@ export type HppRecipeIngredient = {
 
 export type HppIngredient = {
   id: bigint;
+  item_id: bigint | null;
   name: string;
   default_unit: string | null;
   standard_cost_per_unit: number | null;
   description: string | null;
   used_in_recipes: number;
+  is_linked?: boolean;
 };
 
 export type HppVsSale = {
@@ -261,11 +263,14 @@ export async function getHppRecipeDetail(recipeId: number): Promise<{
     SELECT 
       ri.id, ri.recipe_id,
       r.name AS recipe_name, r.source_sheet,
-      ri.ingredient_id, i.name AS ingredient_name,
-      i.default_unit, i.standard_cost_per_unit,
+      ri.ingredient_id, 
+      COALESCE(it.name, i.name) AS ingredient_name,
+      COALESCE(it.smallest_unit, i.default_unit) AS default_unit,
+      COALESCE((it.current_average_price / NULLIF(it.conversion_ratio, 0)), i.standard_cost_per_unit) AS standard_cost_per_unit,
       ri.quantity, ri.unit, ri.cost_per_unit, ri.extension, ri.sort_order
     FROM recipe_ingredients ri
     JOIN ingredients i ON i.id = ri.ingredient_id
+    LEFT JOIN items it ON it.id = i.item_id
     JOIN recipes r ON r.id = ri.recipe_id
     WHERE ri.recipe_id = $1
     ORDER BY ri.sort_order
@@ -305,13 +310,19 @@ export async function getHppIngredients(opts?: {
 
   const dataRes = await query<HppIngredient>(`
     SELECT 
-      i.id, i.name, i.default_unit, i.standard_cost_per_unit, i.description,
-      COALESCE(COUNT(ri.id)::int, 0) AS used_in_recipes
+      i.id, i.item_id, 
+      COALESCE(it.name, i.name) AS name,
+      COALESCE(it.smallest_unit, i.default_unit) AS default_unit,
+      COALESCE((it.current_average_price / NULLIF(it.conversion_ratio, 0)), i.standard_cost_per_unit) AS standard_cost_per_unit,
+      i.description,
+      COALESCE(COUNT(ri.id)::int, 0) AS used_in_recipes,
+      (it.id IS NOT NULL) AS is_linked
     FROM ingredients i
+    LEFT JOIN items it ON it.id = i.item_id
     LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = i.id
     ${where}
-    GROUP BY i.id, i.name, i.default_unit, i.standard_cost_per_unit, i.description
-    ORDER BY used_in_recipes DESC, i.name
+    GROUP BY i.id, it.id, i.name, it.name, it.smallest_unit, i.default_unit, it.current_average_price, it.conversion_ratio, i.standard_cost_per_unit, i.description
+    ORDER BY used_in_recipes DESC, COALESCE(it.name, i.name)
     LIMIT $${idx} OFFSET $${idx + 1}
   `, [...params, limit, offset]);
 
@@ -535,20 +546,22 @@ export async function deleteRecipe(id: number) {
 // ─────────────────────────────────────────────
 
 export async function createIngredient(data: {
+  item_id?: number | null;
   name: string;
   default_unit: string;
   standard_cost_per_unit: number;
   description?: string;
 }) {
   const res = await query(`
-    INSERT INTO ingredients (name, default_unit, standard_cost_per_unit, description)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO ingredients (item_id, name, default_unit, standard_cost_per_unit, description)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING id
-  `, [data.name, data.default_unit, data.standard_cost_per_unit, data.description || null]);
+  `, [data.item_id || null, data.name, data.default_unit, data.standard_cost_per_unit, data.description || null]);
   return res.rows[0].id;
 }
 
 export async function updateIngredient(id: number, data: {
+  item_id?: number | null;
   name: string;
   default_unit: string;
   standard_cost_per_unit: number;
@@ -556,9 +569,9 @@ export async function updateIngredient(id: number, data: {
 }) {
   const res = await query(`
     UPDATE ingredients 
-    SET name = $1, default_unit = $2, standard_cost_per_unit = $3, description = $4
-    WHERE id = $5
-  `, [data.name, data.default_unit, data.standard_cost_per_unit, data.description || null, id]);
+    SET item_id = $1, name = $2, default_unit = $3, standard_cost_per_unit = $4, description = $5
+    WHERE id = $6
+  `, [data.item_id || null, data.name, data.default_unit, data.standard_cost_per_unit, data.description || null, id]);
   return (res.rowCount ?? 0) > 0;
 }
 

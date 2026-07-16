@@ -81,8 +81,6 @@ function MenusTab({ categories }: { categories: Category[] }) {
   const [detailModal, setDetailModal] = useState<number | null>(null);
   const [detailData, setDetailData] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [newPrice, setNewPrice] = useState<string>('');
-
   const load = useCallback(() => {
     setLoading(true);
     let url = `/api/hpp?limit=${limit}&page=${page}`;
@@ -95,28 +93,6 @@ function MenusTab({ categories }: { categories: Category[] }) {
       .finally(() => setLoading(false));
   }, [search, catId, marginFlag, page]);
 
-  const handleSavePrice = async () => {
-    if (!detailModal || !detailData) return;
-    const sale_price = parseFloat(newPrice);
-    if (isNaN(sale_price) || sale_price < 0) return alert('Nominal harga tidak valid');
-
-    try {
-      const res = await fetch(`/api/outlet/menus/${detailModal}/price`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sale_price })
-      });
-      if (res.ok) {
-        setDetailModal(null);
-        load();
-      } else {
-        const err = await res.json();
-        alert('Gagal: ' + (err.error || 'Unknown error'));
-      }
-    } catch (e) {
-      alert('Terjadi kesalahan koneksi');
-    }
-  };
 
   const openDetail = async (menuId: number) => {
     setDetailModal(menuId);
@@ -127,7 +103,6 @@ function MenusTab({ categories }: { categories: Category[] }) {
       if (res.ok) {
         const d = await res.json();
         setDetailData(d);
-        setNewPrice(d.menu.sale_price ? Math.round(Number(d.menu.sale_price)).toString() : '0');
       }
     } finally {
       setDetailLoading(false);
@@ -182,12 +157,11 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 <th className="right">COGS %</th>
                 <th className="right">Margin %</th>
                 <th className="center">Status</th>
-                <th className="right">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {data.map(row => (
-                <tr key={row.id}>
+                <tr key={row.id} onClick={() => openDetail(row.id)} style={{ cursor: 'pointer' }}>
                   <td><span style={{ fontSize: 12, color: 'var(--muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{row.category_name}</span></td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{row.display_name ?? row.name}</div>
@@ -205,16 +179,6 @@ function MenusTab({ categories }: { categories: Category[] }) {
                     {row.hpp_ratio == null ? '—' : pct(1 - row.hpp_ratio)}
                   </td>
                   <td className="center"><MarginBadge flag={row.margin_flag} /></td>
-                  <td className="right">
-                    <button
-                      className="btn btn-outline"
-                      title={(row as any).is_overridden ? 'Price Override Active' : 'View Detail'}
-                      style={{ padding: '6px', ...((row as any).is_overridden ? { borderColor: '#d97706', color: '#d97706' } : {}) }}
-                      onClick={() => openDetail(row.id)}
-                    >
-                      <Eye size={16} />
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -236,7 +200,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
       )}
 
       {/* Menu Detail Modal */}
-      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Detail Menu & HPP" maxWidth={680}>
+      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Menu & COGS Detail" maxWidth={680}>
         {detailLoading ? (
           <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading detail...</div>
         ) : detailData ? (
@@ -248,34 +212,11 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 {detailData.menu.variant && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{detailData.menu.variant}</div>}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Modal (Raw Cost)</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Base Cost</div>
                 <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{rp(detailData.menu.hpp)}</div>
               </div>
             </div>
 
-            {/* Price Override Section */}
-            <div style={{ background: '#f0fdf4', padding: '16px 20px', borderRadius: 10, border: '1px solid #bbf7d0' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#166534', marginBottom: 10 }}>Set Local Outlet Price</div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div style={{ flex: 1 }}>
-                  <Input
-                    type="text"
-                    value={newPrice ? Number(newPrice.replace(/\D/g, '')).toLocaleString('id-ID') : ''}
-                    onChange={e => {
-                      const raw = e.target.value.replace(/\D/g, '');
-                      setNewPrice(raw);
-                    }}
-                    placeholder="Enter sale price..."
-                  />
-                </div>
-                <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={handleSavePrice}>
-                  <Save size={15} /> Save Price
-                </button>
-              </div>
-              <div style={{ fontSize: 11, color: '#166534', marginTop: 8 }}>
-                Enter <strong>0</strong> to revert to default.
-              </div>
-            </div>
 
             {/* Ingredients Table */}
             <div>
@@ -522,6 +463,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
 
 function IngredientsTab() {
   const [data, setData] = useState<IngRow[]>([]);
+  const [masterItems, setMasterItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -533,7 +475,7 @@ function IngredientsTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', default_unit: '', standard_cost_per_unit: '', description: '' });
+  const [form, setForm] = useState({ item_id: '', name: '', default_unit: '', standard_cost_per_unit: '', description: '' });
 
   const load = useCallback(() => {
     setLoading(true);
@@ -545,17 +487,23 @@ function IngredientsTab() {
       .finally(() => setLoading(false));
   }, [search, page]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { 
+    load();
+    fetch('/api/items').then(r => r.json()).then(d => {
+      if (d.success) setMasterItems(d.data);
+    });
+  }, [load]);
 
   const handleOpenAdd = () => {
     setEditId(null);
-    setForm({ name: '', default_unit: '', standard_cost_per_unit: '', description: '' });
+    setForm({ item_id: '', name: '', default_unit: '', standard_cost_per_unit: '', description: '' });
     setModalOpen(true);
   };
 
-  const handleOpenEdit = (row: IngRow) => {
+  const handleOpenEdit = (row: any) => {
     setEditId(row.id);
     setForm({
+      item_id: row.item_id ? String(row.item_id) : '',
       name: row.name,
       default_unit: row.default_unit || '',
       standard_cost_per_unit: row.standard_cost_per_unit ? String(row.standard_cost_per_unit) : '',
@@ -569,6 +517,7 @@ function IngredientsTab() {
     setSaving(true);
     try {
       const payload = {
+        item_id: form.item_id ? Number(form.item_id) : null,
         name: form.name,
         default_unit: form.default_unit,
         standard_cost_per_unit: Number(form.standard_cost_per_unit) || 0,
@@ -615,6 +564,7 @@ function IngredientsTab() {
         <input className="input" placeholder="Search ingredient name..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 260 }} />
         <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} ingredients</span>
+        <button className="btn btn-primary" onClick={handleOpenAdd}>+ Add Ingredient</button>
       </div>
 
       <div className="card-body flush">
@@ -629,12 +579,16 @@ function IngredientsTab() {
                 <th className="right">Standard Cost/Unit</th>
                 <th className="right">Used in Recipes</th>
                 <th>Description</th>
+                <th className="right" style={{ width: 80 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {data.map(row => (
+              {data.map((row: any) => (
                 <tr key={row.id}>
-                  <td style={{ fontWeight: 600 }}>{row.name}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    {row.name}
+                    {row.is_linked && <span style={{ marginLeft: 8, fontSize: 10, background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: 4 }}>Linked</span>}
+                  </td>
                   <td><span style={{ fontSize: 13 }}>{row.default_unit ?? '—'}</span></td>
                   <td className="right ">{rp(row.standard_cost_per_unit)}</td>
                   <td className="right">
@@ -647,6 +601,10 @@ function IngredientsTab() {
                     </span>
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>{row.description ?? '—'}</td>
+                  <td className="right">
+                    <button className="btn" style={{ padding: '6px', marginRight: 4 }} onClick={() => handleOpenEdit(row)}><Pencil size={14} /></button>
+                    <button className="btn" style={{ padding: '6px', color: 'var(--red)' }} onClick={() => setDeleteConfirm(row.id)}><Trash2 size={14} /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -684,10 +642,38 @@ function IngredientsTab() {
 
             <div className="modal-body form-grid" style={{ padding: '24px', gap: 20 }}>
               <div style={{ gridColumn: '1 / -1' }}>
-                <Input label="Ingredient Name" placeholder="e.g. Arabica Coffee Beans" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                <label className="form-label">Link to Master Item (Optional)</label>
+                <select 
+                  className="input" 
+                  value={form.item_id} 
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val) {
+                      const matched = masterItems.find(i => String(i.id) === val);
+                      if (matched) {
+                        setForm(f => ({ 
+                          ...f, 
+                          item_id: val, 
+                          name: matched.name, 
+                          default_unit: matched.smallest_unit, 
+                          standard_cost_per_unit: String(Math.round(matched.current_average_price / matched.conversion_ratio))
+                        }));
+                      }
+                    } else {
+                      setForm(f => ({ ...f, item_id: '' }));
+                    }
+                  }}
+                >
+                  <option value="">-- No Link (Manual/Homemade Prep) --</option>
+                  {masterItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+                </select>
+                {form.item_id && <div style={{ fontSize: 11, color: 'var(--primary)', marginTop: 6 }}>Harga dan satuan akan otomatis tersinkronisasi dari Master Item ini.</div>}
               </div>
-              <Input label="Default Unit" placeholder="e.g. gr, ml, pcs" value={form.default_unit} onChange={e => setForm(f => ({ ...f, default_unit: e.target.value }))} />
-              <Input label="Standard Cost / Unit" placeholder="Rp 0" type="number" min="0" step="1" required value={form.standard_cost_per_unit} onChange={e => setForm(f => ({ ...f, standard_cost_per_unit: e.target.value }))} />
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Input label="Ingredient Name" placeholder="e.g. Arabica Coffee Beans" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} disabled={!!form.item_id} />
+              </div>
+              <Input label="Default Unit" placeholder="e.g. gr, ml, pcs" value={form.default_unit} onChange={e => setForm(f => ({ ...f, default_unit: e.target.value }))} disabled={!!form.item_id} />
+              <Input label="Standard Cost / Unit" placeholder="Rp 0" type="number" min="0" step="1" required value={form.standard_cost_per_unit} onChange={e => setForm(f => ({ ...f, standard_cost_per_unit: e.target.value }))} disabled={!!form.item_id} />
 
               <div style={{ gridColumn: '1 / -1' }} className="form-group">
                 <label className="form-label">Description (Optional)</label>

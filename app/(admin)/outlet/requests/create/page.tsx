@@ -47,7 +47,7 @@ export default function CreateRequestPage() {
               // Only auto-add if effective balance is completely below minimum (don't auto add if they already ordered)
               return effectiveBalance <= d.minimum_threshold && Number(d.incoming_balance || 0) === 0;
             })
-            .map((d: any) => {
+            .map((d: any, index: number) => {
               const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
               let shortage = d.minimum_threshold - effectiveBalance;
               if (shortage <= 0) shortage = d.minimum_threshold;
@@ -56,7 +56,7 @@ export default function CreateRequestPage() {
               if (!matchedMaster) return null;
 
               return {
-                id: Date.now() + Math.random(),
+                id: Date.now() + index,
                 item_id: d.item_id,
                 name: d.item_name,
                 uom: d.smallest_unit,
@@ -64,7 +64,7 @@ export default function CreateRequestPage() {
                 purchase_unit: matchedMaster.purchase_unit,
                 ratio: 1, 
                 qty: shortage.toString(),
-                note: 'Low Stock Auto-Add'
+                note: ''
               };
             })
             .filter(Boolean);
@@ -87,7 +87,7 @@ export default function CreateRequestPage() {
 
   const addEmptyRow = () => {
     setCart([...cart, {
-      id: Date.now() + Math.random(),
+      id: Date.now(),
       item_id: null,
       name: '',
       uom: '',
@@ -100,8 +100,7 @@ export default function CreateRequestPage() {
   };
 
   const updateCartItemSelect = (rowId: number, selectedItemId: string) => {
-    const id = parseInt(selectedItemId);
-    const item = items.find(i => i.id === id);
+    const item = items.find(i => String(i.id) === selectedItemId);
     if (!item) return;
 
     setCart(cart.map(c => c.id === rowId ? {
@@ -207,10 +206,15 @@ export default function CreateRequestPage() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h4 style={{ margin: 0 }}>Items</h4>
-            <Button variant="outline" size="sm" onClick={addEmptyRow} style={{ borderColor: '#86efac', background: '#f0fdf4' }}>
-              + Tambah Data
-            </Button>
+            <h4 style={{ margin: 0 }}>Items ({cart.length})</h4>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button variant="outline" size="sm" onClick={addEmptyRow} style={{ borderColor: '#86efac', background: '#f0fdf4' }}>
+                + Add Item
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => setShowConfirm(true)} disabled={submitting || cart.length === 0}>
+                {submitting ? 'Submitting...' : 'Submit Request'}
+              </Button>
+            </div>
           </div>
 
           <Table>
@@ -230,9 +234,9 @@ export default function CreateRequestPage() {
                   <td className={c.item_id ? "font-bold" : ""}>
                     {!c.item_id ? (
                       <select className="input" style={{ width: '100%', maxWidth: 300 }} value={c.item_id || ''} onChange={e => updateCartItemSelect(c.id, e.target.value)}>
-                        <option value="">-- Pilih Barang --</option>
+                        <option value="">-- Select Item --</option>
                         {items.map(i => (
-                          <option key={i.id} value={i.id} disabled={cart.some(cartItem => cartItem.item_id === i.id)}>{i.name}</option>
+                          <option key={i.id} value={i.id} disabled={cart.some(cartItem => String(cartItem.item_id) === String(i.id))}>{i.name}</option>
                         ))}
                       </select>
                     ) : c.name}
@@ -264,16 +268,12 @@ export default function CreateRequestPage() {
                 </tr>
               ))}
               {cart.length === 0 && (
-                <tr><td colSpan={6} className="center muted" style={{ padding: 40 }}>Your cart is empty. Click "+ Tambah Data" to add items.</td></tr>
+                <tr><td colSpan={6} className="center muted" style={{ padding: 40 }}>Your cart is empty. Click "+ Add Item" to add items.</td></tr>
               )}
             </tbody>
           </Table>
 
-          <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="primary" onClick={() => setShowConfirm(true)} disabled={submitting || cart.length === 0}>
-              {submitting ? 'Submitting...' : 'Submit Request'}
-            </Button>
-          </div>
+
         </div>
       </div>
 
@@ -283,6 +283,7 @@ export default function CreateRequestPage() {
         message={`Are you sure you want to submit this request with ${cart.length} item(s)?`}
         onCancel={() => setShowConfirm(false)}
         onConfirm={handleSubmit}
+        loading={submitting}
         confirmText="Yes, Submit"
         cancelText="Cancel"
       />

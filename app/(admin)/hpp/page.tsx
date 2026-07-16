@@ -182,12 +182,11 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 <th className="right">COGS %</th>
                 <th className="right">Margin %</th>
                 <th className="center">Status</th>
-                <th className="right" style={{ width: 80 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {data.map(row => (
-                <tr key={row.id}>
+                <tr key={row.id} onClick={() => openDetail(row.id)} style={{ cursor: 'pointer' }}>
                   <td><span style={{ fontSize: 12, color: 'var(--muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{row.category_name}</span></td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{row.display_name ?? row.name}</div>
@@ -205,16 +204,6 @@ function MenusTab({ categories }: { categories: Category[] }) {
                     {row.hpp_ratio == null ? '—' : pct(1 - row.hpp_ratio)}
                   </td>
                   <td className="center"><MarginBadge flag={row.margin_flag} /></td>
-                  <td className="right">
-                    <button
-                      className="btn btn-outline"
-                      title="View Detail"
-                      style={{ padding: '6px' }}
-                      onClick={() => openDetail(row.id)}
-                    >
-                      <Eye size={16} />
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -236,7 +225,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
       )}
 
       {/* Detail & Price Override Modal */}
-      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Detail Menu & HPP" maxWidth={680}>
+      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Menu & COGS Detail" maxWidth={680}>
         {detailLoading ? (
           <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading detail...</div>
         ) : detailData ? (
@@ -248,7 +237,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 {detailData.menu.variant && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{detailData.menu.variant}</div>}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Modal (Raw Cost)</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Base Cost</div>
                 <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{rp(detailData.menu.hpp)}</div>
               </div>
             </div>
@@ -677,7 +666,7 @@ function IngredientsTab() {
           <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
             <ChevronLeft size={16} />
           </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Hal. {page} dari {totalPages}</span>
+          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Page {page} of {totalPages}</span>
           <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
             <ChevronRight size={16} />
           </button>

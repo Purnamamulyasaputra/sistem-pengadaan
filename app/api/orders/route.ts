@@ -10,8 +10,10 @@ export async function GET(req: NextRequest) {
   const orders = await getOrders({
     outletId: session.role === 'ADMIN_OUTLET' ? session.outletId! : (searchParams.get('outlet_id') ? Number(searchParams.get('outlet_id')) : undefined),
     status: searchParams.get('status') ?? undefined,
-    limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : 50,
-    offset: searchParams.get('offset') ? Number(searchParams.get('offset')) : 0,
+    startDate: searchParams.get('start_date') ?? undefined,
+    endDate: searchParams.get('end_date') ?? undefined,
+    limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : undefined,
+    offset: searchParams.get('offset') ? Number(searchParams.get('offset')) : undefined,
   });
   return NextResponse.json({ success: true, message: 'OK', data: orders });
 }

@@ -17,10 +17,14 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ success: false, message: 'Forbidden', data: null }, { status: 403 });
   const body = await req.json();
-  const po = await createPurchaseOrder({
-    ...body,
-    buyer_id: session.userId,
-    created_by: session.userId,
-  });
-  return NextResponse.json({ success: true, message: 'Purchase Order berhasil dibuat', data: po }, { status: 201 });
+  try {
+    const po = await createPurchaseOrder({
+      ...body,
+      buyer_id: session.userId,
+      created_by: session.userId,
+    });
+    return NextResponse.json({ success: true, message: 'Purchase Order berhasil dibuat', data: po }, { status: 201 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error.message || 'Internal Server Error', data: null }, { status: 500 });
+  }
 }

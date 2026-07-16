@@ -154,10 +154,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const barcodeBase64 = `data:image/png;base64,${barcodeBuffer.toString('base64')}`;
     doc.addImage(barcodeBase64, 'PNG', qrX, y, qrSize, qrSize);
     
-    // Add text label below the QR
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Tracking Code: ${dn.delivery_note_number}`, 105, y + qrSize + 5, { align: 'center' });
+    // Intentionally omitting the text label below the QR for security
   } catch (err) {
     doc.text("Error generating QR", 105, y + 15, { align: 'center' });
   }

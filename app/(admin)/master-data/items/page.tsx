@@ -39,7 +39,7 @@ export default function ItemsPage() {
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [form, setForm] = useState({ name: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, current_average_price: '0', ingredient_id: '' });
+  const [form, setForm] = useState({ name: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
@@ -80,18 +80,21 @@ export default function ItemsPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ name: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, current_average_price: '0', ingredient_id: '' });
+    setForm({ name: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
     setError('');
     setShowModal(true);
   }
 
   function openEdit(item: Item) {
     setEditing(item);
+    const hasConv = Number(item.conversion_ratio) > 1 && item.purchase_unit !== item.smallest_unit;
     setForm({
       name: item.name, category_id: String(item.category_id ?? ''), purchase_unit: item.purchase_unit, package_unit: item.package_unit || '', package_qty: String(item.package_qty || ''), package_inner_size: '',
       smallest_unit: item.smallest_unit, conversion_ratio: String(Number(item.conversion_ratio)),
       minimum_threshold: String(Number(item.minimum_threshold)), threshold_type: item.threshold_type,
-      is_perishable: item.is_perishable, is_active: item.is_active, current_average_price: String(Number(item.current_average_price ?? 0)),
+      is_perishable: item.is_perishable, is_active: item.is_active, 
+      purchase_price: String(Number(item.current_average_price ?? 0) * Number(item.conversion_ratio || 1)),
+      has_conversion: hasConv,
       ingredient_id: item.ingredient_id ? String(item.ingredient_id) : ''
     });
     setError('');
@@ -99,21 +102,27 @@ export default function ItemsPage() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.category_id || !form.purchase_unit || !form.smallest_unit) {
-      setError('Nama, kategori, satuan beli, dan satuan terkecil wajib diisi');
+    if (!form.name || !form.category_id || !form.purchase_unit || (form.has_conversion && !form.smallest_unit)) {
+      setError('Nama, kategori, satuan beli, dan kelengkapan konversi wajib diisi');
       return;
     }
     setSaving(true); setError('');
     try {
       const url = editing ? `/api/items/${editing.id}` : '/api/items';
       const method = editing ? 'PATCH' : 'POST';
-      const { package_unit, package_qty, package_inner_size, ...cleanForm } = form;
+      const { package_unit, package_qty, package_inner_size, has_conversion, purchase_price, ...cleanForm } = form;
+      
+      const finalRatio = has_conversion ? Number(form.conversion_ratio) : 1;
+      const finalSmallestUnit = has_conversion ? form.smallest_unit : form.purchase_unit;
+      const finalAvgPrice = has_conversion ? Number(purchase_price) / finalRatio : Number(purchase_price);
+
       const payload = {
         ...cleanForm,
         category_id: Number(form.category_id),
-        conversion_ratio: Number(form.conversion_ratio),
+        smallest_unit: finalSmallestUnit,
+        conversion_ratio: finalRatio,
         minimum_threshold: Number(form.minimum_threshold),
-        current_average_price: Number(form.current_average_price),
+        current_average_price: finalAvgPrice,
         ingredient_id: form.ingredient_id ? Number(form.ingredient_id) : null
       };
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -291,23 +300,50 @@ export default function ItemsPage() {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px' }}>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label className="req">Purch. Unit</label>
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label className="req">Satuan Pembelian</label>
                 <select className="input" value={form.purchase_unit} onChange={e => setForm(f => ({ ...f, purchase_unit: e.target.value }))}>
-                  <option value="">Select...</option>
+                  <option value="">Pilih...</option>
                   {['Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Roll', 'Pcs'].map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label className="req">Smallest Unit</label>
-                <select className="input" value={form.smallest_unit} onChange={e => setForm(f => ({ ...f, smallest_unit: e.target.value }))}>
-                  <option value="">Select...</option>
-                  {['gr', 'ml', 'pcs', 'shoot', 'slice', 'lembar'].map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Conversion Ratio</label>
-                <input className="input" type="number" min="0.01" step="0.01" value={form.conversion_ratio} onChange={e => setForm(f => ({ ...f, conversion_ratio: e.target.value }))} />
+
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Apakah diecer/dikonversi?</label>
+                <div style={{ height: 38, display: 'flex', alignItems: 'center' }}>
+                  <Toggle checked={form.has_conversion} onChange={c => setForm(f => ({ ...f, has_conversion: c }))} />
+                  <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--muted)' }}>{form.has_conversion ? 'Ya' : 'Tidak'}</span>
+                </div>
               </div>
             </div>
+
+            {form.has_conversion && (
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                  <label className="req">Satuan Eceran (Terkecil)</label>
+                  <select className="input" value={form.smallest_unit} onChange={e => setForm(f => ({ ...f, smallest_unit: e.target.value }))}>
+                    <option value="">Pilih...</option>
+                    {['gr', 'ml', 'pcs', 'shoot', 'slice', 'lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks'].map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                  <label className="req">Isi per 1 {form.purchase_unit || 'Satuan'}</label>
+                  <div style={{ position: 'relative' }}>
+                    <input className="input" type="number" min="0.01" step="0.01" value={form.conversion_ratio} onChange={e => setForm(f => ({ ...f, conversion_ratio: e.target.value }))} style={{ paddingRight: 60 }} />
+                    <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)' }}>{form.smallest_unit}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', marginTop: 4 }}>
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Harga Beli per {form.purchase_unit || 'Satuan'} (Rp)</label>
+                <input className="input" type="text" placeholder="0" value={form.purchase_price === '0' || !form.purchase_price ? '' : Number(form.purchase_price).toLocaleString('id-ID')} onChange={e => {
+                  const raw = e.target.value.replace(/\./g, '');
+                  if (/^\d*$/.test(raw)) setForm(f => ({ ...f, purchase_price: raw }));
+                }} onFocus={e => e.target.select()} />
+              </div>
               <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Min. Threshold</label>
                 <input className="input" type="number" min="0" value={form.minimum_threshold} onChange={e => setForm(f => ({ ...f, minimum_threshold: e.target.value }))} />
               </div>
@@ -317,13 +353,15 @@ export default function ItemsPage() {
                   <option value="PERSENTASE">Percentage (%)</option>
                 </select>
               </div>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Avg Price (Rp)</label>
-                <input className="input" type="text" placeholder="0" value={form.current_average_price === '0' || !form.current_average_price ? '' : Number(form.current_average_price).toLocaleString('id-ID')} onChange={e => {
-                  const raw = e.target.value.replace(/\./g, '');
-                  if (/^\d*$/.test(raw)) setForm(f => ({ ...f, current_average_price: raw }));
-                }} onFocus={e => e.target.select()} />
-              </div>
             </div>
+
+            {form.has_conversion && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0 && (
+              <div style={{ gridColumn: '1 / -1', fontSize: 12.5, color: '#0369a1', background: '#e0f2fe', padding: '8px 12px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8, marginTop: -4 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <span>Sistem mencatat: 1 {form.purchase_unit} isi {form.conversion_ratio} {form.smallest_unit}. Harga HPP / Stok Gudang adalah <strong>{fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per {form.smallest_unit}</strong>.</span>
+              </div>
+            )}
+            
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 24, marginTop: 4 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                 <Toggle checked={form.is_perishable} onChange={c => setForm(f => ({ ...f, is_perishable: c }))} />

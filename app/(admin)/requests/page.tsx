@@ -5,6 +5,7 @@ import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Toast } from '@/components/ui/Toast';
 import { OrderStatusBadge } from '@/components/shared/OrderStatusBadge';
 
 interface Order {
@@ -52,7 +53,13 @@ function RequestsContent() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<{ order: Order; items: OrderItem[] } | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [saving, setSaving] = useState<number | null>(null);
+  const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success'|'error'|'info' });
+
+  const ITEMS_PER_PAGE = 25;
 
   const searchParams = useSearchParams();
   const openId = searchParams.get('open_id');
@@ -61,11 +68,15 @@ function RequestsContent() {
     setLoading(true);
     const params = new URLSearchParams();
     if (statusFilter) params.set('status', statusFilter);
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    
     const res = await fetch(`/api/orders?${params}`);
     const data = await res.json();
     setOrders(data.data ?? []);
     setLoading(false);
-  }, [statusFilter]);
+    setCurrentPage(1); // Reset to first page when fetching new data
+  }, [statusFilter, startDate, endDate]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -111,7 +122,7 @@ function RequestsContent() {
     const itemsToUpdate = selectedOrder.items.filter(i => i.item_status === 'DITERIMA_DARI_OUTLET');
 
     if (itemsToUpdate.length === 0) {
-      alert('Semua barang sudah di-assess (tidak ada yang berstatus Diterima).');
+      setToast({ open: true, message: 'Semua barang sudah di-assess (tidak ada yang berstatus Diterima).', type: 'info' });
       return;
     }
 
@@ -153,7 +164,7 @@ function RequestsContent() {
       });
       fetchOrders();
     } catch (e) {
-      alert('Terjadi kesalahan saat Auto-Assess');
+      setToast({ open: true, message: 'Terjadi kesalahan saat Auto-Assess', type: 'error' });
     } finally {
       setSaving(null);
     }
@@ -161,18 +172,38 @@ function RequestsContent() {
 
   return (
     <section className="screen">
+      <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, open: false })} />
       <div className="card">
         <div className="card-head">
           <div>
             <h3>Request Recap</h3>
           </div>
-          <select className="input" style={{ width: 180 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">All Status</option>
-            <option value="PENDING">Pending</option>
-            <option value="PROCESSING">Processing</option>
-            <option value="SHIPPED">Shipped</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input 
+              type="date" 
+              className="input" 
+              style={{ width: 140 }} 
+              value={startDate} 
+              onChange={e => setStartDate(e.target.value)} 
+              title="Start Date"
+            />
+            <span className="muted">-</span>
+            <input 
+              type="date" 
+              className="input" 
+              style={{ width: 140 }} 
+              value={endDate} 
+              onChange={e => setEndDate(e.target.value)} 
+              title="End Date"
+            />
+            <select className="input" style={{ width: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="">All Status</option>
+              <option value="PENDING">Pending</option>
+              <option value="PROCESSING">Processing</option>
+              <option value="SHIPPED">Shipped</option>
+              <option value="COMPLETED">Completed</option>
+            </select>
+          </div>
         </div>
 
         <div className="card-body flush">
@@ -185,31 +216,64 @@ function RequestsContent() {
               <p>No incoming requests from outlets yet</p>
             </div>
           ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <th>PO No.</th><th>Outlet</th><th>Created by</th>
-                  <th>Order Date</th><th>Delivery Date</th>
-                  <th className="center">Items</th><th className="center">Status</th><th className="right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map(o => (
-                  <tr key={o.id}>
-                    <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
-                    <td className="font-bold">{o.outlet_name}</td>
-                    <td className="muted">{o.created_by_name}</td>
-                    <td>{formatDate(o.order_date)}</td>
-                    <td>{formatDate(o.delivery_date)}</td>
-                    <td className="center num font-bold">{o.item_count}</td>
-                    <td className="center"><OrderStatusBadge status={o.status} /></td>
-                    <td className="right">
-                      <Button size="sm" onClick={() => handleViewOrder(o)} style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>Detail</Button>
-                    </td>
+            <>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>PO No.</th><th>Outlet</th><th>Created by</th>
+                    <th>Order Date</th><th>Delivery Date</th>
+                    <th className="center">Items</th><th className="center">Status</th><th className="right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
+                </thead>
+                <tbody>
+                  {orders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => (
+                    <tr key={o.id}>
+                      <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
+                      <td className="font-bold">{o.outlet_name}</td>
+                      <td className="muted">{o.created_by_name}</td>
+                      <td>{formatDate(o.order_date)}</td>
+                      <td>{formatDate(o.delivery_date)}</td>
+                      <td className="center num font-bold">{o.item_count}</td>
+                      <td className="center"><OrderStatusBadge status={o.status} /></td>
+                      <td className="right">
+                        <Button size="sm" onClick={() => handleViewOrder(o)} style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3', padding: '6px' }} title="View Details">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+              
+              {orders.length > ITEMS_PER_PAGE && (
+                <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)' }}>
+                  <div className="muted" style={{ fontSize: 11 }}>
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, orders.length)} of {orders.length} requests
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                      disabled={currentPage === 1}
+                    >
+                      Prev
+                    </Button>
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', fontSize: 12, fontWeight: 600 }}>
+                      Page {currentPage} of {Math.ceil(orders.length / ITEMS_PER_PAGE)}
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ITEMS_PER_PAGE), p + 1))} 
+                      disabled={currentPage === Math.ceil(orders.length / ITEMS_PER_PAGE)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

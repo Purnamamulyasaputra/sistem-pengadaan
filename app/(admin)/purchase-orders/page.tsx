@@ -1,13 +1,16 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Modal } from '@/components/ui/Modal';
+import { Toast } from '@/components/ui/Toast';
 interface PO {
   id: number; po_number: string; vendor_name: string; order_date: string;
   order_deadline?: string; status: string; total: number; buyer_name: string;
   created_at: string;
 }
 
-interface Vendor { id: number; name: string; is_active?: boolean; }
+interface Vendor { id: number; name: string; is_active?: boolean; email?: string; }
 interface Item { id: number; name: string; purchase_unit: string; smallest_unit?: string; conversion_ratio: number; current_average_price: number; }
 interface Outlet { id: number; name: string; is_active?: boolean; }
 
@@ -31,6 +34,8 @@ export default function PurchaseOrdersPage() {
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +46,13 @@ export default function PurchaseOrdersPage() {
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [deliverToFocused, setDeliverToFocused] = useState(false);
 
+  // Email state
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailForm, setEmailForm] = useState({ to: '', subject: '', message: '' });
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
+  const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+
   const fetchPOs = useCallback(async () => {
     setLoading(true);
     const params = statusFilter ? `?status=${statusFilter}` : '';
@@ -48,6 +60,7 @@ export default function PurchaseOrdersPage() {
     const data = await res.json();
     setPos(data.data ?? []);
     setLoading(false);
+    setCurrentPage(1);
   }, [statusFilter]);
 
   useEffect(() => {
@@ -69,7 +82,7 @@ export default function PurchaseOrdersPage() {
         window.history.replaceState({}, '', '/purchase-orders');
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function addLine() {
@@ -116,10 +129,10 @@ export default function PurchaseOrdersPage() {
     if (!form.vendor_id) { setError('Kolom Vendor tidak boleh kosong.'); return; }
     if (!form.deliver_to.trim()) { setError('Kolom Deliver To tidak boleh kosong.'); return; }
     if (!form.order_deadline) { setError('Kolom Order Deadline tidak boleh kosong.'); return; }
-    
+
     const validLines = lines.filter(l => (l.type === 'product' ? (l.item_id && l.qty && l.unit_price) : l.description));
     if (!validLines.length) { setError('Minimal 1 item/bahan harus diisi dengan lengkap.'); return; }
-    
+
     setSaving(true); setError('');
     try {
       const url = draftPO ? `/api/purchase-orders/${draftPO.id}` : '/api/purchase-orders';
@@ -134,10 +147,10 @@ export default function PurchaseOrdersPage() {
             line_type: l.type === 'note' ? 'CATATAN' : 'PRODUK',
             item_id: l.type === 'product' ? Number(l.item_id) : null,
             description: l.description,
-            qty: l.type === 'product' ? Number(l.qty) : 0,
-            unit_price: l.type === 'product' ? Number(l.unit_price) : 0,
-            tax_percent: l.type === 'product' ? Number(l.tax_percent) : 0,
-            discount_percent: l.type === 'product' ? Number(l.disc_percent) : 0,
+            qty: l.type === 'product' ? Number(l.qty) : null,
+            unit_price: l.type === 'product' ? Number(l.unit_price) : null,
+            tax_percent: l.type === 'product' ? Number(l.tax_percent) : null,
+            discount_percent: l.type === 'product' ? Number(l.disc_percent) : null,
             purchase_unit: l.type === 'product' ? l.purchase_unit : null,
             package_qty: l.type === 'product' ? Number(l.package_qty) || null : null,
             package_inner_size: l.type === 'product' ? Number(l.package_inner_size) || null : null,
@@ -148,9 +161,9 @@ export default function PurchaseOrdersPage() {
       });
       const data = await res.json();
       if (!data.success) { setError(data.message); return; }
-      
+
       let finalPO = data.data;
-      
+
       if (statusToSet) {
         await fetch(`/api/purchase-orders/${finalPO.id}`, {
           method: 'PATCH',
@@ -161,7 +174,7 @@ export default function PurchaseOrdersPage() {
         const data2 = await res2.json();
         finalPO = data2.data;
       }
-      
+
       setDraftPO(finalPO);
       fetchPOs();
     } finally { setSaving(false); }
@@ -171,7 +184,7 @@ export default function PurchaseOrdersPage() {
     const res = await fetch(`/api/purchase-orders/${po.id}`);
     const data = await res.json();
     const fetchedPO = data.data;
-    
+
     setDraftPO(fetchedPO);
     setForm({
       vendor_id: String(fetchedPO.vendor_id || ''),
@@ -183,7 +196,7 @@ export default function PurchaseOrdersPage() {
       payment_terms: fetchedPO.payment_terms || '',
       internal_notes: fetchedPO.internal_notes || ''
     } as any);
-    
+
     const fetchedLines = (fetchedPO.items || []).map((i: any) => ({
       type: i.line_type === 'CATATAN' ? 'note' : 'product',
       item_id: i.item_id ? String(i.item_id) : '',
@@ -197,7 +210,7 @@ export default function PurchaseOrdersPage() {
       package_inner_size: i.package_inner_size ? String(i.package_inner_size) : '',
       conversion_ratio: i.conversion_ratio ? String(i.conversion_ratio) : ''
     }));
-    
+
     setLines(fetchedLines.length ? fetchedLines : [{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
     setShowModal(true);
   }
@@ -214,6 +227,126 @@ export default function PurchaseOrdersPage() {
     fetchPOs();
   }
 
+  function generatePDFBase64(): string {
+    const doc = new jsPDF();
+    const poNum = draftPO?.po_number || 'DRAFT';
+
+    // Header
+    doc.setFontSize(20);
+    doc.text('PURCHASE ORDER', 14, 22);
+    doc.setFontSize(10);
+    doc.text(`PO Number: ${poNum}`, 14, 30);
+    doc.text(`Order Date: ${form.order_date}`, 14, 35);
+    doc.text(`Vendor: ${vendors.find(v => String(v.id) === form.vendor_id)?.name || ''}`, 14, 40);
+    doc.text(`Deliver To: ${form.deliver_to}`, 14, 45);
+
+    // Table
+    const tableData = lines.filter(l => l.description).map((l, i) => {
+      if (l.type === 'note') {
+        return [
+          i + 1,
+          { content: l.description, styles: { fontStyle: 'italic', textColor: '#64748b' } },
+          '',
+          '',
+          '',
+          ''
+        ];
+      }
+      return [
+        i + 1,
+        l.description,
+        l.qty,
+        l.purchase_unit || '-',
+        fmtCurrency(Number(l.unit_price)).replace(',00', ''),
+        fmtCurrency(Number(l.qty) * Number(l.unit_price) * (1 - Number(l.disc_percent) / 100)).replace(',00', '')
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 55,
+      head: [['#', 'Description', 'Qty', 'Unit', 'Unit Price', 'Amount']],
+      body: tableData,
+    });
+
+    // Totals
+    const finalY = (doc as any).lastAutoTable.finalY || 55;
+    doc.text(`Subtotal: ${fmtCurrency(computedSubtotal).replace(',00', '')}`, 140, finalY + 10);
+    doc.text(`Taxes: ${fmtCurrency(computedTax).replace(',00', '')}`, 140, finalY + 16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Total: ${fmtCurrency(computedTotal).replace(',00', '')}`, 140, finalY + 24);
+
+    // Output as base64 data uri
+    return doc.output('datauristring');
+  }
+
+  async function handleSendEmail() {
+    if (!emailForm.to) {
+      setError('Alamat email tujuan harus diisi.');
+      return;
+    }
+
+    // Auto-save as RFQ_TERKIRIM if it's currently RFQ
+    if (!draftPO || draftPO.status === 'RFQ') {
+      await handleSave('RFQ_TERKIRIM');
+    }
+
+    setSendingEmail(true);
+    setError('');
+    try {
+      const pdfBase64 = generatePDFBase64();
+      const res = await fetch(`/api/purchase-orders/${draftPO?.id || 'new'}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: emailForm.to,
+          subject: emailForm.subject,
+          message: emailForm.message,
+          pdfBase64,
+          poNumber: draftPO?.po_number || 'DRAFT'
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.message);
+      } else {
+        setShowEmailModal(false);
+        setToast({ isOpen: true, message: 'Email berhasil dikirim!', type: 'success' });
+      }
+    } catch (err: any) {
+      setError('Gagal mengirim email: ' + err.message);
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
+  function handleDownloadPDF() {
+    const pdfDataUri = generatePDFBase64();
+    const link = document.createElement('a');
+    link.href = pdfDataUri;
+    link.download = `${draftPO?.po_number || 'Draft_PO'}.pdf`;
+    link.click();
+  }
+
+  function openEmailModal() {
+    // Basic validation before opening
+    if (!form.vendor_id || !form.deliver_to) {
+      setError('Mohon lengkapi Vendor dan Deliver To terlebih dahulu.');
+      return;
+    }
+    const selectedVendor = vendors.find(v => String(v.id) === form.vendor_id);
+    if (!selectedVendor?.email) {
+      setError('Email vendor ini belum terdaftar. Harap lengkapi email vendor pada menu Master Data terlebih dahulu agar dapat mengirim email.');
+      return;
+    }
+    setEmailForm({
+      to: selectedVendor.email,
+      subject: `Purchase Order ${draftPO?.po_number || 'Baru'} - Sunrise Daily`,
+      message: `Yth. Tim Penjualan ${selectedVendor.name},\n\nBersama email ini, kami bermaksud untuk mengirimkan dokumen Purchase Order (PO) terbaru dari Sunrise Daily.\n\nDetail pemesanan beserta rincian barang, jumlah, dan harga telah kami lampirkan secara lengkap pada dokumen PDF di email ini.\nKami harap barang dapat dipersiapkan dan dikirimkan sesuai dengan tenggat waktu yang telah disepakati.\n\nMohon bantuannya untuk segera memproses pesanan ini dan memberikan konfirmasi tanda terima dengan membalas email ini.\n\nAtas perhatian dan kerja samanya, kami ucapkan terima kasih.\n\nHormat kami,\nTim Purchasing\nSunrise Daily`
+    });
+    setPdfPreviewUrl(''); // Reset preview url
+    setShowEmailModal(true);
+  }
+
   // Calculate KPIs
   const toSend = pos.filter(p => p.status === 'RFQ').length;
   const waiting = pos.filter(p => p.status === 'RFQ_TERKIRIM' || p.status === 'PURCHASE_ORDER').length;
@@ -225,18 +358,20 @@ export default function PurchaseOrdersPage() {
 
   return (
     <section className="screen">
+      <Toast {...toast} onClose={() => setToast(t => ({ ...t, isOpen: false }))} />
+
       {!showModal ? (
         <div className="card">
           <div className="card-head" style={{ paddingBottom: 10 }}>
             <div>
               <h3 style={{ fontSize: 18, margin: 0 }}>Requests for Quotation</h3>
             </div>
-            <button className="btn btn-primary btn-sm" onClick={() => { 
-              setError(''); 
+            <button className="btn btn-primary btn-sm" onClick={() => {
+              setError('');
               setDraftPO(null);
               setForm({ vendor_id: '', vendor_reference: '', deliver_to: '', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
               setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
-              setShowModal(true); 
+              setShowModal(true);
             }}>Create PO</button>
           </div>
 
@@ -285,39 +420,62 @@ export default function PurchaseOrdersPage() {
                 No purchase orders found
               </div>
             ) : (
-              <table style={{ border: 'none' }}>
-                <thead>
-                  <tr style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', color: '#334155' }}>
-                    <th style={{ width: 40, paddingLeft: 16 }}><input type="checkbox" /></th>
-                    <th style={{ width: 30 }}></th>
-                    <th>NO PO</th>
-                    <th>Vendor</th>
-                    <th>Order Deadline</th>
-                    <th>Activities</th>
-                    <th>Source Document</th>
-                    <th className="right">Total</th>
-                    <th className="center">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pos.map(po => {
-                    const cfg = STATUS_CONFIG[po.status] ?? { label: po.status, bg: '#f1f5f9', text: '#475569' };
-                    return (
-                      <tr key={po.id} onClick={() => handleViewPO(po)} style={{ cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }} className="hover-row">
-                        <td style={{ paddingLeft: 16 }} onClick={e => e.stopPropagation()}><input type="checkbox" /></td>
-                        <td className="muted" style={{ fontSize: 16 }}>☆</td>
-                        <td className="font-bold text-primary">{po.po_number}</td>
-                        <td className="text-dark">{po.vendor_name}</td>
-                        <td className="text-dark">{po.order_deadline ? new Date(po.order_deadline).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
-                        <td className="muted">—</td>
-                        <td className="muted">—</td>
-                        <td className="right num text-dark font-bold">{fmtCurrency(po.total).replace(',00', '')}</td>
-                        <td className="center"><span style={{ background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.text}33`, padding: '4px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>{cfg.label}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <>
+                <table style={{ border: 'none' }}>
+                  <thead>
+                    <tr style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', color: '#334155' }}>
+                      <th style={{ width: 40, paddingLeft: 16 }}><input type="checkbox" /></th>
+                      <th style={{ width: 30 }}></th>
+                      <th>NO PO</th>
+                      <th>Vendor</th>
+                      <th>Order Deadline</th>
+                      <th>Activities</th>
+                      <th>Source Document</th>
+                      <th className="right">Total</th>
+                      <th className="center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(po => {
+                      const cfg = STATUS_CONFIG[po.status] ?? { label: po.status, bg: '#f1f5f9', text: '#475569' };
+                      return (
+                        <tr key={po.id} onClick={() => handleViewPO(po)} style={{ cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }} className="hover-row">
+                          <td style={{ paddingLeft: 16 }} onClick={e => e.stopPropagation()}><input type="checkbox" /></td>
+                          <td className="muted" style={{ fontSize: 16 }}>☆</td>
+                          <td className="font-bold text-primary">{po.po_number}</td>
+                          <td className="text-dark">{po.vendor_name}</td>
+                          <td className="text-dark">{po.order_deadline ? new Date(po.order_deadline).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                          <td className="muted">
+                            {['RFQ_TERKIRIM', 'PURCHASE_ORDER', 'DITERIMA_SEBAGIAN', 'SELESAI'].includes(po.status) ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#475569', fontSize: 13, fontWeight: 600 }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                                Email
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td className="muted">—</td>
+                          <td className="right num text-dark font-bold">{fmtCurrency(po.total).replace(',00', '')}</td>
+                          <td className="center"><span style={{ background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.text}33`, padding: '4px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>{cfg.label}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {pos.length > ITEMS_PER_PAGE && (
+                  <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0' }}>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                      Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, pos.length)} of {pos.length}
+                    </div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                      <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', fontSize: 13, fontWeight: 600 }}>
+                        Page {currentPage} of {Math.ceil(pos.length / ITEMS_PER_PAGE)}
+                      </div>
+                      <button className="btn" onClick={() => setCurrentPage(p => Math.min(Math.ceil(pos.length / ITEMS_PER_PAGE), p + 1))} disabled={currentPage === Math.ceil(pos.length / ITEMS_PER_PAGE)}>Next</button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -369,8 +527,8 @@ export default function PurchaseOrdersPage() {
               <div style={{ display: 'flex', gap: 8 }}>
                 {(!draftPO || draftPO.status === 'RFQ') && (
                   <>
-                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => handleSave('RFQ_TERKIRIM')} disabled={saving}>Send by Email</button>
-                    <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => handleSave()} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan Draft'}</button>
+                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={openEmailModal} disabled={saving}>Send by Email</button>
+                    <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => handleSave()} disabled={saving}>{saving ? 'Saving...' : 'Save Draft'}</button>
                   </>
                 )}
                 {draftPO?.status === 'RFQ_TERKIRIM' && (
@@ -378,24 +536,40 @@ export default function PurchaseOrdersPage() {
                 )}
                 {(draftPO?.status === 'PURCHASE_ORDER' || draftPO?.status === 'DITERIMA_SEBAGIAN') && (
                   <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => {
-                    // Navigate to warehouse receipt module
                     window.location.href = `/warehouse/receipt/${draftPO.id}`;
                   }} disabled={saving}>Receive Products</button>
                 )}
+                {draftPO && draftPO.status !== 'DIBATALKAN' && draftPO.status !== 'SELESAI' && draftPO.status !== 'DITERIMA_SEBAGIAN' && (
+                  <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 600 }} onClick={() => {
+                    if (confirm('Are you sure you want to cancel this order?')) {
+                      handleUpdateStatus(draftPO.id, 'DIBATALKAN');
+                    }
+                  }} disabled={saving}>Cancel Order</button>
+                )}
+                <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={handleDownloadPDF} title="Download/View PDF Document">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  PDF
+                </button>
                 <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={() => setShowModal(false)}>Back to list</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', fontSize: 13, fontWeight: 600, color: '#64748b' }}>
-                <div style={{ background: (!draftPO || draftPO.status === 'RFQ') ? 'var(--primary)' : '#f1f5f9', color: (!draftPO || draftPO.status === 'RFQ') ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ</div>
-                <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
-                <div style={{ background: draftPO?.status === 'RFQ_TERKIRIM' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'RFQ_TERKIRIM' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ Sent</div>
-                <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
-                <div style={{ background: draftPO?.status === 'PURCHASE_ORDER' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'PURCHASE_ORDER' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Purchase Order</div>
-                <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
-                <div style={{ background: draftPO?.status === 'SELESAI' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'SELESAI' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Done</div>
+                {draftPO?.status === 'DIBATALKAN' ? (
+                  <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '4px 16px', borderRadius: 16, border: '1px solid #f87171' }}>Canceled</div>
+                ) : (
+                  <>
+                    <div style={{ background: (!draftPO || draftPO.status === 'RFQ') ? 'var(--primary)' : '#f1f5f9', color: (!draftPO || draftPO.status === 'RFQ') ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ</div>
+                    <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
+                    <div style={{ background: draftPO?.status === 'RFQ_TERKIRIM' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'RFQ_TERKIRIM' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ Sent</div>
+                    <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
+                    <div style={{ background: draftPO?.status === 'PURCHASE_ORDER' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'PURCHASE_ORDER' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Purchase Order</div>
+                    <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
+                    <div style={{ background: draftPO?.status === 'SELESAI' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'SELESAI' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Done</div>
+                  </>
+                )}
               </div>
             </div>
           </div>
-          
+
           <div style={{ padding: '24px 24px 0', display: 'flex', alignItems: 'center', gap: 16, background: '#fff' }}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
             <h1 style={{ fontSize: 32, fontWeight: 800, color: 'var(--primary)', margin: 0, lineHeight: 1 }}>{draftPO ? draftPO.po_number : 'New'}</h1>
@@ -407,106 +581,187 @@ export default function PurchaseOrdersPage() {
               {error && <div className="alert-banner alert-danger">{error}</div>}
               <fieldset disabled={draftPO ? draftPO.status !== 'RFQ' : false} style={{ border: 'none', padding: 0, margin: 0 }}>
                 <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap' }}>
-                {/* Left Column */}
-                <div style={{ flex: 1, minWidth: 300, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div className="form-group">
-                    <label className="req">Vendor</label>
-                    <select className="input" value={form.vendor_id} onChange={e => setForm(f => ({ ...f, vendor_id: e.target.value }))}>
-                      <option value="">Select vendor...</option>
-                      {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                    </select>
+                  {/* Left Column */}
+                  <div style={{ flex: 1, minWidth: 300, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div className="form-group">
+                      <label className="req">Vendor</label>
+                      <select className="input" value={form.vendor_id} onChange={e => setForm(f => ({ ...f, vendor_id: e.target.value }))}>
+                        <option value="">Select vendor...</option>
+                        {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Vendor Reference</label>
+                      <input className="input" value={form.vendor_reference} onChange={e => setForm(f => ({ ...f, vendor_reference: e.target.value }))} placeholder="e.g. PO-REF-123" />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Vendor Reference</label>
-                    <input className="input" value={form.vendor_reference} onChange={e => setForm(f => ({ ...f, vendor_reference: e.target.value }))} placeholder="e.g. PO-REF-123" />
-                  </div>
-                </div>
 
-                {/* Right Column */}
-                <div style={{ flex: 1, minWidth: 300, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div className="form-group" style={{ position: 'relative' }}>
-                    <label>Deliver To</label>
-                    <input className="input" value={form.deliver_to} onFocus={(e) => { setDeliverToFocused(true); e.target.select(); }} onBlur={() => setTimeout(() => setDeliverToFocused(false), 200)} onChange={e => {
-                      const val = e.target.value;
-                      const matched = outlets.find(o => o.name === val);
-                      setForm(f => ({ ...f, deliver_to: val, destination_outlet_id: matched ? String(matched.id) : '' }));
-                    }} placeholder="Select or type destination..." />
-                    
-                    {deliverToFocused && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
-                        {[{ name: 'Gudang Cihapit', id: 'gudang' }, ...outlets].filter(o => o.name.toLowerCase().includes(form.deliver_to.toLowerCase())).map((o: any) => (
-                          <div key={o.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onMouseDown={(e) => {
-                            e.preventDefault();
-                            setForm(f => ({ ...f, deliver_to: o.name, destination_outlet_id: o.id === 'gudang' ? '' : String(o.id) }));
-                            setDeliverToFocused(false);
-                          }} onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                            {o.name}
-                          </div>
-                        ))}
+                  {/* Right Column */}
+                  <div style={{ flex: 1, minWidth: 300, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div className="form-group" style={{ position: 'relative' }}>
+                      <label>Deliver To</label>
+                      <input className="input" value={form.deliver_to} onFocus={(e) => { setDeliverToFocused(true); e.target.select(); }} onBlur={() => setTimeout(() => setDeliverToFocused(false), 200)} onChange={e => {
+                        const val = e.target.value;
+                        const matched = outlets.find(o => o.name === val);
+                        setForm(f => ({ ...f, deliver_to: val, destination_outlet_id: matched ? String(matched.id) : '' }));
+                      }} placeholder="Select or type destination..." />
+
+                      {deliverToFocused && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
+                          {[{ name: 'Gudang Cihapit', id: 'gudang' }, ...outlets].filter(o => o.name.toLowerCase().includes(form.deliver_to.toLowerCase())).map((o: any) => (
+                            <div key={o.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onMouseDown={(e) => {
+                              e.preventDefault();
+                              setForm(f => ({ ...f, deliver_to: o.name, destination_outlet_id: o.id === 'gudang' ? '' : String(o.id) }));
+                              setDeliverToFocused(false);
+                            }} onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              {o.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <div className="form-group">
+                        <label>Order Date</label>
+                        <input className="input" type="date" min={new Date().toISOString().split('T')[0]} value={form.order_date} onChange={e => setForm(f => ({ ...f, order_date: e.target.value }))} onKeyDown={e => e.preventDefault()} onClick={e => (e.target as HTMLInputElement).showPicker && (e.target as HTMLInputElement).showPicker()} />
                       </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div className="form-group">
-                      <label>Order Date</label>
-                      <input className="input" type="date" min={new Date().toISOString().split('T')[0]} value={form.order_date} onChange={e => setForm(f => ({ ...f, order_date: e.target.value }))} onKeyDown={e => e.preventDefault()} onClick={e => (e.target as HTMLInputElement).showPicker && (e.target as HTMLInputElement).showPicker()} />
+                      <div className="form-group">
+                        <label>Order Deadline</label>
+                        <input className="input" type="date" min={new Date().toISOString().split('T')[0]} value={form.order_deadline} onChange={e => setForm(f => ({ ...f, order_deadline: e.target.value }))} onKeyDown={e => e.preventDefault()} onClick={e => (e.target as HTMLInputElement).showPicker && (e.target as HTMLInputElement).showPicker()} />
+                      </div>
                     </div>
                     <div className="form-group">
-                      <label>Order Deadline</label>
-                      <input className="input" type="date" min={new Date().toISOString().split('T')[0]} value={form.order_deadline} onChange={e => setForm(f => ({ ...f, order_deadline: e.target.value }))} onKeyDown={e => e.preventDefault()} onClick={e => (e.target as HTMLInputElement).showPicker && (e.target as HTMLInputElement).showPicker()} />
+                      <label>Payment Terms</label>
+                      <input className="input" value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))} placeholder="e.g. 30 days, Cash" />
                     </div>
                   </div>
-                  <div className="form-group">
-                    <label>Payment Terms</label>
-                    <input className="input" value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))} placeholder="e.g. 30 days, Cash" />
+                </div>
+
+                {/* Odoo Style Tabs */}
+                <div style={{ marginTop: 20 }}>
+                  <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border)', paddingBottom: 0, marginBottom: 16 }}>
+                    {['Ingredients', 'Other Info', 'Alternatives'].map(tab => (
+                      <div key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        style={{
+                          padding: '8px 4px',
+                          cursor: 'pointer',
+                          color: activeTab === tab ? 'var(--primary)' : '#64748b',
+                          fontWeight: activeTab === tab ? 600 : 500,
+                          borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent',
+                          marginBottom: -1
+                        }}>
+                        {tab}
+                      </div>
+                    ))}
                   </div>
-                </div>
-              </div>
 
-              {/* Odoo Style Tabs */}
-              <div style={{ marginTop: 20 }}>
-                <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border)', paddingBottom: 0, marginBottom: 16 }}>
-                  {['Ingredients', 'Other Info', 'Alternatives'].map(tab => (
-                    <div key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      style={{
-                        padding: '8px 4px',
-                        cursor: 'pointer',
-                        color: activeTab === tab ? 'var(--primary)' : '#64748b',
-                        fontWeight: activeTab === tab ? 600 : 500,
-                        borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent',
-                        marginBottom: -1
-                      }}>
-                      {tab}
-                    </div>
-                  ))}
-                </div>
-
-                {activeTab === 'Ingredients' && (
-                  <div>
-                    <div className="table-responsive" style={{ overflow: 'visible' }}>
-                      <table style={{ margin: 0, width: '100%' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                            <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200 }}>Ingredient</th>
-                            <th className="right" style={{ minWidth: 80 }}>Quantity</th>
-                            <th className="center" style={{ minWidth: 220 }}>Unit</th>
-                            <th className="right" style={{ minWidth: 100 }}>Unit Price</th>
-                            <th className="right" style={{ minWidth: 70 }}>Taxes %</th>
-                            <th className="right" style={{ minWidth: 70 }}>Disc.%</th>
-                            <th className="right" style={{ minWidth: 100 }}>Amount</th>
-                            <th style={{ width: 40 }}></th>
-                          </tr>
-                        </thead>
-                        <tbody style={{ background: '#fff' }}>
-                          {lines.map((line, idx) => {
-                            if (line.type === 'note') {
+                  {activeTab === 'Ingredients' && (
+                    <div>
+                      <div className="table-responsive" style={{ overflow: 'visible' }}>
+                        <table style={{ margin: 0, width: '100%' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
+                              <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200 }}>Ingredient</th>
+                              <th className="right" style={{ minWidth: 80 }}>Quantity</th>
+                              <th className="center" style={{ minWidth: 220 }}>Unit</th>
+                              <th className="right" style={{ minWidth: 100 }}>Unit Price</th>
+                              <th className="right" style={{ minWidth: 70 }}>Taxes %</th>
+                              <th className="right" style={{ minWidth: 70 }}>Disc.%</th>
+                              <th className="right" style={{ minWidth: 100 }}>Amount</th>
+                              <th style={{ width: 40 }}></th>
+                            </tr>
+                          </thead>
+                          <tbody style={{ background: '#fff' }}>
+                            {lines.map((line, idx) => {
+                              if (line.type === 'note') {
+                                return (
+                                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                    <td style={{ padding: '8px 16px' }}>
+                                      <textarea className="input" rows={2} style={{ width: '100%', resize: 'none', fontStyle: 'italic', fontSize: 13 }} placeholder="Type a note..." value={line.description} onChange={e => updateLine(idx, 'description', e.target.value)} />
+                                    </td>
+                                    <td colSpan={6}></td>
+                                    <td className="center" style={{ padding: '6px 4px' }}>
+                                      <button onClick={() => removeLine(idx)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              }
                               return (
                                 <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                  <td style={{ padding: '8px 16px' }}>
-                                    <textarea className="input" rows={2} style={{ width: '100%', resize: 'none', fontStyle: 'italic', fontSize: 13 }} placeholder="Type a note..." value={line.description} onChange={e => updateLine(idx, 'description', e.target.value)} />
+                                  <td style={{ padding: '6px 16px', position: 'relative' }}>
+                                    <input
+                                      className="po-table-input ingredient-input"
+                                      value={line.description}
+                                      onFocus={(e) => { setActiveDropdown(idx); e.target.select(); }}
+                                      onBlur={() => setTimeout(() => setActiveDropdown(null), 200)}
+                                      onChange={e => handleItemTextChange(idx, e.target.value)}
+                                      placeholder="Ingredient name..."
+                                    />
+                                    {activeDropdown === idx && (
+                                      <div style={{ position: 'absolute', top: '100%', left: 16, right: 16, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 999, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
+                                        {items.filter(i => i.name.toLowerCase().includes((line.item_id ? '' : line.description).toLowerCase())).map(i => (
+                                          <div key={i.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleItemTextChange(idx, i.name);
+                                            setActiveDropdown(null);
+                                          }} onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            {i.name}
+                                          </div>
+                                        ))}
+                                        {items.filter(i => i.name.toLowerCase().includes((line.item_id ? '' : line.description).toLowerCase())).length === 0 && (
+                                          <div style={{ padding: '8px 12px', color: '#64748b', fontStyle: 'italic', fontSize: 13 }}>No matches found</div>
+                                        )}
+                                      </div>
+                                    )}
                                   </td>
-                                  <td colSpan={6}></td>
+                                  <td style={{ padding: '6px 16px' }}>
+                                    <input type="text" className="po-table-input transparent-input right" value={line.qty === '0' ? '' : (line.qty ? Number(line.qty).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'qty', raw); }} onFocus={e => e.target.select()} placeholder="0" />
+                                  </td>
+                                  <td className="center" style={{ padding: '8px 12px', minWidth: 150 }}>
+                                    <div style={{ color: '#334155', fontWeight: 600, fontSize: 14 }}>
+                                      {line.item_id ? (items.find(i => String(i.id) === line.item_id)?.purchase_unit || line.purchase_unit || '-') : (line.purchase_unit || '-')}
+                                    </div>
+                                    {line.item_id && items.find(i => String(i.id) === line.item_id) && Number(items.find(i => String(i.id) === line.item_id)?.conversion_ratio) > 1 && (
+                                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                                        Isi {Math.round(Number(items.find(i => String(i.id) === line.item_id)?.conversion_ratio))} {items.find(i => String(i.id) === line.item_id)?.smallest_unit}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '6px 16px' }}>
+                                    <input type="text" className="po-table-input transparent-input right" value={line.unit_price === '0' ? '' : (line.unit_price ? Number(line.unit_price).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'unit_price', raw); }} onFocus={e => e.target.select()} placeholder="0" />
+                                  </td>
+                                  <td style={{ padding: '6px 16px' }}>
+                                    <input type="text" className="po-table-input transparent-input right" value={line.tax_percent === '0' ? '' : (line.tax_percent ? Number(line.tax_percent).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'tax_percent', raw); }} onFocus={e => e.target.select()} placeholder="0" />
+                                  </td>
+                                  <td style={{ padding: '6px 16px' }}>
+                                    <input type="text" className="po-table-input transparent-input right" value={line.disc_percent === '0' ? '' : (line.disc_percent ? Number(line.disc_percent).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'disc_percent', raw); }} onFocus={e => e.target.select()} placeholder="0" />
+                                  </td>
+                                  <td style={{ padding: '6px 16px' }}>
+                                    <input
+                                      type="text"
+                                      className="po-table-input transparent-input right font-bold"
+                                      value={(() => {
+                                        const amt = (Number(line.qty) || 0) * (Number(line.unit_price) || 0) * (1 - (Number(line.disc_percent) || 0) / 100);
+                                        return amt ? Math.round(amt).toLocaleString('id-ID') : '';
+                                      })()}
+                                      onChange={e => {
+                                        const raw = e.target.value.replace(/\./g, '');
+                                        if (/^\d*$/.test(raw)) {
+                                          const amount = Number(raw) || 0;
+                                          const qty = Number(line.qty) || 1; // hindari bagi nol
+                                          const d = Number(line.disc_percent) || 0;
+                                          const factor = qty * (1 - d / 100);
+                                          const newUnitPrice = Math.round(factor > 0 ? amount / factor : 0);
+                                          updateLine(idx, 'unit_price', String(newUnitPrice));
+                                        }
+                                      }}
+                                      onFocus={e => e.target.select()}
+                                      placeholder="0"
+                                    />
+                                  </td>
                                   <td className="center" style={{ padding: '6px 4px' }}>
                                     <button onClick={() => removeLine(idx)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
                                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
@@ -514,211 +769,136 @@ export default function PurchaseOrdersPage() {
                                   </td>
                                 </tr>
                               );
-                            }
-                            return (
-                              <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                <td style={{ padding: '6px 16px', position: 'relative' }}>
-                                  <input
-                                    className="po-table-input ingredient-input"
-                                    value={line.description}
-                                    onFocus={(e) => { setActiveDropdown(idx); e.target.select(); }}
-                                    onBlur={() => setTimeout(() => setActiveDropdown(null), 200)}
-                                    onChange={e => handleItemTextChange(idx, e.target.value)}
-                                    placeholder="Ingredient name..."
-                                  />
-                                  {activeDropdown === idx && (
-                                    <div style={{ position: 'absolute', top: '100%', left: 16, right: 16, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 999, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
-                                      {items.filter(i => i.name.toLowerCase().includes((line.item_id ? '' : line.description).toLowerCase())).map(i => (
-                                        <div key={i.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onMouseDown={(e) => {
-                                          e.preventDefault();
-                                          handleItemTextChange(idx, i.name);
-                                          setActiveDropdown(null);
-                                        }} onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                          {i.name}
-                                        </div>
-                                      ))}
-                                      {items.filter(i => i.name.toLowerCase().includes((line.item_id ? '' : line.description).toLowerCase())).length === 0 && (
-                                        <div style={{ padding: '8px 12px', color: '#64748b', fontStyle: 'italic', fontSize: 13 }}>No matches found</div>
-                                      )}
-                                    </div>
-                                  )}
-                                </td>
-                                <td style={{ padding: '6px 16px' }}>
-                                  <input type="text" className="po-table-input transparent-input right" value={line.qty === '0' ? '' : (line.qty ? Number(line.qty).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'qty', raw); }} onFocus={e => e.target.select()} placeholder="0" />
-                                </td>
-                                <td style={{ padding: '8px 12px', minWidth: 240 }}>
-                                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                                    <select className="po-table-input transparent-input" style={{ fontWeight: 600, color: 'var(--primary)', outline: 'none', cursor: 'pointer', padding: '2px 4px', border: '1px solid transparent', borderRadius: 4, transition: 'all 0.2s', width: 70 }}
-                                           onMouseEnter={e => e.currentTarget.style.border = '1px solid #cbd5e1'}
-                                           onMouseLeave={e => e.currentTarget.style.border = '1px solid transparent'}
-                                           value={line.purchase_unit || (line.item_id ? items.find(i => String(i.id) === line.item_id)?.purchase_unit : 'pcs') || ''}
-                                           onChange={e => updateLine(idx, 'purchase_unit', e.target.value)}>
-                                      <option value="">-</option>
-                                      {['Dus', 'Karton', 'Kotak', 'Pack', 'Karung', 'Bungkus', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Bal', 'Roll', 'Pcs', 'Ikat', 'Krat', 'Box'].map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
-                                    
-                                    {line.item_id && (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f8fafc', padding: '4px 8px', borderRadius: 6, fontSize: 11, border: '1px solid #e2e8f0' }}>
-                                        <input 
-                                          style={{ width: 26, background: 'transparent', border: 'none', borderBottom: '1px dashed #94a3b8', borderRadius: 0, textAlign: 'center', padding: '0 2px', outline: 'none' }} 
-                                          placeholder="Qty" 
-                                          value={line.package_qty || ''}
-                                          onChange={e => {
-                                            const qty = e.target.value;
-                                            const newRatio = (qty && line.package_inner_size) ? Number(qty) * Number(line.package_inner_size) : null;
-                                            const basePrice = items.find(i => String(i.id) === line.item_id)?.current_average_price ?? 0;
-                                            setLines(l => l.map((ln, i) => i === idx ? {
-                                              ...ln,
-                                              package_qty: qty,
-                                              ...(newRatio ? { conversion_ratio: String(newRatio), unit_price: String(Math.round(basePrice * newRatio)) } : {})
-                                            } : ln));
-                                          }} 
-                                        />
-                                        <span style={{ color: '#64748b', fontSize: 10 }}>×</span>
-                                        <input 
-                                          style={{ width: 34, background: 'transparent', border: 'none', borderBottom: '1px dashed #94a3b8', borderRadius: 0, textAlign: 'center', padding: '0 2px', outline: 'none' }} 
-                                          placeholder="Vol" 
-                                          value={line.package_inner_size || ''}
-                                          onChange={e => {
-                                            const size = e.target.value;
-                                            const newRatio = (size && line.package_qty) ? Number(line.package_qty) * Number(size) : null;
-                                            const basePrice = items.find(i => String(i.id) === line.item_id)?.current_average_price ?? 0;
-                                            setLines(l => l.map((ln, i) => i === idx ? {
-                                              ...ln,
-                                              package_inner_size: size,
-                                              ...(newRatio ? { conversion_ratio: String(newRatio), unit_price: String(Math.round(basePrice * newRatio)) } : {})
-                                            } : ln));
-                                          }} 
-                                        />
-                                        <span style={{ color: '#64748b', margin: '0 2px' }}>=</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', fontWeight: 600, color: 'var(--primary)' }}>
-                                          <input 
-                                            type="number"
-                                            style={{ width: 60, border: 'none', background: 'transparent', textAlign: 'right', fontWeight: 600, color: 'var(--primary)', padding: 0, outline: 'none' }}
-                                            value={line.conversion_ratio || (items.find(i => String(i.id) === line.item_id)?.conversion_ratio ? Number(items.find(i => String(i.id) === line.item_id)?.conversion_ratio) : '')}
-                                            onChange={e => {
-                                              const newRatio = e.target.value;
-                                              const basePrice = items.find(i => String(i.id) === line.item_id)?.current_average_price ?? 0;
-                                              setLines(l => l.map((ln, i) => i === idx ? {
-                                                ...ln,
-                                                conversion_ratio: newRatio,
-                                                unit_price: newRatio ? String(Math.round(basePrice * Number(newRatio))) : ln.unit_price
-                                              } : ln));
-                                            }}
-                                          />
-                                          <span style={{ fontSize: 10, marginLeft: 2 }}>{items.find(i => String(i.id) === line.item_id)?.smallest_unit}</span>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-                                <td style={{ padding: '6px 16px' }}>
-                                  <input type="text" className="po-table-input transparent-input right" value={line.unit_price === '0' ? '' : (line.unit_price ? Number(line.unit_price).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'unit_price', raw); }} onFocus={e => e.target.select()} placeholder="0" />
-                                </td>
-                                <td style={{ padding: '6px 16px' }}>
-                                  <input type="text" className="po-table-input transparent-input right" value={line.tax_percent === '0' ? '' : (line.tax_percent ? Number(line.tax_percent).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'tax_percent', raw); }} onFocus={e => e.target.select()} placeholder="0" />
-                                </td>
-                                <td style={{ padding: '6px 16px' }}>
-                                  <input type="text" className="po-table-input transparent-input right" value={line.disc_percent === '0' ? '' : (line.disc_percent ? Number(line.disc_percent).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'disc_percent', raw); }} onFocus={e => e.target.select()} placeholder="0" />
-                                </td>
-                                <td style={{ padding: '6px 16px' }}>
-                                  <input 
-                                    type="text" 
-                                    className="po-table-input transparent-input right font-bold" 
-                                    value={(() => {
-                                      const amt = (Number(line.qty) || 0) * (Number(line.unit_price) || 0) * (1 - (Number(line.disc_percent) || 0) / 100);
-                                      return amt ? Math.round(amt).toLocaleString('id-ID') : '';
-                                    })()} 
-                                    onChange={e => {
-                                      const raw = e.target.value.replace(/\./g, '');
-                                      if (/^\d*$/.test(raw)) {
-                                        const amount = Number(raw) || 0;
-                                        const qty = Number(line.qty) || 1; // hindari bagi nol
-                                        const d = Number(line.disc_percent) || 0;
-                                        const factor = qty * (1 - d/100);
-                                        const newUnitPrice = Math.round(factor > 0 ? amount / factor : 0);
-                                        updateLine(idx, 'unit_price', String(newUnitPrice));
-                                      }
-                                    }} 
-                                    onFocus={e => e.target.select()} 
-                                    placeholder="0" 
-                                  />
-                                </td>
-                                <td className="center" style={{ padding: '6px 4px' }}>
-                                  <button onClick={() => removeLine(idx)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
 
-                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                      <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>Add an ingredient</button>
-                      <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }}>Add a section</button>
-                      <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={addNote}>Add a note</button>
-                    </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>Add an ingredient</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }}>Add a section</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={addNote}>Add a note</button>
+                      </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', marginTop: 32 }}>
-                      <div style={{ minWidth: 300 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, color: '#64748b' }}>
-                          <span>Untaxed Amount:</span>
-                          <span className="num">{fmtCurrency(computedSubtotal).replace(',00', '')}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, color: '#64748b' }}>
-                          <span>Taxes:</span>
-                          <span className="num">{fmtCurrency(computedTax).replace(',00', '')}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 18 }}>
-                          <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Total:</span>
-                          <span className="num font-bold text-dark">{fmtCurrency(computedTotal).replace(',00', '')}</span>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', marginTop: 32 }}>
+                        <div style={{ minWidth: 300 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, color: '#64748b' }}>
+                            <span>Untaxed Amount:</span>
+                            <span className="num">{fmtCurrency(computedSubtotal).replace(',00', '')}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, color: '#64748b' }}>
+                            <span>Taxes:</span>
+                            <span className="num">{fmtCurrency(computedTax).replace(',00', '')}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 18 }}>
+                            <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Total:</span>
+                            <span className="num font-bold text-dark">{fmtCurrency(computedTotal).replace(',00', '')}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {activeTab === 'Other Info' && (
-                  <div className="form-grid" style={{ columnGap: 60 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Purchase Rep</div>
-                        <input className="input" value="Admin Pusat" disabled style={{ flex: 1 }} />
+                  {activeTab === 'Other Info' && (
+                    <div className="form-grid" style={{ columnGap: 60 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Purchase Rep</div>
+                          <input className="input" value="Admin Pusat" disabled style={{ flex: 1 }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Company</div>
+                          <input className="input" value="Sunrise Daily Pusat" disabled style={{ flex: 1 }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Source Document</div>
+                          <input className="input" placeholder="e.g. OP/0001" style={{ flex: 1 }} />
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Company</div>
-                        <input className="input" value="Sunrise Daily Pusat" disabled style={{ flex: 1 }} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Source Document</div>
-                        <input className="input" placeholder="e.g. OP/0001" style={{ flex: 1 }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Agreement</div>
+                          <input className="input" style={{ flex: 1 }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Payment Terms</div>
+                          <select className="input" style={{ flex: 1 }} value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}>
+                            <option value="">Immediate Payment</option>
+                            <option value="15 Days">15 Days</option>
+                            <option value="30 Days">30 Days</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Agreement</div>
-                        <input className="input" style={{ flex: 1 }} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Payment Terms</div>
-                        <select className="input" style={{ flex: 1 }} value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}>
-                          <option value="">Immediate Payment</option>
-                          <option value="15 Days">15 Days</option>
-                          <option value="30 Days">30 Days</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
               </fieldset>
             </div>
           </div>
         </div>
       )}
+
+      {/* Email Modal */}
+      <Modal isOpen={showEmailModal} onClose={() => !sendingEmail && setShowEmailModal(false)} title={pdfPreviewUrl ? "Compose Email & Preview" : "Compose Email"} maxWidth={pdfPreviewUrl ? 1100 : 700}>
+        <div style={{ padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button className="btn btn-outline" onClick={() => setShowEmailModal(false)} disabled={sendingEmail}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleSendEmail} disabled={sendingEmail}>
+              {sendingEmail ? 'Sending...' : 'Send Email'}
+              {!sendingEmail && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 8 }}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>}
+            </button>
+          </div>
+        </div>
+        <div className="modal-body" style={{ padding: '24px' }}>
+          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
+
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+            {/* Left: Email Form */}
+            <div style={{ flex: 1, minWidth: 350, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="form-group">
+                <label className="req">To (Email Vendor)</label>
+                <input className="input" type="email" placeholder="vendor@example.com" value={emailForm.to} onChange={e => setEmailForm(f => ({ ...f, to: e.target.value }))} disabled={sendingEmail} />
+              </div>
+
+              <div className="form-group">
+                <label className="req">Subject</label>
+                <input className="input" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} disabled={sendingEmail} />
+              </div>
+
+              <div className="form-group">
+                <label>Message Body</label>
+                <textarea className="input" value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} disabled={sendingEmail} style={{ resize: 'none', minHeight: '320px', lineHeight: '1.5' }} />
+              </div>
+
+              <div
+                onClick={() => setPdfPreviewUrl(generatePDFBase64())}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>{draftPO?.po_number || 'Purchase_Order'}.pdf</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Attached Document &bull; Click to preview</div>
+                </div>
+                {!pdfPreviewUrl && (
+                  <button className="btn btn-sm btn-outline" style={{ padding: '4px 8px', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); setPdfPreviewUrl(generatePDFBase64()); }}>
+                    Preview
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Right: PDF Preview */}
+            {pdfPreviewUrl && (
+              <div style={{ flex: 1, minWidth: 400, display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.3s ease' }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 }}>PDF Preview</label>
+                <iframe src={pdfPreviewUrl} style={{ width: '100%', height: '540px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f1f5f9' }}></iframe>
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

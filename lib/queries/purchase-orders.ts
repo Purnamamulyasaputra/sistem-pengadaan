@@ -145,11 +145,11 @@ export async function createPurchaseOrder(data: {
     let totalTax = 0;
     for (let idx = 0; idx < data.items.length; idx++) {
       const item = data.items[idx];
-      const q = item.qty ?? 0;
-      const up = item.unit_price ?? 0;
+      const q = item.qty ?? null;
+      const up = item.unit_price ?? null;
       const d = item.disc_percent ?? 0;
       const t = item.tax_percent ?? 0;
-      const lineSubtotal = (q * up) * (1 - d / 100);
+      const lineSubtotal = ((q || 0) * (up || 0)) * (1 - d / 100);
       
       subtotal += lineSubtotal;
       totalTax += lineSubtotal * (t / 100);
@@ -194,11 +194,11 @@ export async function updatePurchaseOrder(id: number, data: Parameters<typeof cr
     let totalTax = 0;
     for (let idx = 0; idx < data.items.length; idx++) {
       const item = data.items[idx];
-      const q = item.qty ?? 0;
-      const up = item.unit_price ?? 0;
+      const q = item.qty ?? null;
+      const up = item.unit_price ?? null;
       const d = item.disc_percent ?? 0;
       const t = item.tax_percent ?? 0;
-      const lineSubtotal = (q * up) * (1 - d / 100);
+      const lineSubtotal = ((q || 0) * (up || 0)) * (1 - d / 100);
       
       subtotal += lineSubtotal;
       totalTax += lineSubtotal * (t / 100);

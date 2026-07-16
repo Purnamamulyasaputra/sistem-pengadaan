@@ -44,17 +44,17 @@ function Icon({ name, ...props }: { name: string } & React.SVGProps<SVGSVGElemen
 const CENTRAL_MENU: NavItem[] = [
   { section: 'MAIN' },
   { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
-  { section: 'INVENTORY' },
-  { href: '/purchase-orders', label: 'Purchase Order', icon: <Icon name="cart" /> },
-  { href: '/warehouse', label: 'Warehouse', icon: <Icon name="box" /> },
-  { section: 'REQUESTS' },
-  { href: '/requests', label: 'Request Recap', icon: <Icon name="list" /> },
-  { section: 'DATA & REPORTS' },
+  { section: 'CATALOG & MENUS' },
   { href: '/master-data/items', label: 'Master Data', icon: <Icon name="db" /> },
-  { href: '/hpp', label: 'COGS & Recipes', icon: <Icon name="hpp" /> },
-  { href: '/reports', label: 'Reports', icon: <Icon name="report" /> },
-  { section: 'SYSTEM' },
+  { href: '/hpp', label: 'Menus & COGS', icon: <Icon name="hpp" /> },
+  { section: 'PROCUREMENT & INVENTORY' },
+  { href: '/purchase-orders', label: 'Purchase Order', icon: <Icon name="cart" /> },
+  { href: '/warehouse', label: 'Stock & Inventory', icon: <Icon name="box" /> },
+  { href: '/requests', label: 'Outlet Requests', icon: <Icon name="list" /> },
   { href: '/alerts', label: 'Reorder Point', icon: <Icon name="bell" />, badge: 0 },
+  { section: 'ANALYTICS & REPORTS' },
+  { href: '/reports', label: 'Reports', icon: <Icon name="report" /> },
+  { section: 'SYSTEM & ACCOUNT' },
   { href: '/settings', label: 'System Settings', icon: <Icon name="settings" /> },
 ];
 
@@ -62,15 +62,15 @@ const OUTLET_MENU: NavItem[] = [
   { section: 'MAIN' },
   { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
   { section: 'CATALOG & MENUS' },
-  { href: '/outlet/menus', label: 'POS Menus & COGS', icon: <Icon name="hpp" /> },
-  { section: 'SALES & DATA' },
-  { href: '/outlet/sales', label: 'Sales Analytics', icon: <Icon name="trend" /> },
-  { section: 'INVENTORY' },
+  { href: '/outlet/menus', label: 'Menus & COGS', icon: <Icon name="hpp" /> },
+  { section: 'PROCUREMENT & INVENTORY' },
   { href: '/outlet/requests', label: 'Purchase Order', icon: <Icon name="cart" /> },
-  { href: '/outlet/inventory/stock', label: 'Stock & Items', icon: <Icon name="db" /> },
+  { href: '/outlet/inventory/stock', label: 'Stock & Inventory', icon: <Icon name="db" /> },
   { href: '/outlet/receive-goods', label: 'Receive Goods', icon: <Icon name="truck" /> },
   { href: '/outlet/opname', label: 'Stock Opname', icon: <Icon name="clipboard" /> },
-  { section: 'ACCOUNT' },
+  { section: 'ANALYTICS & REPORTS' },
+  { href: '/outlet/sales', label: 'Sales Analytics', icon: <Icon name="trend" /> },
+  { section: 'SYSTEM & ACCOUNT' },
   { href: '/settings/profile', label: 'Profile & Account', icon: <Icon name="user" /> },
 ];
 
@@ -221,8 +221,9 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
         title="Log out?"
         message="You will need to log in again to access the system."
         confirmText="Yes, Log out"
-        onCancel={() => setConfirmLogout(false)}
-        onConfirm={() => { setConfirmLogout(false); handleLogout(); }}
+        onCancel={() => !loggingOut && setConfirmLogout(false)}
+        onConfirm={() => handleLogout()}
+        loading={loggingOut}
       />
     </>
   );

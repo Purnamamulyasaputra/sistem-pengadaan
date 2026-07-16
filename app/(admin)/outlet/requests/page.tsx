@@ -26,6 +26,8 @@ export default function OutletRequestsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<{ order: Order; items: OrderItem[] } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -33,6 +35,7 @@ export default function OutletRequestsPage() {
     const data = await res.json();
     setOrders(data.data ?? []);
     setLoading(false);
+    setCurrentPage(1);
   }, []);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
@@ -62,7 +65,7 @@ export default function OutletRequestsPage() {
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              Buat Manual
+              Request PO
             </Button>
           </Link>
 
@@ -81,32 +84,48 @@ export default function OutletRequestsPage() {
               </Link>
             </div>
           ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <th>PO No.</th><th>Created By</th>
-                  <th>Order Date</th><th>Expected Delivery</th>
-                  <th className="center">Total Items</th><th className="center">Status</th><th className="right">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map(o => (
-                  <tr key={o.id}>
-                    <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
-                    <td className="muted">{o.created_by_name}</td>
-                    <td>{new Date(o.order_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                    <td>{new Date(o.delivery_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                    <td className="center num font-bold">{o.item_count}</td>
-                    <td className="center"><OrderStatusBadge status={o.status} /></td>
-                    <td className="right">
-                      <Button size="sm" onClick={() => handleViewOrder(o)} title="Detail" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                      </Button>
-                    </td>
+            <>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>PO No.</th><th>Created By</th>
+                    <th>Order Date</th><th>Expected Delivery</th>
+                    <th className="center">Total Items</th><th className="center">Status</th><th className="right">ACTIONS</th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
+                </thead>
+                <tbody>
+                  {orders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => (
+                    <tr key={o.id}>
+                      <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
+                      <td className="muted">{o.created_by_name}</td>
+                      <td>{new Date(o.order_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                      <td>{new Date(o.delivery_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                      <td className="center num font-bold">{o.item_count}</td>
+                      <td className="center"><OrderStatusBadge status={o.status} /></td>
+                      <td className="right">
+                        <Button size="sm" onClick={() => handleViewOrder(o)} title="Detail" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+              {orders.length > ITEMS_PER_PAGE && (
+                <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)' }}>
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, orders.length)} of {orders.length}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</Button>
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', fontSize: 13, fontWeight: 600 }}>
+                      Page {currentPage} of {Math.ceil(orders.length / ITEMS_PER_PAGE)}
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ITEMS_PER_PAGE), p + 1))} disabled={currentPage === Math.ceil(orders.length / ITEMS_PER_PAGE)}>Next</Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

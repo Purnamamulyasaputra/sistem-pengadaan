@@ -34,12 +34,14 @@ export interface OrderItem {
   updated_at: string;
 }
 
-export async function getOrders(opts?: { outletId?: number; status?: string; limit?: number; offset?: number }) {
+export async function getOrders(opts?: { outletId?: number; status?: string; startDate?: string; endDate?: string; limit?: number; offset?: number }) {
   const conditions: string[] = [];
   const params: unknown[] = [];
   let i = 1;
   if (opts?.outletId) { conditions.push(`o.outlet_id = $${i++}`); params.push(opts.outletId); }
   if (opts?.status) { conditions.push(`o.status = $${i++}`); params.push(opts.status); }
+  if (opts?.startDate) { conditions.push(`o.order_date >= $${i++}`); params.push(opts.startDate); }
+  if (opts?.endDate) { conditions.push(`o.order_date <= $${i++}`); params.push(opts.endDate); }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const limitClause = opts?.limit ? `LIMIT $${i++} OFFSET $${i++}` : '';
   if (opts?.limit) { params.push(opts.limit); params.push(opts.offset ?? 0); }

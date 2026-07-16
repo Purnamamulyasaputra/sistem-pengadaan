@@ -6,10 +6,10 @@ interface OrderStatusBadgeProps {
 }
 
 const STATUS_MAP: Record<string, { label: string; variant: 'gray' | 'blue' | 'amber' | 'green' }> = {
-  PENDING: { label: 'Menunggu', variant: 'gray' },
-  PROCESSING: { label: 'Diproses', variant: 'blue' },
-  SHIPPED: { label: 'Dikirim', variant: 'amber' },
-  COMPLETED: { label: 'Selesai', variant: 'green' },
+  PENDING: { label: 'Pending', variant: 'gray' },
+  PROCESSING: { label: 'Processing', variant: 'blue' },
+  SHIPPED: { label: 'Shipped', variant: 'amber' },
+  COMPLETED: { label: 'Completed', variant: 'green' },
 };
 
 export function OrderStatusBadge({ status }: OrderStatusBadgeProps) {

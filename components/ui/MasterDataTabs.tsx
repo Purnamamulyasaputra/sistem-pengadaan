@@ -23,16 +23,7 @@ export function MasterDataTabs({ activeTab }: { activeTab: 'items' | 'categories
       <Link href="/master-data/items" className={`tab ${activeTab === 'items' ? 'active' : ''}`} style={{ textDecoration: 'none', color: activeTab === 'items' ? undefined : 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
         Items
         {lowStockCount > 0 && (
-          <span style={{ 
-            background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
-            color: '#fff', 
-            fontSize: 10, 
-            padding: '2px 6px', 
-            borderRadius: 10, 
-            fontWeight: 700, 
-            lineHeight: 1,
-            boxShadow: '0 2px 4px rgba(220, 38, 38, 0.3)'
-          }}>
+          <span className="nav-badge" style={{ marginLeft: 0 }}>
             {lowStockCount}
           </span>
         )}
