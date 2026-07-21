@@ -16,12 +16,7 @@ export default async function WarehousePage() {
   return (
     <section className="screen">
       <div className="card">
-        <div className="tabs" style={{ marginBottom: 0 }}>
-          <a href="/warehouse" className="tab active" style={{ textDecoration: 'none' }}>Goods Receipts</a>
-          <a href="/stock-card" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Stock Card</a>
-          <a href="/delivery-orders" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Delivery Orders</a>
-          <a href="/opname/central" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Central Opname</a>
-        </div>
+
         <div className="card-head">
           <div>
             <h3>Warehouse / Goods Receipts</h3>

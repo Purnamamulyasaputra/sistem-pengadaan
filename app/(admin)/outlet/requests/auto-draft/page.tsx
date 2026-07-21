@@ -44,15 +44,18 @@ export default function AutoRestockDraftPage() {
             })
             .map((d: any) => {
               const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
-              let shortage = d.minimum_threshold - effectiveBalance;
-              // If it's exactly at threshold (shortage = 0), we suggest ordering the min threshold amount again
-              if (shortage <= 0) shortage = d.minimum_threshold;
+              let shortageSmall = d.minimum_threshold - effectiveBalance;
+              if (shortageSmall <= 0) shortageSmall = d.minimum_threshold;
+              
+              const ratio = Number(d.conversion_ratio) || 1;
+              const shortageLarge = Math.ceil(shortageSmall / ratio);
 
               return {
                 ...d,
                 incoming_balance: Number(d.incoming_balance || 0),
                 effective_balance: effectiveBalance,
-                request_qty: shortage,
+                shortage_small: shortageSmall,
+                request_qty: shortageLarge,
                 // Uncheck by default if item already has an active incoming PO
                 selected: Number(d.incoming_balance || 0) === 0
               };
@@ -98,7 +101,7 @@ export default function AutoRestockDraftPage() {
           category_name: item.category_name,
           purchase_unit: item.purchase_unit,
           smallest_unit: item.smallest_unit,
-          qty_request: item.request_qty / (item.conversion_ratio || 1)
+          qty_request: item.request_qty // Already in distribution unit (large unit)
         }))
       };
 
@@ -202,11 +205,13 @@ export default function AutoRestockDraftPage() {
                         transition: 'all 0.2s'
                       }}>
                         <input
-                          type="text"
+                          type="number"
                           value={row.request_qty}
                           onChange={e => handleQtyChange(row.item_id, e.target.value)}
                           onWheel={e => (e.target as HTMLInputElement).blur()}
                           disabled={!row.selected}
+                          min="1"
+                          step="1"
                           style={{
                             width: '100%',
                             border: 'none',
@@ -218,10 +223,15 @@ export default function AutoRestockDraftPage() {
                             color: row.selected ? 'var(--foreground)' : 'var(--muted)'
                           }}
                         />
-                        <span style={{ fontSize: 11, color: row.selected ? 'var(--muted)' : '#cbd5e1', marginLeft: 6, fontWeight: 600 }}>
-                          {row.smallest_unit}
+                        <span style={{ fontSize: 11, color: row.selected ? 'var(--muted)' : '#cbd5e1', marginLeft: 6, fontWeight: 600, minWidth: 35, textAlign: 'left' }}>
+                          {row.purchase_unit || row.smallest_unit}
                         </span>
                       </div>
+                      {row.selected && (
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, textAlign: 'right' }}>
+                          (Setara {Number((row.request_qty * (row.conversion_ratio || 1)).toFixed(2)).toLocaleString('id-ID')} {row.smallest_unit})
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

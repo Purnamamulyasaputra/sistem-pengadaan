@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PaginationProps {
   currentPage: number;
@@ -18,7 +19,9 @@ export function Pagination({ currentPage, totalPages, totalItems, itemsPerPage, 
         Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
       </span>
       <div className="page-btns">
-        <button className="page-btn" disabled={currentPage <= 1} onClick={() => onPageChange(currentPage - 1)}>‹</button>
+        <button className="page-btn" disabled={currentPage <= 1} onClick={() => onPageChange(currentPage - 1)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ChevronLeft size={18} />
+        </button>
         {Array.from({ length: totalPages }).map((_, i) => {
           const p = i + 1;
           if (p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)) {
@@ -33,7 +36,9 @@ export function Pagination({ currentPage, totalPages, totalItems, itemsPerPage, 
           }
           return null;
         })}
-        <button className="page-btn" disabled={currentPage >= totalPages} onClick={() => onPageChange(currentPage + 1)}>›</button>
+        <button className="page-btn" disabled={currentPage >= totalPages} onClick={() => onPageChange(currentPage + 1)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ChevronRight size={18} />
+        </button>
       </div>
     </div>
   );

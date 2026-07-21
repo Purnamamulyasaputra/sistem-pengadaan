@@ -93,14 +93,14 @@ button {
 }
 
 .sidebar-overlay {
-  display: none;
   position: fixed;
   inset: 0;
   background: rgba(10, 18, 14, .45);
   z-index: 15;
 }
 
-.app.mobile-open .sidebar-overlay {
+.app.mobile-open .sidebar-overlay,
+.sidebar.mobile-open + .sidebar-overlay {
   display: block;
 }
 
@@ -1315,7 +1315,9 @@ select:disabled,
     z-index: 100;
   }
 
-  .admin-layout.mobile-open .sidebar {
+  .admin-layout.mobile-open .sidebar,
+  .app.mobile-open .sidebar,
+  .sidebar.mobile-open {
     transform: translateX(0);
   }
 

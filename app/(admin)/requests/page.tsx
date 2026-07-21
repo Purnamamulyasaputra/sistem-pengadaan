@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Toast } from '@/components/ui/Toast';
 import { OrderStatusBadge } from '@/components/shared/OrderStatusBadge';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface Order {
   id: number; outlet_name: string; order_date: string; delivery_date: string;
@@ -15,10 +16,22 @@ interface Order {
 interface OrderItem {
   id: number; order_id: number; item_name: string; category_name: string;
   purchase_unit: string; smallest_unit: string; qty_request: number; smallest_unit_qty: number;
+  qty_approved?: number; approved_smallest_qty?: number;
   fulfillment_status: string; item_status: string; distribution_price?: number;
   additional_notes?: string; current_average_price?: number; current_stock?: number;
   conversion_ratio?: number;
 }
+
+interface AggregatedProduct {
+  item_id: number;
+  item_name: string;
+  unit: string;
+  smallest_unit?: string;
+  conversion_ratio?: string;
+  total_requested: string;
+  central_stock: string;
+}
+
 
 const ITEM_STATUS_LABELS: Record<string, string> = {
   DITERIMA_DARI_OUTLET: 'Submitted', PROSES_BELANJA: 'Purchasing',
@@ -57,9 +70,14 @@ function RequestsContent() {
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [saving, setSaving] = useState<number | null>(null);
-  const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success'|'error'|'info' });
+  const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
+  const [viewMode, setViewMode] = useState<'by-outlet' | 'by-product'>('by-outlet');
+  const [aggregatedProducts, setAggregatedProducts] = useState<AggregatedProduct[]>([]);
+  const [aggCurrentPage, setAggCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const ITEMS_PER_PAGE = 25;
+  const AGG_ITEMS_PER_PAGE = 20;
 
   const searchParams = useSearchParams();
   const openId = searchParams.get('open_id');
@@ -70,7 +88,7 @@ function RequestsContent() {
     if (statusFilter) params.set('status', statusFilter);
     if (startDate) params.set('start_date', startDate);
     if (endDate) params.set('end_date', endDate);
-    
+
     const res = await fetch(`/api/orders?${params}`);
     const data = await res.json();
     setOrders(data.data ?? []);
@@ -78,7 +96,24 @@ function RequestsContent() {
     setCurrentPage(1); // Reset to first page when fetching new data
   }, [statusFilter, startDate, endDate]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  const fetchAggregated = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (statusFilter) params.set('status', statusFilter);
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+
+    const res = await fetch(`/api/orders/aggregated?${params}`);
+    const data = await res.json();
+    setAggregatedProducts(data.data ?? []);
+    setLoading(false);
+    setAggCurrentPage(1);
+  }, [statusFilter, startDate, endDate]);
+
+  useEffect(() => {
+    if (viewMode === 'by-outlet') fetchOrders();
+    else fetchAggregated();
+  }, [viewMode, fetchOrders, fetchAggregated]);
 
   const handleViewOrder = useCallback(async (order: Order) => {
     setSelectedOrder({ order, items: [] });
@@ -117,98 +152,148 @@ function RequestsContent() {
     } finally { setSaving(null); }
   }
 
-  async function handleAutoAssess() {
-    if (!selectedOrder) return;
-    const itemsToUpdate = selectedOrder.items.filter(i => i.item_status === 'DITERIMA_DARI_OUTLET');
 
-    if (itemsToUpdate.length === 0) {
-      setToast({ open: true, message: 'Semua barang sudah di-assess (tidak ada yang berstatus Diterima).', type: 'info' });
-      return;
-    }
-
-    setSaving(-1); // Use -1 to indicate bulk saving
-    try {
-      const updatePromises = itemsToUpdate.map(async (item) => {
-        const stock = Number(item.current_stock ?? 0);
-        const reqQty = Number(item.smallest_unit_qty ?? 0);
-
-        let newStatus = 'TIDAK';
-        let newItemStatus = 'PROSES_BELANJA';
-
-        if (stock >= reqQty) {
-          newStatus = 'SANGGUP';
-          newItemStatus = 'READY_DI_GUDANG';
-        }
-
-        const updates = { fulfillment_status: newStatus, item_status: newItemStatus };
-
-        await fetch(`/api/orders/${item.id}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updates),
-        });
-
-        return { id: item.id, ...updates };
-      });
-
-      const results = await Promise.all(updatePromises);
-
-      setSelectedOrder(prev => {
-        if (!prev) return null;
-        const newItems = [...prev.items];
-        results.forEach(res => {
-          const idx = newItems.findIndex(i => i.id === res.id);
-          if (idx !== -1) newItems[idx] = { ...newItems[idx], fulfillment_status: res.fulfillment_status, item_status: res.item_status };
-        });
-        return { ...prev, items: newItems };
-      });
-      fetchOrders();
-    } catch (e) {
-      setToast({ open: true, message: 'Terjadi kesalahan saat Auto-Assess', type: 'error' });
-    } finally {
-      setSaving(null);
-    }
-  }
 
   return (
     <section className="screen">
       <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, open: false })} />
       <div className="card">
-        <div className="card-head">
+        <div className="card-head" style={{ alignItems: 'flex-start' }}>
           <div>
-            <h3>Request Recap</h3>
+            <h3 style={{ margin: '0 0 12px 0' }}>Request Recap</h3>
+            <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border)' }}>
+              <div
+                style={{ paddingBottom: 8, cursor: 'pointer', fontWeight: viewMode === 'by-outlet' ? 600 : 500, color: viewMode === 'by-outlet' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-outlet' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
+                onClick={() => setViewMode('by-outlet')}
+              >
+                By Outlet (PO)
+              </div>
+              <div
+                style={{ paddingBottom: 8, cursor: 'pointer', fontWeight: viewMode === 'by-product' ? 600 : 500, color: viewMode === 'by-product' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-product' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
+                onClick={() => setViewMode('by-product')}
+              >
+                By Product (Aggregate)
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input 
-              type="date" 
-              className="input" 
-              style={{ width: 140 }} 
-              value={startDate} 
-              onChange={e => setStartDate(e.target.value)} 
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: -4 }}>
+            <input
+              type="text"
+              className="input"
+              style={{ width: 200 }}
+              placeholder={viewMode === 'by-outlet' ? 'Search PO or Outlet...' : 'Search item name...'}
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); setAggCurrentPage(1); }}
+            />
+            <input
+              type="date"
+              className="input"
+              style={{ width: 140 }}
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
               title="Start Date"
             />
             <span className="muted">-</span>
-            <input 
-              type="date" 
-              className="input" 
-              style={{ width: 140 }} 
-              value={endDate} 
-              onChange={e => setEndDate(e.target.value)} 
+            <input
+              type="date"
+              className="input"
+              style={{ width: 140 }}
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
               title="End Date"
             />
-            <select className="input" style={{ width: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="">All Status</option>
-              <option value="PENDING">Pending</option>
-              <option value="PROCESSING">Processing</option>
-              <option value="SHIPPED">Shipped</option>
-              <option value="COMPLETED">Completed</option>
-            </select>
+            {viewMode === 'by-outlet' && (
+              <select className="input" style={{ width: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                <option value="">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="PROCESSING">Processing</option>
+                <option value="SHIPPED">Shipped</option>
+                <option value="COMPLETED">Completed</option>
+              </select>
+            )}
           </div>
         </div>
 
         <div className="card-body flush">
           {loading ? (
             <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          ) : viewMode === 'by-product' ? (
+            aggregatedProducts.length === 0 ? (
+              <div className="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
+                <h4>No pending products</h4>
+                <p>There are no active requests from outlets at the moment</p>
+              </div>
+            ) : (
+              <>
+                <div className="table-responsive">
+                  <Table>
+                    <thead>
+                      <tr>
+                        <th>Item Name</th>
+                        <th className="center">Total Requested</th>
+                        <th className="center">Central Stock</th>
+                        <th className="center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const filteredAgg = aggregatedProducts.filter(p => p.item_name.toLowerCase().includes(searchQuery.toLowerCase()));
+                        return filteredAgg.slice((aggCurrentPage - 1) * AGG_ITEMS_PER_PAGE, aggCurrentPage * AGG_ITEMS_PER_PAGE).map(p => {
+                          const neededRaw = Number(p.total_requested) || 0;
+                          const stockRaw = Number(p.central_stock) || 0;
+                          const ratio = Number(p.conversion_ratio) || 1;
+
+                          const neededPurchase = neededRaw / ratio;
+                          const stockPurchase = stockRaw / ratio;
+
+                          const isShortage = neededRaw > stockRaw;
+
+                          const fmt = (num: number) => num.toLocaleString('id-ID', { maximumFractionDigits: 2 });
+                          const fmtRaw = (num: number) => num.toLocaleString('id-ID');
+
+                          return (
+                            <tr key={p.item_id}>
+                              <td className="font-bold" style={{ padding: '4px 16px', fontSize: 13 }}>{p.item_name}</td>
+                              <td className="center" style={{ padding: '4px 16px' }}>
+                                <div className="font-bold text-primary" style={{ fontSize: 13 }}>{fmt(neededPurchase)} {p.unit}</div>
+                                {ratio > 1 && <div className="muted" style={{ fontSize: 10 }}>({fmtRaw(neededRaw)} {p.smallest_unit})</div>}
+                              </td>
+                              <td className="center" style={{ padding: '4px 16px' }}>
+                                <div className="text-dark" style={{ fontSize: 13 }}>{fmt(stockPurchase)} {p.unit}</div>
+                                {ratio > 1 && <div className="muted" style={{ fontSize: 10 }}>({fmtRaw(stockRaw)} {p.smallest_unit})</div>}
+                              </td>
+                              <td className="center" style={{ padding: '4px 16px' }}>
+                                {isShortage ? (
+                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRadius: 4, background: '#fee2e2', color: '#991b1b' }}>Needs Restock</span>
+                                ) : (
+                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>In Stock</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </Table>
+                </div>
+                {(() => {
+                  const filteredAgg = aggregatedProducts.filter(p => p.item_name.toLowerCase().includes(searchQuery.toLowerCase()));
+                  if (filteredAgg.length <= AGG_ITEMS_PER_PAGE) return null;
+                  return (
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+                      <Pagination
+                        currentPage={aggCurrentPage}
+                        totalPages={Math.ceil(filteredAgg.length / AGG_ITEMS_PER_PAGE)}
+                        totalItems={filteredAgg.length}
+                        itemsPerPage={AGG_ITEMS_PER_PAGE}
+                        onPageChange={setAggCurrentPage}
+                      />
+                    </div>
+                  );
+                })()}
+              </>
+            )
           ) : orders.length === 0 ? (
             <div className="empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
@@ -222,57 +307,53 @@ function RequestsContent() {
                   <tr>
                     <th>PO No.</th><th>Outlet</th><th>Created by</th>
                     <th>Order Date</th><th>Delivery Date</th>
-                    <th className="center">Items</th><th className="center">Status</th><th className="right">Actions</th>
+                    <th className="center">Items</th><th className="center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => (
-                    <tr key={o.id}>
-                      <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
-                      <td className="font-bold">{o.outlet_name}</td>
-                      <td className="muted">{o.created_by_name}</td>
-                      <td>{formatDate(o.order_date)}</td>
-                      <td>{formatDate(o.delivery_date)}</td>
-                      <td className="center num font-bold">{o.item_count}</td>
-                      <td className="center"><OrderStatusBadge status={o.status} /></td>
-                      <td className="right">
-                        <Button size="sm" onClick={() => handleViewOrder(o)} style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3', padding: '6px' }} title="View Details">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const filteredOrders = orders.filter(o => 
+                      o.outlet_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                      `PO-${new Date(o.order_date).getFullYear()}-${String(o.id).padStart(5, '0')}`.toLowerCase().includes(searchQuery.toLowerCase())
+                    );
+                    return filteredOrders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => (
+                      <tr
+                        key={o.id}
+                        onClick={() => handleViewOrder(o)}
+                        style={{ cursor: 'pointer' }}
+                        className="hover:bg-[#e6f3ec] transition-colors"
+                      >
+                        <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
+                        <td className="font-bold">{o.outlet_name}</td>
+                        <td className="muted">{o.created_by_name}</td>
+                        <td>{formatDate(o.order_date)}</td>
+                        <td>{formatDate(o.delivery_date)}</td>
+                        <td className="center num font-bold">{o.item_count}</td>
+                        <td className="center"><OrderStatusBadge status={o.status} /></td>
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </Table>
-              
-              {orders.length > ITEMS_PER_PAGE && (
-                <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)' }}>
-                  <div className="muted" style={{ fontSize: 11 }}>
-                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, orders.length)} of {orders.length} requests
+
+              {(() => {
+                const filteredOrders = orders.filter(o => 
+                  o.outlet_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  `PO-${new Date(o.order_date).getFullYear()}-${String(o.id).padStart(5, '0')}`.toLowerCase().includes(searchQuery.toLowerCase())
+                );
+                if (filteredOrders.length <= ITEMS_PER_PAGE) return null;
+                return (
+                  <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={Math.ceil(filteredOrders.length / ITEMS_PER_PAGE)}
+                      totalItems={filteredOrders.length}
+                      itemsPerPage={ITEMS_PER_PAGE}
+                      onPageChange={setCurrentPage}
+                    />
                   </div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
-                      disabled={currentPage === 1}
-                    >
-                      Prev
-                    </Button>
-                    <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', fontSize: 12, fontWeight: 600 }}>
-                      Page {currentPage} of {Math.ceil(orders.length / ITEMS_PER_PAGE)}
-                    </div>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ITEMS_PER_PAGE), p + 1))} 
-                      disabled={currentPage === Math.ceil(orders.length / ITEMS_PER_PAGE)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </>
           )}
         </div>
@@ -282,22 +363,7 @@ function RequestsContent() {
         <div className="modal-body" style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <p className="muted" style={{ margin: 0 }}>{selectedOrder?.order?.outlet_name}: {selectedOrder ? formatDate(selectedOrder.order.order_date) : ''}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAutoAssess}
-              disabled={saving !== null}
-              style={{ border: '1px solid var(--primary)', color: 'var(--primary)', background: '#dcfce7', display: 'flex', alignItems: 'center' }}
-            >
-              {saving === -1 ? 'Assessing stock...' : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                  </svg>
-                  Auto-Assess from Stock
-                </>
-              )}
-            </Button>
+            <Button variant="primary" size="sm" onClick={() => setSelectedOrder(null)}>Close</Button>
           </div>
 
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -309,7 +375,8 @@ function RequestsContent() {
               <Table>
                 <thead>
                   <tr>
-                    <th>Item</th><th>Category</th><th className="right">Qty</th>
+                    <th>Item</th><th>Category</th><th className="right">Req Qty</th>
+                    <th className="right">Apprv Qty</th>
                     <th className="right">Current Stock</th>
                     <th>Fulfillment</th><th>Status</th>
                     <th></th>
@@ -321,10 +388,30 @@ function RequestsContent() {
                       <td className="font-bold">{item.item_name}</td>
                       <td className="muted">{item.category_name}</td>
                       <td className="right">
-                        <div className="font-bold num">{parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
+                        <div className="muted num" style={{ fontSize: 13 }}>{parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
                       </td>
                       <td className="right">
-                        <div className="font-bold num" style={{ color: Number(item.current_stock) >= item.smallest_unit_qty ? '#166534' : '#991b1b' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                          <input 
+                            type="number"
+                            className="input right font-bold"
+                            style={{ width: 70, height: 28, padding: '2px 8px' }}
+                            defaultValue={item.qty_approved ?? item.qty_request}
+                            onBlur={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val >= 0) {
+                                handleUpdateItem(item.id, { 
+                                  qty_approved: val,
+                                  approved_smallest_qty: val * Number(item.conversion_ratio || 1)
+                                });
+                              }
+                            }}
+                          />
+                          <span style={{ fontSize: 13 }}>{item.purchase_unit}</span>
+                        </div>
+                      </td>
+                      <td className="right">
+                        <div className="font-bold num" style={{ color: Number(item.current_stock) >= (item.approved_smallest_qty ?? item.smallest_unit_qty) ? '#166534' : '#991b1b' }}>
                           {parseFloat((Number(item.current_stock ?? 0) / Number(item.conversion_ratio || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
                         </div>
                       </td>
@@ -359,9 +446,6 @@ function RequestsContent() {
               </Table>
             )}
           </div>
-        </div>
-        <div className="modal-actions" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button variant="primary" onClick={() => setSelectedOrder(null)}>Close & Save</Button>
         </div>
       </Modal>
     </section>

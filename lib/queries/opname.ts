@@ -151,7 +151,7 @@ export async function getItemsForOpname(locationType: string, locationId?: numbe
   if (locationType === 'PUSAT') {
     return query(
       `SELECT i.id AS item_id, i.name AS item_name, i.smallest_unit, c.name AS category_name,
-              i.current_average_price,
+              i.current_average_price, i.purchase_unit, i.conversion_ratio,
               COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS system_balance
        FROM items i
        LEFT JOIN categories c ON c.id = i.category_id

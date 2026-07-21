@@ -42,36 +42,46 @@ function Icon({ name, ...props }: { name: string } & React.SVGProps<SVGSVGElemen
 }
 
 const CENTRAL_MENU: NavItem[] = [
-  { section: 'MAIN' },
+  { section: 'OVERVIEW' },
   { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
-  { section: 'CATALOG & MENUS' },
-  { href: '/master-data/items', label: 'Master Data', icon: <Icon name="db" /> },
+  { href: '/alerts', label: 'Reorder Alerts', icon: <Icon name="bell" />, badge: 0 },
+  
+  { section: 'MASTER DATA & INVENTORY' },
+  { href: '/master-data/items', label: 'Master Items', icon: <Icon name="db" /> },
   { href: '/hpp', label: 'Menus & COGS', icon: <Icon name="hpp" /> },
-  { section: 'PROCUREMENT & INVENTORY' },
-  { href: '/purchase-orders', label: 'Purchase Order', icon: <Icon name="cart" /> },
-  { href: '/warehouse', label: 'Stock & Inventory', icon: <Icon name="box" /> },
+  { href: '/master-data/moka-catalog', label: 'Moka POS Catalog', icon: <Icon name="package" /> },
+  { href: '/stock-card', label: 'Central Stock', icon: <Icon name="clipboard" /> },
+  { href: '/opname/central', label: 'Stock Opname', icon: <Icon name="package" /> },
+  
+  { section: 'PURCHASING & DISTRIBUTION' },
+  { href: '/purchase-orders', label: 'Purchase Orders', icon: <Icon name="cart" /> },
+  { href: '/warehouse', label: 'Receive Goods', icon: <Icon name="box" /> },
   { href: '/requests', label: 'Outlet Requests', icon: <Icon name="list" /> },
-  { href: '/alerts', label: 'Reorder Point', icon: <Icon name="bell" />, badge: 0 },
-  { section: 'ANALYTICS & REPORTS' },
-  { href: '/reports', label: 'Reports', icon: <Icon name="report" /> },
-  { section: 'SYSTEM & ACCOUNT' },
+  { href: '/delivery-orders', label: 'Delivery Orders', icon: <Icon name="truck" /> },
+
+  { section: 'REPORTS & SETTINGS' },
+  { href: '/sales-report', label: 'Moka Sales Report', icon: <Icon name="trend" /> },
+  { href: '/reports/sales-analytics', label: 'Sales Analytics', icon: <Icon name="trend" /> },
+  { href: '/reports', label: 'System Reports', icon: <Icon name="report" /> },
   { href: '/settings', label: 'System Settings', icon: <Icon name="settings" /> },
 ];
 
 const OUTLET_MENU: NavItem[] = [
-  { section: 'MAIN' },
+  { section: 'OVERVIEW' },
   { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
-  { section: 'CATALOG & MENUS' },
+  
+  { section: 'CATALOG & INVENTORY' },
   { href: '/outlet/menus', label: 'Menus & COGS', icon: <Icon name="hpp" /> },
-  { section: 'PROCUREMENT & INVENTORY' },
-  { href: '/outlet/requests', label: 'Purchase Order', icon: <Icon name="cart" /> },
-  { href: '/outlet/inventory/stock', label: 'Stock & Inventory', icon: <Icon name="db" /> },
-  { href: '/outlet/receive-goods', label: 'Receive Goods', icon: <Icon name="truck" /> },
+  { href: '/outlet/inventory/stock', label: 'Live Stock', icon: <Icon name="db" /> },
   { href: '/outlet/opname', label: 'Stock Opname', icon: <Icon name="clipboard" /> },
-  { section: 'ANALYTICS & REPORTS' },
+  
+  { section: 'PROCUREMENT' },
+  { href: '/outlet/requests', label: 'Order Requests', icon: <Icon name="cart" /> },
+  { href: '/outlet/receive-goods', label: 'Receive Goods', icon: <Icon name="truck" /> },
+
+  { section: 'REPORTS & SETTINGS' },
   { href: '/outlet/sales', label: 'Sales Analytics', icon: <Icon name="trend" /> },
-  { section: 'SYSTEM & ACCOUNT' },
-  { href: '/settings/profile', label: 'Profile & Account', icon: <Icon name="user" /> },
+  { href: '/settings/profile', label: 'Account Profile', icon: <Icon name="user" /> },
 ];
 
 export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
@@ -83,12 +93,32 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
   const [liveRequestCount, setLiveRequestCount] = useState(0);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [snoozeMap, setSnoozeMap] = useState<Record<string, { expiresAt: number, count: number }>>({});
 
   const menu = role === 'ADMIN_PUSAT' ? CENTRAL_MENU : OUTLET_MENU;
+
+  // Load snooze data on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('sidebar_snooze');
+      if (stored) setSnoozeMap(JSON.parse(stored));
+    } catch(e) {}
+  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  // Listen for hamburger toggle from TopBar
+  useEffect(() => {
+    const handleToggle = () => {
+      // Safely assume if they clicked the hamburger, they are on mobile layout
+      // because the hamburger is only visible <= 960px
+      setMobileOpen(prev => !prev);
+    };
+    window.addEventListener('toggle-sidebar', handleToggle);
+    return () => window.removeEventListener('toggle-sidebar', handleToggle);
+  }, []);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -137,11 +167,54 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
     return () => clearInterval(interval);
   }, [role]);
 
+  // Update snooze state when visiting a page with active notifications
+  useEffect(() => {
+    let currentPathCount = 0;
+    if (role === 'ADMIN_PUSAT') {
+      if (pathname === '/alerts') currentPathCount = liveAlertCount;
+      if (pathname === '/requests') currentPathCount = liveRequestCount;
+    } else {
+      if (pathname === '/outlet/inventory/stock') currentPathCount = liveAlertCount;
+      if (pathname === '/outlet/receive-goods') currentPathCount = liveRequestCount;
+    }
+
+    if (currentPathCount > 0 && pathname) {
+      const now = new Date();
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
+      setSnoozeMap(prev => {
+        const existing = prev[pathname];
+        // Snooze if it's new, count is different (to catch updates), or previous snooze expired
+        if (!existing || existing.count !== currentPathCount || existing.expiresAt < now.getTime()) {
+          const next = { ...prev, [pathname]: { expiresAt: midnight, count: currentPathCount } };
+          localStorage.setItem('sidebar_snooze', JSON.stringify(next));
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [pathname, liveAlertCount, liveRequestCount, role]);
+
+  const getEffectiveBadge = (href: string, actualCount: number) => {
+    if (pathname === href) return 0; // Hide if currently on the page
+    if (actualCount === 0) return 0;
+
+    const snooze = snoozeMap[href];
+    if (snooze) {
+      const now = Date.now();
+      // Hide if still snoozed AND count hasn't increased (no new items)
+      if (now < snooze.expiresAt && actualCount <= snooze.count) {
+        return 0;
+      }
+    }
+    return actualCount;
+  };
+
   const menuWithBadge = menu.map(item => {
-    if (item.href === '/alerts') return { ...item, badge: liveAlertCount };
-    if (item.href === '/requests') return { ...item, badge: liveRequestCount };
-    if (item.href === '/outlet/inventory/stock') return { ...item, badge: liveAlertCount };
-    if (item.href === '/outlet/requests') return { ...item, badge: liveRequestCount };
+    if (item.href === '/alerts' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveAlertCount) };
+    if (item.href === '/requests' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) }; 
+    if (item.href === '/outlet/inventory/stock' && role === 'ADMIN_OUTLET') return { ...item, badge: getEffectiveBadge(item.href, liveAlertCount) };
+    if (item.href === '/outlet/receive-goods' && role === 'ADMIN_OUTLET') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) };
     return item;
   });
 
@@ -152,12 +225,14 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
         <div
           className="sidebar-overlay"
           onClick={() => setMobileOpen(false)}
+          style={{ display: 'block', position: 'fixed', inset: 0, background: 'rgba(10,18,14,0.45)', zIndex: 15 }}
         />
       )}
 
-      {/* Mobile hamburger is usually part of TopBar, but if it needs to be here we can just hide it and use TopBar's hamburger */}
-
-      <aside className={`sidebar no-print ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+      <aside 
+        className={`sidebar no-print ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
+        style={mobileOpen ? { transform: 'translateX(0)', position: 'fixed', left: 0, top: 0, bottom: 0, width: '220px', zIndex: 100 } : undefined}
+      >
         <div className="sidebar-top">
           <div className="brand-wrapper">
             <Image src="/logo-putih.png" alt="Logo" width={50} height={50} className="sunburst" />
@@ -183,8 +258,12 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             }
             let isActive = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href!);
             if (item.href === '/purchase-orders' && pathname.startsWith('/goods-receipt')) isActive = true;
-            if (item.href === '/stock-card' && (pathname.startsWith('/delivery-orders') || pathname.startsWith('/opname/central'))) isActive = true;
-            if (item.href === '/reports' && pathname.startsWith('/price-history')) isActive = true;
+            if (item.href === '/reports') {
+              isActive = pathname === '/reports' || pathname.startsWith('/reports/profit-projection') || pathname.startsWith('/price-history');
+            }
+            if (item.href === '/reports/sales-analytics') {
+              isActive = pathname.startsWith('/reports/sales-analytics');
+            }
             if (item.href === '/master-data/items' && pathname.startsWith('/master-data')) isActive = true;
             if (item.href === '/hpp' && pathname.startsWith('/hpp')) isActive = true;
             return (

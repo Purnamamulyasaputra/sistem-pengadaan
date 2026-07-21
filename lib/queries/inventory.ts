@@ -1,6 +1,7 @@
 import { query, withTransaction } from '@/lib/db';
 import type { PoolClient } from 'pg';
 import { checkAndCreateAlert } from './alerts';
+import { autoFulfillPendingRequests } from './orders';
 
 export interface InventoryLog {
   id: number;
@@ -67,6 +68,9 @@ export async function receiveGoods(input: {
        VALUES ($1, 'IN', $2, $3, 'RECEIPT', $4)`,
       [item_id, qty, newBalance, null]
     );
+
+    // Auto fulfill pending outlet requests if stock arrived
+    await autoFulfillPendingRequests(client, item_id, newBalance);
 
     // 5. Insert price history
     await client.query(
@@ -166,6 +170,8 @@ export async function adjustStock(input: {
 
   if (qty_change < 0) {
     await checkAndCreateAlert(item_id, newBalance, client);
+  } else if (qty_change > 0) {
+    await autoFulfillPendingRequests(client, item_id, newBalance);
   }
 
   return newBalance;

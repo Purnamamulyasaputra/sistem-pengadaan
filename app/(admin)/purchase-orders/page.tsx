@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Modal } from '@/components/ui/Modal';
 import { Toast } from '@/components/ui/Toast';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 interface PO {
   id: number; po_number: string; vendor_name: string; order_date: string;
   order_deadline?: string; status: string; total: number; buyer_name: string;
@@ -38,6 +39,7 @@ export default function PurchaseOrdersPage() {
   const ITEMS_PER_PAGE = 20;
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
   const [lines, setLines] = useState<any[]>([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
@@ -285,14 +287,15 @@ export default function PurchaseOrdersPage() {
       return;
     }
 
-    // Auto-save as RFQ_TERKIRIM if it's currently RFQ
-    if (!draftPO || draftPO.status === 'RFQ') {
-      await handleSave('RFQ_TERKIRIM');
-    }
-
     setSendingEmail(true);
     setError('');
+
     try {
+      // Auto-save as RFQ_TERKIRIM if it's currently RFQ
+      if (!draftPO || draftPO.status === 'RFQ') {
+        await handleSave('RFQ_TERKIRIM');
+      }
+
       const pdfBase64 = generatePDFBase64();
       const res = await fetch(`/api/purchase-orders/${draftPO?.id || 'new'}/send-email`, {
         method: 'POST',
@@ -359,6 +362,19 @@ export default function PurchaseOrdersPage() {
   return (
     <section className="screen">
       <Toast {...toast} onClose={() => setToast(t => ({ ...t, isOpen: false }))} />
+
+      <ConfirmDialog
+        open={confirmCancel}
+        title="Cancel Order"
+        message="Are you sure you want to cancel this order?"
+        confirmText="Cancel Order"
+        danger={true}
+        onConfirm={() => {
+          if (draftPO) handleUpdateStatus(draftPO.id, 'DIBATALKAN');
+          setConfirmCancel(false);
+        }}
+        onCancel={() => setConfirmCancel(false)}
+      />
 
       {!showModal ? (
         <div className="card">
@@ -540,11 +556,7 @@ export default function PurchaseOrdersPage() {
                   }} disabled={saving}>Receive Products</button>
                 )}
                 {draftPO && draftPO.status !== 'DIBATALKAN' && draftPO.status !== 'SELESAI' && draftPO.status !== 'DITERIMA_SEBAGIAN' && (
-                  <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 600 }} onClick={() => {
-                    if (confirm('Are you sure you want to cancel this order?')) {
-                      handleUpdateStatus(draftPO.id, 'DIBATALKAN');
-                    }
-                  }} disabled={saving}>Cancel Order</button>
+                  <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 600 }} onClick={() => setConfirmCancel(true)} disabled={saving}>Cancel Order</button>
                 )}
                 <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={handleDownloadPDF} title="Download/View PDF Document">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>

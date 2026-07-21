@@ -6,9 +6,10 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   maxWidth?: string | number;
+  footer?: React.ReactNode;
 }
 
-export function Modal({ isOpen, onClose, title, children, maxWidth = 600 }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, maxWidth = 600, footer }: ModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -16,13 +17,17 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 600 }: Moda
       <div className="modal-box" style={{ maxWidth }}>
         {title && (
           <div className="modal-header">
-            <span>{title}</span>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--muted)', fontSize: 18, lineHeight: 1 }}>×</button>
+            <h3 style={{ margin: 0, fontSize: 'inherit' }}>{title}</h3>
           </div>
         )}
         <div className="modal-body">
           {children}
         </div>
+        {footer && (
+          <div className="modal-actions" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', background: '#f8fafc', display: 'flex', gap: 8, justifyContent: 'flex-end', borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -25,6 +25,8 @@ export interface OrderItem {
   smallest_unit?: string;
   conversion_ratio?: number;
   qty_request: number;
+  qty_approved?: number;
+  approved_smallest_qty?: number;
   additional_notes?: string;
   smallest_unit_qty?: number;
   fulfillment_status: string;
@@ -116,13 +118,29 @@ export async function createOrder(data: {
       const ratio = Number(ratioRes.rows[0]?.conversion_ratio ?? 1);
       const smallest_unit_qty = item.qty_request * ratio;
 
+      const stockRes = await client.query(
+        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [item.item_id]
+      );
+      const stock = Number(stockRes.rows[0]?.ending_balance ?? 0);
+
+      let fulfillment_status = 'TIDAK';
+      let item_status = 'PROSES_BELANJA';
+
+      if (stock >= smallest_unit_qty) {
+        fulfillment_status = 'SANGGUP';
+        item_status = 'READY_DI_GUDANG';
+      }
+
       await client.query(
-        `INSERT INTO order_items (order_id, item_id, qty_request, additional_notes, smallest_unit_qty)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [order.id, item.item_id, Math.max(0.001, item.qty_request), item.additional_notes ?? null, smallest_unit_qty]
+        `INSERT INTO order_items (order_id, item_id, qty_request, additional_notes, smallest_unit_qty, fulfillment_status, item_status, qty_approved, approved_smallest_qty)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [order.id, item.item_id, Math.max(0.001, item.qty_request), item.additional_notes ?? null, smallest_unit_qty, fulfillment_status, item_status, Math.max(0.001, item.qty_request), smallest_unit_qty]
       );
     }
 
+    await recalculateOrderStatus(order.id, client);
+    
     return order;
   });
 }
@@ -138,7 +156,7 @@ export async function getOrderRecap(opts?: { status?: string; outletId?: number 
   const result = await query(
     `SELECT o.id AS order_id, o.outlet_id, outlet.name AS outlet_name, o.order_date, o.delivery_date, o.status,
             oi.id AS order_item_id, oi.item_id, i.name AS item_name, i.purchase_unit, i.smallest_unit, i.conversion_ratio,
-            oi.qty_request, oi.smallest_unit_qty, oi.additional_notes, oi.fulfillment_status, oi.item_status, oi.distribution_price,
+            oi.qty_request, oi.qty_approved, oi.smallest_unit_qty, oi.approved_smallest_qty, oi.additional_notes, oi.fulfillment_status, oi.item_status, oi.distribution_price,
             c.name AS category_name, i.current_average_price
      FROM orders o
      LEFT JOIN outlets outlet ON outlet.id = o.outlet_id
@@ -154,7 +172,7 @@ export async function getOrderRecap(opts?: { status?: string; outletId?: number 
 
 export async function updateOrderItemStatus(
   orderItemId: number,
-  updates: Partial<{ item_status: string; fulfillment_status: string; distribution_price: number }>
+  updates: Partial<{ item_status: string; fulfillment_status: string; distribution_price: number; qty_approved: number; approved_smallest_qty: number }>
 ) {
   return withTransaction(async (client) => {
     const fields = Object.keys(updates);
@@ -187,4 +205,88 @@ export async function recalculateOrderStatus(orderId: number, client: PoolClient
     `UPDATE orders SET status = $1, updated_at = now() WHERE id = $2`,
     [newStatus, orderId]
   );
+}
+
+export async function autoFulfillPendingRequests(client: PoolClient, itemId: number, currentStock: number) {
+  // Ambil semua request Outlet (order_items) yang masih PROSES_BELANJA (atau PENDING), diurutkan dari yang paling lama
+  const pendingRes = await client.query(`
+    SELECT oi.id, oi.order_id, COALESCE(oi.approved_smallest_qty, oi.smallest_unit_qty) as needed_qty
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id
+    WHERE oi.item_id = $1 
+      AND oi.item_status IN ('PROSES_BELANJA', 'PENDING')
+      AND oi.fulfillment_status != 'SANGGUP'
+      AND o.status NOT IN ('COMPLETED', 'CANCELLED')
+    ORDER BY oi.created_at ASC
+  `, [itemId]);
+
+  let availableStock = currentStock;
+
+  for (const row of pendingRes.rows) {
+    const neededQty = parseFloat(row.needed_qty);
+    if (availableStock >= neededQty) {
+      // Stock cukup untuk fulfill request ini
+      await client.query(`
+        UPDATE order_items 
+        SET fulfillment_status = 'SANGGUP', item_status = 'READY_DI_GUDANG', updated_at = now() 
+        WHERE id = $1
+      `, [row.id]);
+      
+      availableStock -= neededQty;
+      
+      // Update status order induk (mungkin berubah dari PENDING menjadi PROCESSING)
+      await recalculateOrderStatus(row.order_id, client);
+    }
+  }
+}
+
+export async function getAggregatedRequestsByProduct(opts?: { status?: string; startDate?: string; endDate?: string }) {
+  const conditions: string[] = ["oi.item_status IN ('PENDING', 'PROSES_BELANJA')"];
+  const params: unknown[] = [];
+  let i = 1;
+
+  if (opts?.status) {
+    conditions.push(`o.status = $${i++}`);
+    params.push(opts.status);
+  } else {
+    conditions.push(`o.status IN ('PENDING', 'PROCESSING')`);
+  }
+
+  if (opts?.startDate) {
+    conditions.push(`o.order_date >= $${i++}`);
+    params.push(opts.startDate);
+  }
+
+  if (opts?.endDate) {
+    conditions.push(`o.order_date <= $${i++}`);
+    params.push(opts.endDate);
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  const result = await query(
+    `SELECT
+      i.id AS item_id,
+      i.name AS item_name,
+      i.purchase_unit AS unit,
+      i.smallest_unit,
+      i.conversion_ratio,
+      SUM(COALESCE(oi.qty_approved, oi.qty_request)) AS total_requested,
+      COALESCE(latest.ending_balance, 0) AS central_stock
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     JOIN items i ON i.id = oi.item_id
+     LEFT JOIN LATERAL (
+       SELECT ending_balance
+       FROM inventory_logs
+       WHERE item_id = i.id
+       ORDER BY created_at DESC
+       LIMIT 1
+     ) latest ON true
+     WHERE ${whereClause}
+     GROUP BY i.id, i.name, i.purchase_unit, i.smallest_unit, i.conversion_ratio, latest.ending_balance
+     ORDER BY i.name ASC`,
+    params
+  );
+  return result.rows;
 }

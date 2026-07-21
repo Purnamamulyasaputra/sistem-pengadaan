@@ -231,7 +231,9 @@ export default function ReceiveGoodsPage() {
                     <td>{new Date(dn.delivery_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                     <td className="muted">{dn.driver_name || '-'}</td>
                     <td className="center">
-                      <Badge variant={dn.status === 'DITERIMA' ? 'green' : 'amber'}>{dn.status}</Badge>
+                      <Badge variant={dn.status === 'DITERIMA' ? 'green' : 'amber'}>
+                        {dn.status === 'DITERIMA' ? 'Received' : dn.status === 'DIKIRIM' ? 'Shipped' : dn.status}
+                      </Badge>
                     </td>
                     <td className="right">
                       <Button variant={dn.status === 'DITERIMA' ? 'outline' : 'primary'} size="sm" onClick={() => openScan(dn)}>
@@ -421,7 +423,7 @@ export default function ReceiveGoodsPage() {
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-            Kembali
+            Back
           </button>
           <img
             src={previewUrl}

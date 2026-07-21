@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getOrders, createOrder } from '@/lib/queries/orders';
+import { query } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -29,6 +30,30 @@ export async function POST(req: NextRequest) {
 
   if (!delivery_date || !items?.length) {
     return NextResponse.json({ success: false, message: 'Data tidak lengkap', data: null }, { status: 400 });
+  }
+
+  // Double-check validation against active items to prevent bypass
+  try {
+    const activeRes = await query(
+      `SELECT DISTINCT oi.item_id 
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE o.outlet_id = $1 
+         AND oi.item_status NOT IN ('SELESAI', 'DIBATALKAN')`,
+      [session.outletId]
+    );
+    const activeIds = activeRes.rows.map(r => Number(r.item_id));
+    const duplicateItems = items.filter((i: any) => activeIds.includes(Number(i.item_id)));
+
+    if (duplicateItems.length > 0) {
+      return NextResponse.json({ 
+        success: false, 
+        message: 'Beberapa barang masih dalam pesanan aktif (belum selesai). Hapus dari daftar sebelum melanjutkan.', 
+        data: null 
+      }, { status: 400 });
+    }
+  } catch (err) {
+    console.error('Error validating active items:', err);
   }
 
   const order = await createOrder({

@@ -16,6 +16,7 @@ export default function CreateRequestPage() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [cart, setCart] = useState<RequestLine[]>([]);
+  const [activeItemIds, setActiveItemIds] = useState<number[]>([]);
   const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success'|'error'|'info' });
 
   const [orderDate] = useState(new Date().toISOString().split('T')[0]);
@@ -36,6 +37,12 @@ export default function CreateRequestPage() {
         const itemsList = itemsJson.data ?? [];
         setItems(itemsList);
 
+        // Fetch active item requests
+        const activeRes = await fetch('/api/outlet/active-requests');
+        const activeJson = await activeRes.json();
+        const activeItemsSet = new Set(activeJson.success ? activeJson.data : []);
+        setActiveItemIds(Array.from(activeItemsSet) as number[]);
+
         const invRes = await fetch('/api/outlet/inventory');
         const invJson = await invRes.json();
         
@@ -43,27 +50,31 @@ export default function CreateRequestPage() {
           const lowStockItems = invJson.data
             .filter((d: any) => {
               if (d.minimum_threshold === null) return false;
+              if (activeItemsSet.has(d.item_id)) return false; // Exclude already ordered items
               const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
               // Only auto-add if effective balance is completely below minimum (don't auto add if they already ordered)
               return effectiveBalance <= d.minimum_threshold && Number(d.incoming_balance || 0) === 0;
             })
             .map((d: any, index: number) => {
               const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
-              let shortage = d.minimum_threshold - effectiveBalance;
-              if (shortage <= 0) shortage = d.minimum_threshold;
+              let shortageSmall = d.minimum_threshold - effectiveBalance;
+              if (shortageSmall <= 0) shortageSmall = d.minimum_threshold;
               
               const matchedMaster = itemsList.find((i: any) => i.id === d.item_id);
               if (!matchedMaster) return null;
+
+              const ratio = Number(matchedMaster.conversion_ratio) || 1;
+              const shortageLarge = Math.ceil(shortageSmall / ratio);
 
               return {
                 id: Date.now() + index,
                 item_id: d.item_id,
                 name: d.item_name,
-                uom: d.smallest_unit,
+                uom: matchedMaster.purchase_unit,
                 smallest_unit: d.smallest_unit,
                 purchase_unit: matchedMaster.purchase_unit,
-                ratio: 1, 
-                qty: shortage.toString(),
+                ratio: ratio, 
+                qty: shortageLarge.toString(),
                 note: ''
               };
             })
@@ -86,7 +97,7 @@ export default function CreateRequestPage() {
   }, []);
 
   const addEmptyRow = () => {
-    setCart([...cart, {
+    setCart([{
       id: Date.now(),
       item_id: null,
       name: '',
@@ -96,7 +107,7 @@ export default function CreateRequestPage() {
       ratio: 1,
       qty: '',
       note: ''
-    }]);
+    }, ...cart]);
   };
 
   const updateCartItemSelect = (rowId: number, selectedItemId: string) => {
@@ -145,12 +156,9 @@ export default function CreateRequestPage() {
           delivery_date: deliveryDate,
           created_by: CREATED_BY,
           items: cart.filter(l => l.item_id !== null && parseFloat(l.qty) > 0).map(l => {
-            const itemData = items.find(i => i.id === l.item_id);
-            const isSmallest = l.uom === itemData?.smallest_unit && l.uom !== itemData?.purchase_unit;
-            const ratio = itemData?.conversion_ratio || 1;
             const floatQty = parseFloat(l.qty) || 0;
-            const finalQty = isSmallest ? floatQty / ratio : floatQty;
-            return { item_id: l.item_id, qty_request: finalQty, additional_notes: l.note };
+            // The qty is already guaranteed to be in purchase_unit and rounded
+            return { item_id: l.item_id, qty_request: floatQty, additional_notes: l.note };
           }),
         }),
       });
@@ -235,27 +243,26 @@ export default function CreateRequestPage() {
                     {!c.item_id ? (
                       <select className="input" style={{ width: '100%', maxWidth: 300 }} value={c.item_id || ''} onChange={e => updateCartItemSelect(c.id, e.target.value)}>
                         <option value="">-- Select Item --</option>
-                        {items.map(i => (
-                          <option key={i.id} value={i.id} disabled={cart.some(cartItem => String(cartItem.item_id) === String(i.id))}>{i.name}</option>
-                        ))}
+                        {items.map(i => {
+                          const isActive = activeItemIds.includes(i.id);
+                          const inCart = cart.some(cartItem => String(cartItem.item_id) === String(i.id));
+                          return (
+                            <option key={i.id} value={i.id} disabled={inCart || isActive}>
+                              {i.name} {isActive ? '(Sedang dipesan)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     ) : c.name}
                   </td>
                   <td>
-                    <input type="text" className="input right" value={c.qty} onChange={(e) => updateCartQty(c.id, e.target.value)} style={{ height: 32, width: '100%', minWidth: 60 }} placeholder="0" />
+                    <input type="number" min="1" step="1" className="input right" value={c.qty} onChange={(e) => updateCartQty(c.id, e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} style={{ height: 32, width: '100%', minWidth: 60 }} placeholder="0" />
                   </td>
-                  <td>
-                    {c.item_id ? (
-                       <select className="input" value={c.uom} onChange={e => updateCartUnit(c.id, e.target.value)} style={{ width: '100%', height: 32 }}>
-                          <option value={c.purchase_unit}>{c.purchase_unit}</option>
-                          {c.smallest_unit && c.smallest_unit !== c.purchase_unit && (
-                            <option value={c.smallest_unit}>{c.smallest_unit}</option>
-                          )}
-                       </select>
-                    ) : '-'}
+                  <td style={{ fontWeight: 600, color: 'var(--foreground)' }}>
+                    {c.item_id ? c.purchase_unit : '-'}
                   </td>
                   <td className="muted" style={{ fontSize: 13 }}>
-                    {c.item_id && c.uom !== c.smallest_unit ? `≈ ${parseFloat(c.qty || '0') * c.ratio} ${c.smallest_unit}` : '-'}
+                    {c.item_id ? `≈ ${Number((parseFloat(c.qty || '0') * c.ratio).toFixed(2)).toLocaleString('id-ID')} ${c.smallest_unit}` : '-'}
                   </td>
                   <td>
                      <Input type="text" value={c.note} onChange={e => updateCartNote(c.id, e.target.value)} placeholder="Notes (Optional)" style={{ height: 32, minWidth: 150 }} />

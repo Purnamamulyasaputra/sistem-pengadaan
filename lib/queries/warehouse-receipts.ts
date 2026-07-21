@@ -1,4 +1,5 @@
 import { query, withTransaction } from '@/lib/db';
+import { autoFulfillPendingRequests } from './orders';
 
 export interface GoodsReceipt {
   id: number;
@@ -103,6 +104,9 @@ export async function createGoodsReceipt(data: {
          VALUES ($1, 'IN', $2, $3, 'RECEIPT', $4)`,
         [item.item_id, qtyInSmallestUnit, newStock, receipt.id]
       );
+
+      // Auto-fulfill pending requests for this item since stock arrived
+      await autoFulfillPendingRequests(client, item.item_id, newStock);
 
       // Insert price history
       await client.query(

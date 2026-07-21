@@ -50,13 +50,14 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
 
   const getDetail = (itemId: number) => details.find(d => d.item_id === itemId);
 
-  const handleQtyChange = (itemId: number, systemBalance: number, actualQty: string) => {
+  const handleQtyChange = (itemId: number, systemBalance: number, ratio: number, actualQtyLarge: string) => {
     if (isLocked) return;
-    const qty = parseFloat(actualQty);
-    if (isNaN(qty)) return;
+    const qtyLarge = parseFloat(actualQtyLarge);
+    if (isNaN(qtyLarge)) return;
 
+    const qtySmall = qtyLarge * (ratio || 1);
     const existing = details.find(d => d.item_id === itemId);
-    const variance = qty - systemBalance;
+    const variance = qtySmall - systemBalance;
     
     // Reset reason if variance becomes 0
     let reason_category = existing?.reason_category;
@@ -67,9 +68,9 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
     }
 
     if (existing) {
-      setDetails(details.map(d => d.item_id === itemId ? { ...d, actual_physical_qty: qty, variance, reason_category, reason_notes } : d));
+      setDetails(details.map(d => d.item_id === itemId ? { ...d, actual_physical_qty: qtySmall, variance, reason_category, reason_notes } : d));
     } else {
-      setDetails([...details, { item_id: itemId, system_balance: systemBalance, actual_physical_qty: qty, variance }]);
+      setDetails([...details, { item_id: itemId, system_balance: systemBalance, actual_physical_qty: qtySmall, variance }]);
     }
   };
 
@@ -153,50 +154,71 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
             <thead>
               <tr>
                 <th style={{ padding: '4px 8px', fontSize: 11 }}>Item Name</th>
-                <th className="right" style={{ padding: '4px 8px', fontSize: 11 }}>System Bal</th>
-                <th className="right" style={{ width: 100, padding: '4px 8px', fontSize: 11 }}>Phys Qty</th>
+                <th className="right" style={{ padding: '4px 8px', fontSize: 11, width: 100 }}>Harga / Besar</th>
+                <th className="right" style={{ padding: '4px 8px', fontSize: 11, width: 90 }}>Sys Bal</th>
+                <th className="right" style={{ width: 90, padding: '4px 8px', fontSize: 11 }}>Phys Qty</th>
                 <th className="right" style={{ width: 70, padding: '4px 8px', fontSize: 11 }}>Var.</th>
-                <th style={{ width: 180, padding: '4px 8px', fontSize: 11 }}>Reason Category</th>
-                <th style={{ width: 220, padding: '4px 8px', fontSize: 11 }}>Notes</th>
+                <th className="right" style={{ width: 100, padding: '4px 8px', fontSize: 11 }}>Nilai Selisih</th>
+                <th style={{ width: 150, padding: '4px 8px', fontSize: 11 }}>Reason Category</th>
+                <th style={{ width: 180, padding: '4px 8px', fontSize: 11 }}>Notes</th>
               </tr>
             </thead>
             <tbody style={{ fontSize: 12 }}>
               {items.map(item => {
                 const detail = getDetail(item.item_id);
-                const actual = detail?.actual_physical_qty ?? '';
-                const variance = detail?.variance ?? 0;
+                const ratio = item.conversion_ratio || 1;
+                const largeUnit = item.purchase_unit || item.smallest_unit;
+                const priceLarge = Number(item.current_average_price) * ratio;
+
+                const actualSmall = detail?.actual_physical_qty;
+                const actualLarge = actualSmall !== undefined ? Number((actualSmall / ratio).toFixed(2)) : '';
+                
+                const varianceSmall = detail?.variance ?? 0;
+                const varianceLarge = Number((varianceSmall / ratio).toFixed(2));
+                const varianceValue = Math.abs(varianceSmall) * Number(item.current_average_price);
                 
                 return (
                   <tr key={item.item_id}>
                     <td className="font-bold" style={{ padding: '2px 8px' }}>
                       {item.item_name}
                       <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
-                        MA Price: Rp {Number(item.current_average_price).toLocaleString('id-ID')}
+                        Satuan Kecil: {item.smallest_unit} (Rasio: {ratio})
                       </div>
                     </td>
-                    <td className="right num" style={{ padding: '2px 8px' }}>{Number(item.system_balance).toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 10 }}>{item.smallest_unit}</span></td>
+                    <td className="right num" style={{ padding: '2px 8px' }}>
+                      Rp {priceLarge.toLocaleString('id-ID')}
+                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
+                        / {largeUnit}
+                      </div>
+                    </td>
+                    <td className="right num" style={{ padding: '2px 8px' }}>
+                      {Number((item.system_balance / ratio).toFixed(2)).toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 10 }}>{largeUnit}</span>
+                    </td>
                     <td className="right" style={{ padding: '2px 8px' }}>
                       <input 
                         type="number" 
                         className="input right" 
-                        value={actual} 
-                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, e.target.value)} 
+                        value={actualLarge} 
+                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, ratio, e.target.value)} 
                         onWheel={(e) => (e.target as HTMLInputElement).blur()}
                         disabled={isLocked}
                         placeholder="0"
                         step="any"
-                        style={{ height: 24, width: '100%', fontSize: 12, padding: '2px 6px', borderColor: actual === '' ? '#fca5a5' : 'var(--border)' }} 
+                        style={{ height: 24, width: '100%', fontSize: 12, padding: '2px 6px', borderColor: actualLarge === '' ? '#fca5a5' : 'var(--border)' }} 
                       />
                     </td>
                     <td className="right num" style={{ padding: '2px 8px' }}>
-                      {variance !== 0 ? (
-                        <span style={{ color: variance > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
-                          {variance > 0 ? '+' : ''}{Number(variance).toLocaleString('id-ID')}
+                      {varianceLarge !== 0 ? (
+                        <span style={{ color: varianceLarge > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
+                          {varianceLarge > 0 ? '+' : ''}{varianceLarge.toLocaleString('id-ID')}
                         </span>
                       ) : '-'}
                     </td>
+                    <td className="right num font-bold" style={{ padding: '2px 8px', color: varianceSmall !== 0 ? '#dc2626' : 'inherit' }}>
+                      {varianceSmall !== 0 ? `Rp ${varianceValue.toLocaleString('id-ID')}` : '-'}
+                    </td>
                     <td style={{ padding: '2px 8px' }}>
-                      {variance !== 0 ? (
+                      {varianceSmall !== 0 ? (
                         <select 
                           className="input" 
                           value={detail?.reason_category || ''} 
@@ -212,7 +234,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                       )}
                     </td>
                     <td style={{ padding: '2px 8px' }}>
-                      {variance !== 0 && detail?.reason_category ? (
+                      {varianceSmall !== 0 && detail?.reason_category ? (
                         <input 
                           type="text" 
                           className="input" 

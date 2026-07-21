@@ -140,6 +140,8 @@ function MenusTab({ categories }: { categories: Category[] }) {
 
   return (
     <>
+
+
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
@@ -157,9 +159,40 @@ function MenusTab({ categories }: { categories: Category[] }) {
           <option value="YELLOW">Yellow (35–50%)</option>
           <option value="RED">Red (&gt;50%)</option>
         </select>
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>
-          {total} Menus found
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+          <span className="muted" style={{ fontSize: 13 }}>
+            {total} Menus found
+          </span>
+          <div 
+            className="group" 
+            style={{ position: 'relative', cursor: 'help', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}
+          >
+            <AlertCircle size={18} />
+            <div 
+              className="hidden group-hover:flex" 
+              style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 8, zIndex: 50,
+                background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: 12, width: 230,
+                flexDirection: 'column', gap: 8
+              }}
+            >
+              <span className="font-bold" style={{ fontSize: 13, marginBottom: 4, color: '#12201a' }}>COGS % Indicators</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e' }}></span>
+                <span className="muted"><strong>Green</strong> (&lt; 35% - Healthy)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#eab308' }}></span>
+                <span className="muted"><strong>Yellow</strong> (35–50% - Warning)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }}></span>
+                <span className="muted"><strong>Red</strong> (&gt; 50% - Critical)</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Table */}
@@ -334,7 +367,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [viewRecipeData, setViewRecipeData] = useState<any>(null);
   const [viewRecipeLoading, setViewRecipeLoading] = useState(false);
 
-  const SHEETS = ['Bar 1', 'Bar 2', 'Kitchen 2025', 'Turangga'];
+  const SHEETS = ['Bar 1', 'Bar 2', 'Kitchen 2025'];
 
   const load = useCallback(() => {
     setLoading(true);
@@ -748,9 +781,8 @@ function KitchenTab() {
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
         <select className="input" value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 180 }}>
-          <option value="">Kitchen + Turangga</option>
+          <option value="">All Kitchen</option>
           <option value="Kitchen 2025">Kitchen 2025</option>
-          <option value="Turangga">Turangga</option>
         </select>
         <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{filtered.length} recipes</span>
       </div>
@@ -813,7 +845,7 @@ export default function HppPage() {
     { key: 'menus', label: 'POS Menus' },
     { key: 'recipes', label: 'Recipe Cards' },
     { key: 'ingredients', label: 'Ingredients' },
-    { key: 'kitchen', label: 'Kitchen & Turangga' },
+    { key: 'kitchen', label: 'Kitchen' },
   ] as const;
 
   const marginMap = (stats?.marginBreakdown ?? []).reduce((a, b) => ({ ...a, [b.flag]: b.count }), {} as Record<string, number>);

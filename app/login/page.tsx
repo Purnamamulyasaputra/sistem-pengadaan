@@ -15,7 +15,6 @@ export default function LoginPage() {
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [demoUsers, setDemoUsers] = useState<{ name: string; email: string }[]>([]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -25,11 +24,6 @@ export default function LoginPage() {
       setToastOpen(true);
       window.history.replaceState(null, '', window.location.pathname);
     }
-
-    fetch('/api/auth/login')
-      .then(r => r.json())
-      .then(d => { if (d.success) setDemoUsers(d.data); })
-      .catch(console.error);
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -59,7 +53,7 @@ export default function LoginPage() {
   return (
     <>
       <Toast isOpen={toastOpen} message={toastMessage} type="error" onClose={() => setToastOpen(false)} />
-      <FullScreenLoader open={loading} />
+      <FullScreenLoader open={loading} label="Loading" />
       <div style={{ minHeight: '100dvh', background: 'linear-gradient(135deg, #014f2d 0%, #016e3f 50%, #1a7a4a 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
         {/* Background decoration */}
         <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
@@ -176,38 +170,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Demo Credentials Box */}
-          <div style={{ width: '100%', maxWidth: 300, background: 'rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: 16, padding: 20, color: 'white', boxShadow: '0 24px 80px rgba(0,0,0,0.1)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <div style={{ background: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 8 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
-              </div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Demo Login</h3>
-            </div>
-
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginBottom: 16, lineHeight: 1.5 }}>
-              Semua akun menggunakan password: <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 6px', borderRadius: 4 }}>admin123</code>
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '300px', overflowY: 'auto', paddingRight: 4 }}>
-              {demoUsers.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>Memuat data akun...</div>
-              ) : (
-                demoUsers.map((u, i) => (
-                  <div
-                    key={i}
-                    onClick={() => { setEmail(u.email); setPassword('admin123'); }}
-                    style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', padding: '10px 14px', borderRadius: 10, cursor: 'pointer', transition: 'background 0.2s' }}
-                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-                    onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{u.name}</div>
-                    <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace' }}>{u.email}</div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </>

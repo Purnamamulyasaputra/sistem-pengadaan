@@ -64,12 +64,7 @@ export default function CentralOpnamePage() {
   return (
     <section className="screen">
       <div className="card">
-        <div className="tabs" style={{ marginBottom: 0 }}>
-          <a href="/warehouse" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Goods Receipts</a>
-          <a href="/stock-card" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Stock Card</a>
-          <a href="/delivery-orders" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Delivery Orders</a>
-          <a href="/opname/central" className="tab active" style={{ textDecoration: 'none' }}>Central Opname</a>
-        </div>
+
         <div className="card-head">
           <div>
             <h3>Central Stock Opname</h3>

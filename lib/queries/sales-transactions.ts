@@ -20,6 +20,67 @@ export type IngredientRequirementRow = {
 };
 
 /**
+ * Mendapatkan matriks penjualan produk per outlet.
+ * Hasilnya: { menu_id, menu_name, category_name, sale_price, outlets: { [outlet_id]: qty }, total_qty }
+ */
+export async function getProductSalesMatrix(dateFrom: string, dateTo: string, categoryId?: number, search?: string) {
+  let queryStr = `
+    SELECT 
+      m.id AS menu_id,
+      m.name AS menu_name,
+      c.name AS category_name,
+      m.sale_price,
+      st.outlet_id,
+      SUM(sti.qty)::int AS total_qty
+    FROM sales_transaction_items sti
+    JOIN sales_transactions st ON st.id = sti.sales_transaction_id
+    JOIN menus m ON m.id = sti.menu_id
+    LEFT JOIN menu_categories c ON c.id = m.category_id
+    WHERE st.transaction_date >= $1 AND st.transaction_date <= $2
+  `;
+  const params: any[] = [dateFrom, dateTo];
+  let paramIndex = 3;
+
+  if (categoryId) {
+    queryStr += ` AND m.category_id = $${paramIndex}`;
+    params.push(categoryId);
+    paramIndex++;
+  }
+
+  if (search) {
+    queryStr += ` AND m.name ILIKE $${paramIndex}`;
+    params.push(`%${search}%`);
+    paramIndex++;
+  }
+
+  queryStr += ` GROUP BY m.id, m.name, c.name, m.sale_price, st.outlet_id`;
+
+  const res = await query(queryStr, params);
+
+  // Transform data in memory
+  const map = new Map<number, any>();
+  for (const row of res.rows) {
+    const mId = Number(row.menu_id);
+    if (!map.has(mId)) {
+      map.set(mId, {
+        menu_id: mId,
+        menu_name: row.menu_name,
+        category_name: row.category_name,
+        sale_price: Number(row.sale_price),
+        outlets: {},
+        total_qty: 0
+      });
+    }
+    const record = map.get(mId)!;
+    const qty = Number(row.total_qty);
+    record.outlets[row.outlet_id] = qty;
+    record.total_qty += qty;
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total_qty - a.total_qty);
+}
+
+/**
  * Mendapatkan ringkasan penjualan (Summary) per menu dalam rentang tanggal tertentu
  * Hanya menampilkan menu yang terjual di rentang tersebut.
  */
@@ -42,7 +103,7 @@ export async function getSalesSummary(outletId: number, dateFrom: string, dateTo
     GROUP BY m.id, m.display_name, m.name, c.name, m.sale_price
     ORDER BY total_qty DESC
   `, [outletId, dateFrom, dateTo]);
-  
+
   return res.rows;
 }
 
@@ -54,9 +115,9 @@ export async function getSalesIngredientRequirements(outletId: number, dateFrom:
   // 1. Ambil summary menu terjual
   const sales = await getSalesSummary(outletId, dateFrom, dateTo);
   if (sales.length === 0) return [];
-  
+
   const menuIds = sales.map(s => Number(s.menu_id));
-  
+
   // 2. Ambil komposisi resep untuk semua menu yang terjual
   const res = await query(`
     SELECT 
@@ -76,24 +137,24 @@ export async function getSalesIngredientRequirements(outletId: number, dateFrom:
     LEFT JOIN categories cat ON cat.id = it.category_id
     WHERE r.menu_id = ANY($1::bigint[])
   `, [menuIds]);
-  
+
   const recipeData = res.rows;
-  
+
   // 3. Kalkulasi: (Qty Menu Terjual / Recipe Yield) * Qty Ingredient
   const reqMap = new Map<number, IngredientRequirementRow>();
-  
+
   for (const s of sales) {
     const menuId = Number(s.menu_id);
     const qtySold = Number(s.total_qty);
-    
+
     // Cari bahan baku untuk menu ini
     const ingredientsForMenu = recipeData.filter(r => Number(r.menu_id) === menuId);
-    
+
     for (const ing of ingredientsForMenu) {
       const ingId = Number(ing.ingredient_id);
       const yieldFactor = Number(ing.recipe_yield) || 1;
       const rawQtyNeeded = (qtySold / yieldFactor) * Number(ing.qty_per_recipe);
-      
+
       if (!reqMap.has(ingId)) {
         reqMap.set(ingId, {
           ingredient_id: BigInt(ingId),
@@ -105,11 +166,11 @@ export async function getSalesIngredientRequirements(outletId: number, dateFrom:
           default_unit: ing.default_unit
         });
       }
-      
+
       reqMap.get(ingId)!.total_raw_qty += rawQtyNeeded;
     }
   }
-  
+
   // Convert map ke array dan filter yang tidak punya item (karena request ke Gudang butuh Item ID)
   return Array.from(reqMap.values()).sort((a, b) => b.total_raw_qty - a.total_raw_qty);
 }

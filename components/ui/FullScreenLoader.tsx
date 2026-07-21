@@ -27,16 +27,33 @@ function Sunburst({ size = 52, spin = false }: { size?: number, spin?: boolean }
 /* ============================================================
    FullScreenLoader — full-viewport "loading app data" state
    ============================================================ */
+
+let globalProgress = 8;
+let globalProgressLastUpdated = 0;
+
 export function FullScreenLoader({ open, label = "Loading..." }: { open: boolean; label?: string }) {
-  const [progress, setProgress] = useState(8);
+  const [progress, setProgress] = useState(() => {
+    if (Date.now() - globalProgressLastUpdated > 1000) {
+      globalProgress = 8;
+    }
+    return globalProgress;
+  });
 
   useEffect(() => {
     if (!open) {
-      const reset = setTimeout(() => setProgress(8), 300);
+      const reset = setTimeout(() => {
+        setProgress(8);
+        globalProgress = 8;
+      }, 300);
       return () => clearTimeout(reset);
     }
     const t = setInterval(() => {
-      setProgress((p) => (p >= 92 ? 92 : p + Math.random() * 10));
+      setProgress((p) => {
+        const next = p >= 92 ? 92 : p + Math.random() * 10;
+        globalProgress = next;
+        globalProgressLastUpdated = Date.now();
+        return next;
+      });
     }, 260);
     return () => clearInterval(t);
   }, [open]);

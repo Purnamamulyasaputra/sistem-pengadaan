@@ -64,34 +64,7 @@ export default function OutletInventoryStockPage() {
     }
   };
 
-  const handleSimulateSale = async (itemId: number) => {
-    // Determine amount to subtract based on item
-    const amount = 500; // Deduct 500 units for simulation
-    
-    // Optimistic update
-    setData(prev => prev.map(d => 
-      d.item_id === itemId ? { ...d, current_balance: d.current_balance - amount } : d
-    ));
 
-    try {
-      await fetch('/api/outlet/inventory/simulate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId, amount })
-      });
-      // We don't necessarily need to reload, because the optimistic update handles it.
-      // But we fetch silently just to sync any server changes
-      fetchData(true);
-      
-      // Force update the sidebar badge by triggering a custom event or fetching alerts
-      // (Since layout relies on global state, the easiest way without modifying Context 
-      // is just letting the silent fetch complete, but we could trigger an event here)
-      window.dispatchEvent(new Event('stock-updated'));
-    } catch (e) {
-      console.error(e);
-      fetchData(true); // Revert on error
-    }
-  };
 
   const filteredData = search.trim() 
     ? data.filter(d => 
@@ -200,26 +173,7 @@ export default function OutletInventoryStockPage() {
                       
                       <td className="center">
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                          <button 
-                            onClick={() => handleSimulateSale(row.item_id)}
-                            title="Simulasi Penjualan POS (-500)"
-                            style={{
-                              border: '1px solid #fed7aa',
-                              background: '#fff7ed',
-                              borderRadius: 4,
-                              width: 26,
-                              height: 26,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              color: '#ea580c'
-                            }}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                          </button>
+
                           <button 
                             onClick={() => {
                               setEditingId(row.item_id);

@@ -34,21 +34,16 @@ export default function ItemsPage() {
   const [catFilter, setCatFilter] = useState('');
   const [filterExpiry, setFilterExpiry] = useState('');
   const [filterUnit, setFilterUnit] = useState('');
-  const [filterLowStock, setFilterLowStock] = useState('');
 
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [form, setForm] = useState({ name: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
+  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
 
   // Stock Card
-  const [showCardModal, setShowCardModal] = useState<Item | null>(null);
-  const [stockCard, setStockCard] = useState<unknown[]>([]);
-
-  // Confirms
   const [confirmToggleActive, setConfirmToggleActive] = useState<Item | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -69,7 +64,7 @@ export default function ItemsPage() {
   // Reset to page 1 only when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, catFilter, filterExpiry, filterUnit, filterLowStock]);
+  }, [search, catFilter, filterExpiry, filterUnit]);
 
   useEffect(() => {
     fetch('/api/categories').then(r => r.json()).then(d => setCategories(d.data ?? []));
@@ -80,7 +75,7 @@ export default function ItemsPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ name: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
+    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_unit: '', package_qty: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
     setError('');
     setShowModal(true);
   }
@@ -89,7 +84,7 @@ export default function ItemsPage() {
     setEditing(item);
     const hasConv = Number(item.conversion_ratio) > 1 && item.purchase_unit !== item.smallest_unit;
     setForm({
-      name: item.name, category_id: String(item.category_id ?? ''), purchase_unit: item.purchase_unit, package_unit: item.package_unit || '', package_qty: String(item.package_qty || ''), package_inner_size: '',
+      name: item.name, barcode: item.barcode || '', category_id: String(item.category_id ?? ''), purchase_unit: item.purchase_unit, package_unit: item.package_unit || '', package_qty: String(item.package_qty || ''), package_inner_size: '',
       smallest_unit: item.smallest_unit, conversion_ratio: String(Number(item.conversion_ratio)),
       minimum_threshold: String(Number(item.minimum_threshold)), threshold_type: item.threshold_type,
       is_perishable: item.is_perishable, is_active: item.is_active, 
@@ -154,25 +149,18 @@ export default function ItemsPage() {
     }
   }
 
-  async function handleViewCard(item: Item) {
-    setShowCardModal(item);
-    const res = await fetch(`/api/inventory/card?item_id=${item.id}&limit=30`);
-    const data = await res.json();
-    setStockCard(data.data ?? []);
-  }
+
 
   const uniqueUnits = Array.from(new Set(items.map(i => i.purchase_unit))).filter(Boolean).sort();
 
   const filteredItems = items.filter(item => {
     if (filterExpiry === 'SHORT' && !item.is_perishable) return false;
     if (filterUnit && item.purchase_unit !== filterUnit) return false;
-    if (filterLowStock === 'LOW' && (item.current_stock ?? 0) >= item.minimum_threshold) return false;
     return true;
   });
 
   const paginatedItems = filteredItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const lowStockCount = items.filter(i => Number(i.current_stock ?? 0) < Number(i.minimum_threshold)).length;
 
   return (
     <section className="screen">
@@ -194,10 +182,6 @@ export default function ItemsPage() {
                 <option value="">All Expiry Types</option>
                 <option value="SHORT">Short Expiry Only</option>
               </select>
-              <select className="input" style={{ width: '150px' }} value={filterLowStock} onChange={e => setFilterLowStock(e.target.value)}>
-                <option value="">All Stock Levels</option>
-                <option value="LOW">Low Stock Only</option>
-              </select>
             </div>
             <Button variant="primary" size="sm" onClick={openAdd}>+ Add Item</Button>
           </div>
@@ -218,13 +202,12 @@ export default function ItemsPage() {
                     <tr>
                       <th>Code</th><th>Item</th>
                       <th>Purch. Unit</th><th>Small. Unit</th><th className="center">Ratio</th><th className="right">Avg Price</th>
-                      <th className="right">Stock</th><th className="center">Min</th>
                       <th className="center">Status</th><th className="center">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedItems.map(item => (
-                      <tr key={item.id} onClick={() => handleViewCard(item)} className="cursor-pointer" title="View Stock Card">
+                      <tr key={item.id}>
                         <td className="font-mono text-muted">ERC{String(item.id).padStart(5, '0')}</td>
                         <td>
                           <div className="font-bold" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -239,12 +222,6 @@ export default function ItemsPage() {
                         <td>{item.smallest_unit}</td>
                         <td className="center num muted">{Math.round(Number(item.conversion_ratio)).toLocaleString('id-ID')}</td>
                         <td className="right num">{fmtCurrency(item.current_average_price).replace(',00', '')}</td>
-                        <td className="right num font-bold" style={{ color: Number(item.current_stock ?? 0) < Number(item.minimum_threshold) ? '#dc2626' : 'inherit' }}>
-                          {Math.round(Number(item.current_stock ?? 0)).toLocaleString('id-ID')}
-                        </td>
-                        <td className="center num muted">
-                          {Math.round(Number(item.minimum_threshold)).toLocaleString('id-ID')}{item.threshold_type === 'PERSENTASE' ? '%' : ''}
-                        </td>
                         <td className="center">
                           <Badge variant={item.is_active ? 'green' : 'gray'}>
                             {item.is_active ? 'Active' : 'Inactive'}
@@ -277,131 +254,131 @@ export default function ItemsPage() {
         </div>
       </div>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Item' : 'Add New Item'} maxWidth={600}>
-        <div className="modal-body" style={{ padding: '16px 20px' }}>
-          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
-          <div className="form-grid" style={{ marginBottom: 0, gap: '12px' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <datalist id="existing-item-names">
-                {items.map(item => <option key={item.id} value={item.name} />)}
-              </datalist>
-              <Input
-                label="Item Name"
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="create new item name"
-                list="existing-item-names"
-              />
-            </div>
-            <div className="form-group"><label className="req">Category</label>
-              <select className="input" value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
-                <option value="">Select category...</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px' }}>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                <label className="req">Satuan Pembelian</label>
-                <select className="input" value={form.purchase_unit} onChange={e => setForm(f => ({ ...f, purchase_unit: e.target.value }))}>
-                  <option value="">Pilih...</option>
-                  {['Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Roll', 'Pcs'].map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                <label>Apakah diecer/dikonversi?</label>
-                <div style={{ height: 38, display: 'flex', alignItems: 'center' }}>
-                  <Toggle checked={form.has_conversion} onChange={c => setForm(f => ({ ...f, has_conversion: c }))} />
-                  <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--muted)' }}>{form.has_conversion ? 'Ya' : 'Tidak'}</span>
+      <Modal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)} 
+        title={editing ? 'Edit Item' : 'Add New Item'} 
+        maxWidth={1024}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Item'}</Button>
+          </>
+        }
+      >
+        <div style={{ padding: '0px' }}>
+          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '20px' }}>
+            
+            {/* LEFT COLUMN: Main Inputs */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1.4 }}>
+                  <datalist id="existing-item-names">
+                    {items.map(item => <option key={item.id} value={item.name} />)}
+                  </datalist>
+                  <Input
+                    label="Item Name"
+                    value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="create new item name"
+                    list="existing-item-names"
+                  />
                 </div>
-              </div>
-            </div>
-
-            {form.has_conversion && (
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0', marginTop: 4 }}>
-                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                  <label className="req">Satuan Eceran (Terkecil)</label>
-                  <select className="input" value={form.smallest_unit} onChange={e => setForm(f => ({ ...f, smallest_unit: e.target.value }))}>
-                    <option value="">Pilih...</option>
-                    {['gr', 'ml', 'pcs', 'shoot', 'slice', 'lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks'].map(u => <option key={u} value={u}>{u}</option>)}
+                <div style={{ flex: 0.9 }}>
+                  <Input
+                    label="Barcode / SKU"
+                    value={form.barcode || ''}
+                    onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div className="form-group" style={{ flex: 1.8, marginBottom: 0 }}>
+                  <label className="req">Category</label>
+                  <select className="input" value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
+                    <option value="">Select category...</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                  <label className="req">Isi per 1 {form.purchase_unit || 'Satuan'}</label>
+                  <label className="req">Purchase Unit (Largest)</label>
+                  <select className="input" value={form.purchase_unit} onChange={e => setForm(f => ({ ...f, purchase_unit: e.target.value }))}>
+                    <option value="">Select...</option>
+                    {['Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Roll', 'Pcs'].map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ flex: 1, marginBottom: 0, opacity: form.has_conversion ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+                  <label className="req">Retail Unit</label>
+                  <select className="input" value={form.smallest_unit} onChange={e => setForm(f => ({ ...f, smallest_unit: e.target.value }))} disabled={!form.has_conversion} style={{ cursor: form.has_conversion ? 'pointer' : 'not-allowed' }}>
+                    <option value="">Select...</option>
+                    {['gr', 'ml', 'pcs', 'shoot', 'slice', 'lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks', 'Roll', 'Kg', 'Liter', 'Pack'].map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                
+                <div className="form-group" style={{ flex: 1, marginBottom: 0, opacity: form.has_conversion ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+                  <label className="req">Content per 1 {form.purchase_unit || 'Unit'}</label>
                   <div style={{ position: 'relative' }}>
-                    <input className="input" type="number" min="0.01" step="0.01" value={form.conversion_ratio} onChange={e => setForm(f => ({ ...f, conversion_ratio: e.target.value }))} style={{ paddingRight: 60 }} />
+                    <input className="input" type="number" min="0.01" step="0.01" value={form.conversion_ratio} onChange={e => setForm(f => ({ ...f, conversion_ratio: e.target.value }))} disabled={!form.has_conversion} style={{ paddingRight: 60, cursor: form.has_conversion ? 'text' : 'not-allowed' }} />
                     <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)' }}>{form.smallest_unit}</span>
                   </div>
                 </div>
               </div>
-            )}
 
-            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', marginTop: 4 }}>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                <label>Harga Beli per {form.purchase_unit || 'Satuan'} (Rp)</label>
-                <input className="input" type="text" placeholder="0" value={form.purchase_price === '0' || !form.purchase_price ? '' : Number(form.purchase_price).toLocaleString('id-ID')} onChange={e => {
-                  const raw = e.target.value.replace(/\./g, '');
-                  if (/^\d*$/.test(raw)) setForm(f => ({ ...f, purchase_price: raw }));
-                }} onFocus={e => e.target.select()} />
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div className="form-group" style={{ flex: 1.2, marginBottom: 0 }}>
+                  <label>Purchase Price per {form.purchase_unit || 'Unit'} (Rp)</label>
+                  <input className="input" type="text" placeholder="0" value={form.purchase_price === '0' || !form.purchase_price ? '' : Number(form.purchase_price).toLocaleString('id-ID')} onChange={e => {
+                    const raw = e.target.value.replace(/\./g, '');
+                    if (/^\d*$/.test(raw)) setForm(f => ({ ...f, purchase_price: raw }));
+                  }} onFocus={e => e.target.select()} />
+                </div>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Min. Threshold</label>
+                  <input className="input" type="number" min="0" value={form.minimum_threshold} onChange={e => setForm(f => ({ ...f, minimum_threshold: e.target.value }))} />
+                </div>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Alert Type</label>
+                  <select className="input" value={form.threshold_type} onChange={e => setForm(f => ({ ...f, threshold_type: e.target.value }))}>
+                    <option value="ABSOLUT">Absolute</option>
+                    <option value="PERSENTASE">Percentage (%)</option>
+                  </select>
+                </div>
               </div>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Min. Threshold</label>
-                <input className="input" type="number" min="0" value={form.minimum_threshold} onChange={e => setForm(f => ({ ...f, minimum_threshold: e.target.value }))} />
-              </div>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Type</label>
-                <select className="input" value={form.threshold_type} onChange={e => setForm(f => ({ ...f, threshold_type: e.target.value }))}>
-                  <option value="ABSOLUT">Absolute</option>
-                  <option value="PERSENTASE">Percentage (%)</option>
-                </select>
-              </div>
+
+              {form.has_conversion && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0 && (
+                <div style={{ fontSize: 12.5, color: '#0369a1', background: '#e0f2fe', padding: '8px 12px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <span>System note: 1 {form.purchase_unit} contains {form.conversion_ratio} {form.smallest_unit}. COGS / Warehouse Stock Price is <strong>{fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per {form.smallest_unit}</strong>.</span>
+                </div>
+              )}
             </div>
 
-            {form.has_conversion && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0 && (
-              <div style={{ gridColumn: '1 / -1', fontSize: 12.5, color: '#0369a1', background: '#e0f2fe', padding: '8px 12px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8, marginTop: -4 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                <span>Sistem mencatat: 1 {form.purchase_unit} isi {form.conversion_ratio} {form.smallest_unit}. Harga HPP / Stok Gudang adalah <strong>{fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per {form.smallest_unit}</strong>.</span>
+            {/* RIGHT COLUMN: Settings & Toggles */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: 8, border: '1px solid #e2e8f0', alignSelf: 'start' }}>
+              <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #cbd5e1', paddingBottom: 8 }}>Settings & Rules</h4>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Split / Retail Unit</span>
+                <Toggle checked={form.has_conversion} onChange={c => setForm(f => ({ ...f, has_conversion: c }))} />
               </div>
-            )}
-            
-            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 24, marginTop: 4 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Short Expiry Item</span>
                 <Toggle checked={form.is_perishable} onChange={c => setForm(f => ({ ...f, is_perishable: c }))} />
-                <span>Short Expiry</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <Toggle checked={form.is_active} onChange={c => setForm(f => ({ ...f, is_active: c }))} />
-                <span style={{ color: form.is_active ? '#016e3f' : '#64748b', fontWeight: 600 }}>
-                  {form.is_active ? 'Item Active' : 'Item Inactive'}
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div className="modal-actions" style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: '#f8fafc', display: 'flex', gap: 8, justifyContent: 'flex-end', borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
-          <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Item'}</Button>
-        </div>
-      </Modal>
+              </div>
 
-      <Modal isOpen={!!showCardModal} onClose={() => setShowCardModal(null)} title={`Stock Card — ${showCardModal?.name}`} maxWidth={800}>
-        <Table>
-          <thead><tr><th>Date</th><th className="center">Type</th><th className="right">Change</th><th className="right">Ending Balance</th><th>Reference</th></tr></thead>
-          <tbody>
-            {stockCard.length === 0 && <tr><td colSpan={5} className="center muted" style={{ padding: 24 }}>No mutations</td></tr>}
-            {(stockCard as { id: number; created_at: string; movement_type: string; qty_change: number; ending_balance: number; reference_type: string }[]).map((log) => (
-              <tr key={log.id}>
-                <td>{new Date(log.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-                <td className="center"><Badge variant={log.movement_type === 'IN' ? 'green' : log.movement_type === 'OUT' ? 'red' : 'amber'}>{log.movement_type}</Badge></td>
-                <td className="right num font-bold" style={{ color: log.qty_change > 0 ? '#059669' : '#dc2626' }}>
-                  {log.qty_change > 0 ? '+' : ''}{Number(log.qty_change).toLocaleString('id-ID')} {showCardModal?.smallest_unit}
-                </td>
-                <td className="right num">{Number(log.ending_balance).toLocaleString('id-ID')} {showCardModal?.smallest_unit}</td>
-                <td className="muted">{log.reference_type}</td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-        <div className="modal-actions" style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button variant="outline" size="sm" onClick={() => setShowCardModal(null)}>Close</Button>
+              <div style={{ borderTop: '1px dashed #cbd5e1', margin: '4px 0' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: form.is_active ? 'var(--primary)' : 'var(--muted)' }}>{form.is_active ? 'Item Active' : 'Inactive'}</span>
+                <Toggle checked={form.is_active} onChange={c => setForm(f => ({ ...f, is_active: c }))} />
+              </div>
+            </div>
+            
+          </div>
         </div>
       </Modal>
 
