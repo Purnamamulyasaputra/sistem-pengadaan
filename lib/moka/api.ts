@@ -5,8 +5,14 @@ export async function refreshMokaToken(tokenObj: any) {
         throw new Error("Cannot refresh token without business_id");
     }
 
-    const clientId = process.env.MOKA_CLIENT_ID;
-    const clientSecret = process.env.MOKA_CLIENT_SECRET;
+    // Use per-account credentials stored in DB for Private App support
+    // Falls back to env vars only if not stored (backward compatibility)
+    const clientId = tokenObj.client_id || process.env.MOKA_CLIENT_ID;
+    const clientSecret = tokenObj.client_secret || process.env.MOKA_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+        throw new Error(`Missing client credentials for business ${tokenObj.business_id}`);
+    }
 
     const refreshRes = await fetch('https://api.mokapos.com/oauth/token', {
         method: 'POST',
@@ -26,14 +32,16 @@ export async function refreshMokaToken(tokenObj: any) {
 
     const data = await refreshRes.json();
     await saveMokaToken(
-        data.access_token, 
-        data.refresh_token, 
-        data.expires_in, 
-        data.scope, 
+        data.access_token,
+        data.refresh_token,
+        data.expires_in,
+        data.scope,
         data.created_at,
         tokenObj.business_id,
         tokenObj.account_name,
-        tokenObj.account_email
+        tokenObj.account_email,
+        clientId,
+        clientSecret
     );
     return data;
 }

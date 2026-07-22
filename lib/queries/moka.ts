@@ -34,6 +34,7 @@ export async function getMokaTokenByBusinessId(businessId: number) {
 }
 
 // DIPERBARUI: Menyimpan token dengan UPSERT berdasarkan business_id
+// Setiap Private App menyimpan client_id & client_secret-nya sendiri
 export async function saveMokaToken(
     accessToken: string,
     refreshToken: string,
@@ -42,7 +43,9 @@ export async function saveMokaToken(
     mokaCreatedAt: number,
     businessId: number,
     accountName: string,
-    accountEmail: string = ''
+    accountEmail: string = '',
+    clientId: string = '',
+    clientSecret: string = ''
 ) {
     if (!businessId) {
         console.error("FATAL ERROR: saveMokaToken called with null/undefined businessId!");
@@ -52,9 +55,10 @@ export async function saveMokaToken(
         await query(`
             INSERT INTO moka_tokens (
                 access_token, refresh_token, expires_in, scope, moka_created_at, 
-                business_id, account_name, account_email, is_active
+                business_id, account_name, account_email, is_active,
+                client_id, client_secret
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10)
             ON CONFLICT (business_id) DO UPDATE SET
                 access_token = EXCLUDED.access_token,
                 refresh_token = EXCLUDED.refresh_token,
@@ -63,9 +67,11 @@ export async function saveMokaToken(
                 moka_created_at = EXCLUDED.moka_created_at,
                 account_name = EXCLUDED.account_name,
                 account_email = EXCLUDED.account_email,
+                client_id = EXCLUDED.client_id,
+                client_secret = EXCLUDED.client_secret,
                 is_active = true,
                 updated_at = CURRENT_TIMESTAMP
-        `, [accessToken, refreshToken, expiresIn, scope, mokaCreatedAt, businessId, accountName, accountEmail]);
+        `, [accessToken, refreshToken, expiresIn, scope, mokaCreatedAt, businessId, accountName, accountEmail, clientId, clientSecret]);
         return true;
     } catch (error) {
         console.error("Error saving Moka token:", error);

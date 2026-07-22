@@ -8,23 +8,108 @@ import { Toast } from '@/components/ui/Toast';
 
 export function ConnectMokaButton() {
     const [isLoading, setIsLoading] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [clientId, setClientId] = useState('');
+    const [clientSecret, setClientSecret] = useState('');
+    const [error, setError] = useState('');
 
-    const handleConnect = () => {
+    const handleOpenModal = () => {
+        setClientId('');
+        setClientSecret('');
+        setError('');
+        setShowModal(true);
+    };
+
+    const handleConnect = async () => {
+        if (!clientId.trim() || !clientSecret.trim()) {
+            setError('Client ID and Client Secret are required.');
+            return;
+        }
         setIsLoading(true);
-        window.open('/api/moka/connect', '_blank');
-        // Reset loading state after a short delay since we remain on the same page
-        setTimeout(() => setIsLoading(false), 2000);
+        setError('');
+        try {
+            const res = await fetch('/api/moka/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ client_id: clientId.trim(), client_secret: clientSecret.trim() }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.auth_url) {
+                setError(data.error || 'Failed to initiate connection.');
+                setIsLoading(false);
+                return;
+            }
+            setShowModal(false);
+            window.open(data.auth_url, '_blank');
+        } catch {
+            setError('Network error. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
-        <button 
-            onClick={handleConnect} 
-            disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors disabled:opacity-50"
-        >
-            {isLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Link className="w-3.5 h-3.5" />}
-            Connect Moka Account
-        </button>
+        <>
+            <button
+                onClick={handleOpenModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors"
+            >
+                <Link className="w-3.5 h-3.5" />
+                Connect Moka Account
+            </button>
+
+            {showModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+                        <h3 className="text-sm font-bold text-gray-900 mb-1">Connect Moka Private App</h3>
+                        <p className="text-xs text-gray-500 mb-5">
+                            Enter the Client ID and Client Secret from your Moka Developer Portal. Each account has its own unique credentials.
+                        </p>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Client ID</label>
+                                <input
+                                    type="text"
+                                    value={clientId}
+                                    onChange={e => setClientId(e.target.value)}
+                                    placeholder="Paste your Moka Client ID..."
+                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Client Secret</label>
+                                <input
+                                    type="password"
+                                    value={clientSecret}
+                                    onChange={e => setClientSecret(e.target.value)}
+                                    placeholder="Paste your Moka Client Secret..."
+                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
+                                />
+                            </div>
+                            {error && <p className="text-xs text-red-500">{error}</p>}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 mt-5">
+                            <button
+                                onClick={() => setShowModal(false)}
+                                className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConnect}
+                                disabled={isLoading}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors disabled:opacity-50"
+                            >
+                                {isLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Link className="w-3.5 h-3.5" />}
+                                Authorize & Connect
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
 
