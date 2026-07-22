@@ -1,22 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveMokaToken } from '@/lib/queries/moka';
+import { query } from '@/lib/db';
 
 // Force Turbopack recompile for Multi-Account Private App support
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
+    const state = searchParams.get('state');
 
     if (!code) {
         return NextResponse.redirect(new URL('/settings/moka?error=no_code', request.url));
     }
 
-    // Read per-account credentials stored in HTTP-only cookies during /api/moka/connect
-    const clientId = request.cookies.get('moka_pending_client_id')?.value;
-    const clientSecret = request.cookies.get('moka_pending_client_secret')?.value;
+    if (!state) {
+        console.error('Missing state parameter in callback');
+        return NextResponse.redirect(new URL('/settings/moka?error=missing_credentials', request.url));
+    }
+
+    let clientId = '';
+    let clientSecret = '';
+
+    try {
+        // Fetch credentials from DB based on the state token
+        const stateRes = await query(`SELECT client_id, client_secret FROM moka_oauth_states WHERE state = $1`, [state]);
+        if (stateRes.rows.length === 0) {
+            console.error('State token not found or expired:', state);
+            return NextResponse.redirect(new URL('/settings/moka?error=missing_credentials', request.url));
+        }
+
+        clientId = stateRes.rows[0].client_id;
+        clientSecret = stateRes.rows[0].client_secret;
+
+        // Delete state immediately to prevent reuse (one-time use only)
+        await query(`DELETE FROM moka_oauth_states WHERE state = $1`, [state]);
+    } catch (dbError) {
+        console.error('Error fetching state from DB:', dbError);
+        return NextResponse.redirect(new URL('/settings/moka?error=db_error', request.url));
+    }
+
     const redirectUri = process.env.MOKA_REDIRECT_URI;
 
     if (!clientId || !clientSecret || !redirectUri) {
-        console.error('Missing credentials in cookies or env:', { clientId: !!clientId, clientSecret: !!clientSecret, redirectUri: !!redirectUri });
+        console.error('Missing credentials or env:', { clientId: !!clientId, clientSecret: !!clientSecret, redirectUri: !!redirectUri });
         return NextResponse.redirect(new URL('/settings/moka?error=missing_credentials', request.url));
     }
 
@@ -58,7 +83,14 @@ export async function GET(request: NextRequest) {
             const bizData = await bizRes.json();
             console.log('Moka /v1/businesses response:', JSON.stringify(bizData).substring(0, 500));
 
-            if (bizData && bizData.data && bizData.data.length > 0) {
+            if (bizData && bizData.data && bizData.data.business) {
+                // For /v1/businesses, data is an object containing 'business'
+                const primaryBiz = bizData.data.business;
+                businessId = primaryBiz.id;
+                accountName = primaryBiz.name;
+                accountEmail = primaryBiz.email || '';
+            } else if (bizData && Array.isArray(bizData.data) && bizData.data.length > 0) {
+                // Fallback just in case Moka returns an array
                 const primaryBiz = bizData.data[0];
                 businessId = primaryBiz.id;
                 accountName = primaryBiz.name;
@@ -75,10 +107,14 @@ export async function GET(request: NextRequest) {
                 const outData = await outRes.json();
                 console.log('Moka /v1/outlets response:', JSON.stringify(outData).substring(0, 500));
                 
-                if (outData && outData.data && outData.data.length > 0) {
-                    const primaryOut = outData.data[0];
+                if (outData && outData.data && outData.data.outlets && outData.data.outlets.length > 0) {
+                    const primaryOut = outData.data.outlets[0];
                     businessId = primaryOut.business_id;
                     accountName = primaryOut.name ? `Account via ${primaryOut.name}` : 'Unknown Account';
+                } else if (outData && Array.isArray(outData.data) && outData.data.length > 0) {
+                     const primaryOut = outData.data[0];
+                     businessId = primaryOut.business_id;
+                     accountName = primaryOut.name ? `Account via ${primaryOut.name}` : 'Unknown Account';
                 }
             }
         } catch (bizError) {
@@ -107,11 +143,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.redirect(new URL('/settings/moka?error=db_error', request.url));
         }
 
-        // Clear the temporary credential cookies after successful save
-        const redirectResponse = NextResponse.redirect(new URL('/settings/moka?success=true', request.url));
-        redirectResponse.cookies.delete('moka_pending_client_id');
-        redirectResponse.cookies.delete('moka_pending_client_secret');
-        return redirectResponse;
+        return NextResponse.redirect(new URL('/settings/moka?success=true', request.url));
 
     } catch (error) {
         console.error('Callback error:', error);

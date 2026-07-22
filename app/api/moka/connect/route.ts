@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { query } from '@/lib/db';
 
-// POST: Receive client_id & client_secret from UI form, store in cookies, return Moka auth URL
+// POST: Receive client_id & client_secret from UI form, store in DB with state token, return Moka auth URL
 export async function POST(request: NextRequest) {
     const body = await request.json();
     const { client_id, client_secret } = body;
@@ -14,28 +15,26 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'MOKA_REDIRECT_URI not configured' }, { status: 500 });
     }
 
+    // Generate a unique state token for OAuth flow
+    const state = crypto.randomUUID();
+
+    try {
+        // Store credentials in DB mapped to the state token
+        await query(`
+            INSERT INTO moka_oauth_states (state, client_id, client_secret)
+            VALUES ($1, $2, $3)
+        `, [state, client_id, client_secret]);
+    } catch (dbError) {
+        console.error('Failed to save Moka state to DB:', dbError);
+        return NextResponse.json({ error: 'Database error while preparing auth' }, { status: 500 });
+    }
+
     const scope = encodeURIComponent('profile library report transaction customer');
     const encodedRedirect = encodeURIComponent(redirectUri);
-    const mokaAuthUrl = `https://api.mokapos.com/oauth/authorize?client_id=${client_id}&redirect_uri=${encodedRedirect}&response_type=code&scope=${scope}`;
+    // Attach state to the auth URL
+    const mokaAuthUrl = `https://api.mokapos.com/oauth/authorize?client_id=${client_id}&redirect_uri=${encodedRedirect}&response_type=code&scope=${scope}&state=${state}`;
 
-    // Store credentials temporarily in HTTP-only cookies (10 minutes TTL)
-    const response = NextResponse.json({ auth_url: mokaAuthUrl });
-    response.cookies.set('moka_pending_client_id', client_id, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 600,
-        path: '/',
-        sameSite: 'lax',
-    });
-    response.cookies.set('moka_pending_client_secret', client_secret, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 600,
-        path: '/',
-        sameSite: 'lax',
-    });
-
-    return response;
+    return NextResponse.json({ auth_url: mokaAuthUrl });
 }
 
 // GET: Legacy redirect support (kept for direct URL access)
