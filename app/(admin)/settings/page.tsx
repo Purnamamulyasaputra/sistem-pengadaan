@@ -65,96 +65,101 @@ export default function SettingsPage() {
     <section className="screen">
       <SettingsTabs />
       <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, open: false })} />
-      
-      <div className="card" style={{ maxWidth: 640, margin: '0 auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <div className="card-head" style={{ padding: '20px 24px' }}>
+
+      <div className="card" style={{ maxWidth: 540, margin: '0 auto', boxShadow: '0 2px 12px rgba(0,0,0,0.03)' }}>
+        <div className="card-head" style={{ padding: '10px 14px' }}>
           <div>
-            <h3 style={{ fontSize: 18, color: '#0f172a' }}>Company Profile</h3>
-            <p className="text-muted" style={{ marginTop: 4, fontSize: 13 }}>Application profile and identity settings.</p>
+            <h3 style={{ fontSize: '13px', margin: 0, fontWeight: 700 }}>Company Profile</h3>
+            <p className="text-muted" style={{ fontSize: '10px', marginTop: '1px', marginBottom: 0 }}>Application profile and identity settings.</p>
           </div>
         </div>
         
-        <div className="card-body" style={{ padding: '24px' }}>
+        <div className="card-body" style={{ padding: '12px 14px' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', fontSize: 14 }}>
+            <div style={{ textAlign: 'center', padding: '16px 0', color: '#64748b', fontSize: 12 }}>
               Loading settings...
             </div>
           ) : (
             <form onSubmit={handleSave}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 28 }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: '#475569' }}>Company Name</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-3">
+                <div className="form-group mb-0 md:col-span-2">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Company Name</label>
                   <Input 
                     value={settings.company_name} 
                     onChange={e => setSettings({...settings, company_name: e.target.value})} 
                     required 
+                    style={{ height: 30, fontSize: 11 }}
                   />
                 </div>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: 13, fontWeight: 500, color: '#475569' }}>Phone Number</label>
-                    <Input 
-                      type="text" 
-                      value={settings.company_phone} 
-                      onChange={e => setSettings({...settings, company_phone: e.target.value})} 
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: 13, fontWeight: 500, color: '#475569' }}>HQ Notification Email</label>
-                    <Input 
-                      type="email" 
-                      value={settings.notification_email} 
-                      onChange={e => setSettings({...settings, notification_email: e.target.value})} 
-                    />
-                  </div>
+                <div className="form-group mb-0">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Phone Number</label>
+                  <Input 
+                    type="text" 
+                    value={settings.company_phone} 
+                    onChange={e => setSettings({...settings, company_phone: e.target.value})} 
+                    style={{ height: 30, fontSize: 11 }}
+                  />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: 13, fontWeight: 500, color: '#475569' }}>Tax ID (NPWP)</label>
-                    <Input 
-                      type="text" 
-                      value={settings.company_tax_id} 
-                      onChange={e => setSettings({...settings, company_tax_id: e.target.value})} 
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: 13, fontWeight: 500, color: '#475569' }}>Website</label>
-                    <Input 
-                      type="text" 
-                      value={settings.company_website} 
-                      onChange={e => setSettings({...settings, company_website: e.target.value})} 
-                    />
-                  </div>
+                <div className="form-group mb-0">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">HQ Notification Email</label>
+                  <Input 
+                    type="email" 
+                    value={settings.notification_email} 
+                    onChange={e => setSettings({...settings, notification_email: e.target.value})} 
+                    style={{ height: 30, fontSize: 11 }}
+                  />
                 </div>
 
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: '#475569' }}>Bank Account Information</label>
+                <div className="form-group mb-0">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Tax ID (NPWP)</label>
+                  <Input 
+                    type="text" 
+                    value={settings.company_tax_id} 
+                    onChange={e => setSettings({...settings, company_tax_id: e.target.value})} 
+                    style={{ height: 30, fontSize: 11 }}
+                  />
+                </div>
+
+                <div className="form-group mb-0">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Website</label>
+                  <Input 
+                    type="text" 
+                    value={settings.company_website} 
+                    onChange={e => setSettings({...settings, company_website: e.target.value})} 
+                    style={{ height: 30, fontSize: 11 }}
+                  />
+                </div>
+
+                <div className="form-group mb-0 md:col-span-2">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Bank Account Information</label>
                   <textarea 
-                    className="form-control" 
+                    className="form-control text-xs" 
                     rows={2}
                     value={settings.bank_account_info} 
                     onChange={e => setSettings({...settings, bank_account_info: e.target.value})} 
                     placeholder="e.g. Bank BCA - 1234567890 a.n. PT Sunrise Daily"
+                    style={{ fontSize: 11, padding: '4px 8px' }}
                   />
-                  <p className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>This information may be used for internal transfer references or payment instructions.</p>
+                  <p className="text-muted" style={{ fontSize: '10px', marginTop: '2px', marginBottom: 0 }}>This information may be used for internal transfer references or payment instructions.</p>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label style={{ fontSize: 13, fontWeight: 500, color: '#475569' }}>Central Warehouse Full Address</label>
+                <div className="form-group mb-0 md:col-span-2">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Central Warehouse Full Address</label>
                   <textarea 
-                    className="form-control" 
-                    rows={3}
+                    className="form-control text-xs" 
+                    rows={2}
                     value={settings.warehouse_address} 
                     onChange={e => setSettings({...settings, warehouse_address: e.target.value})} 
+                    style={{ fontSize: 11, padding: '4px 8px' }}
                   />
-                  <p className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>This address will be printed on the header of Delivery Notes and Purchase Orders (PO).</p>
+                  <p className="text-muted" style={{ fontSize: '10px', marginTop: '2px', marginBottom: 0 }}>This address will be printed on the header of Delivery Notes and Purchase Orders (PO).</p>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <Button variant="primary" type="submit" disabled={saving} style={{ padding: '0 32px', height: 42, fontSize: 14 }}>
+              <div className="flex justify-start">
+                <Button variant="primary" type="submit" disabled={saving} style={{ padding: '0 16px', height: 28, fontSize: 11 }}>
                   {saving ? 'Saving...' : 'Save Settings'}
                 </Button>
               </div>

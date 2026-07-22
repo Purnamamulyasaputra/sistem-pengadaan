@@ -1,20 +1,18 @@
-import { getMokaToken } from '@/lib/queries/moka';
+import { getAllActiveMokaTokens } from '@/lib/queries/moka';
 import { getSyncStatus } from '@/lib/queries/moka_sync';
-import MokaConnectButton from '@/components/moka/MokaConnectButton';
+import { ConnectMokaButton, SyncMasterButton, DisconnectAccountButton } from '@/components/moka/MokaActions';
 import MokaToaster from '@/components/moka/MokaToaster';
-import { SettingsTabs } from '@/components/ui/SettingsTabs';
-import { CheckCircle, XCircle, AlertCircle, Database } from 'lucide-react';
+import { Store, AlertCircle, Database } from 'lucide-react';
 
 export const metadata = {
-    title: 'Integrasi Moka POS - Sunrise Daily',
+    title: 'Moka POS Integration - Sunrise Daily',
 };
 
 export default async function MokaIntegrationPage(props: {
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
     const searchParams = await props.searchParams;
-    const token = await getMokaToken();
-    const isConnected = !!token;
+    const tokens = await getAllActiveMokaTokens();
     
     const syncStatus = await getSyncStatus();
 
@@ -23,97 +21,119 @@ export default async function MokaIntegrationPage(props: {
 
     return (
         <section className="screen">
-            <SettingsTabs />
             <MokaToaster errorMsg={errorMsg} successMsg={successMsg} />
-            <div className="card" style={{ maxWidth: 768, margin: '0 auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-                <div className="card-head" style={{ padding: '20px 24px' }}>
-                    <div>
-                        <h3 style={{ fontSize: 18, color: '#0f172a' }}>Integrasi Moka POS</h3>
-                        <p className="text-muted" style={{ marginTop: 4, fontSize: 13 }}>
-                            Kelola koneksi akun Moka POS ER Coffee Lab untuk sinkronisasi otomatis Master Item, Laporan Penjualan, dan Transaksi.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="card-body" style={{ padding: 0 }}>
-                <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isConnected ? 'bg-green-100' : 'bg-gray-100'}`}>
-                            {isConnected ? (
-                                <CheckCircle className="w-6 h-6 text-[#016e3f]" />
-                            ) : (
-                                <XCircle className="w-6 h-6 text-gray-400" />
-                            )}
-                        </div>
+            <div className="card">
+                <div className="card-head" style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6' }}>
+                    <div className="flex justify-between items-center w-full">
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-800">Status Koneksi</h2>
-                            <p className={`text-sm font-medium ${isConnected ? 'text-[#016e3f]' : 'text-gray-500'}`}>
-                                {isConnected ? 'Tersambung (ER Coffee Lab)' : 'Belum Tersambung'}
+                            <h3 style={{ fontSize: '16px', margin: 0, fontWeight: 700, color: '#111827' }}>Moka POS Accounts</h3>
+                            <p className="text-muted" style={{ fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>
+                                Manage your connected Moka POS accounts for automatic synchronization of Master Items, Sales Reports, and Transactions.
                             </p>
                         </div>
+                        <div className="flex items-center gap-3">
+                            {tokens.length > 0 && <SyncMasterButton />}
+                            <ConnectMokaButton />
+                        </div>
                     </div>
-                    
-                    <MokaConnectButton isConnected={isConnected} />
                 </div>
 
-                {isConnected && (
-                    <div className="p-6 bg-gray-50 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                <Database className="w-4 h-4 text-gray-500" />
-                                Informasi API Token
-                            </h3>
-                            <div className="space-y-3">
-                                <div>
-                                    <p className="text-xs text-gray-500 mb-1">Access Token (Disamarkan)</p>
-                                    <code className="text-xs bg-white px-2 py-1 rounded border border-gray-200 text-gray-600 block truncate">
-                                        {token.access_token.substring(0, 10)}*********************
-                                    </code>
+                <div className="card-body bg-gray-50/30" style={{ padding: '20px' }}>
+                    {tokens.length === 0 ? (
+                        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center shadow-sm">
+                            <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <Store className="w-6 h-6" />
+                            </div>
+                            <h4 className="text-sm font-bold text-gray-900 mb-1">No Accounts Connected</h4>
+                            <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
+                                You haven't connected any Moka POS accounts yet. Click the button above to add your first account.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                            
+                            {/* Left Column: Accounts List */}
+                            <div className="lg:col-span-2 space-y-4">
+                                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                    <Database className="w-4 h-4 text-[#016e3f]" />
+                                    Connected Accounts ({tokens.length})
+                                </h3>
+                                
+                                <div className="space-y-3">
+                                    {tokens.map((token: any) => (
+                                        <div key={token.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-gray-300 transition-colors">
+                                            <div className="flex items-start sm:items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-[#016e3f]/10 text-[#016e3f] flex items-center justify-center shrink-0">
+                                                    <Store className="w-5 h-5" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-gray-900">{token.account_name || `Account ID: ${token.business_id}`}</h4>
+                                                    {token.account_email && (
+                                                        <p className="text-[11px] text-gray-500 mt-0.5">{token.account_email}</p>
+                                                    )}
+                                                    <div className="flex items-center gap-2 mt-1.5">
+                                                        <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">
+                                                            ID: {token.business_id}
+                                                        </span>
+                                                        <span className="text-[10px] flex items-center gap-1 font-medium text-[#016e3f] bg-[#016e3f]/10 px-1.5 py-0.5 rounded border border-[#016e3f]/20">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-[#016e3f] animate-pulse"></span>
+                                                            Active
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="shrink-0 pt-3 sm:pt-0 border-t sm:border-0 border-gray-100 w-full sm:w-auto flex justify-end">
+                                                <DisconnectAccountButton 
+                                                    businessId={token.business_id} 
+                                                    accountName={token.account_name || 'Account'} 
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div>
-                                    <p className="text-xs text-gray-500 mb-1">Izin Akses (Scope)</p>
-                                    <div className="flex flex-wrap gap-1">
-                                        {token.scope.split(' ').map((s: string) => (
-                                            <span key={s} className="text-[10px] uppercase font-semibold tracking-wide bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100">
-                                                {s}
-                                            </span>
+                            </div>
+
+                            {/* Right Column: Sync Status Summary */}
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 text-[#016e3f]" />
+                                    Global Sync Status
+                                </h3>
+                                
+                                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                    <p className="text-[11px] text-gray-500 mb-4 pb-3 border-b border-gray-100">
+                                        This shows the latest successful synchronization time across all connected accounts.
+                                    </p>
+                                    
+                                    <div className="divide-y divide-gray-100">
+                                        {[
+                                            { label: 'Profile & Outlets', date: syncStatus.business },
+                                            { label: 'Master Items & Menus', date: syncStatus.items },
+                                            { label: 'Sales Reports', date: syncStatus.sales },
+                                            { label: 'Transaction Details', date: syncStatus.transactions },
+                                            { label: 'Customer Database', date: syncStatus.customers },
+                                        ].map((item, idx) => (
+                                            <div key={idx} className="flex justify-between items-center py-2.5 first:pt-0 last:pb-0">
+                                                <span className="text-[11.5px] font-medium text-gray-700">{item.label}</span>
+                                                {item.date ? (
+                                                    <span className="text-[10px] font-bold text-[#016e3f] bg-[#016e3f]/10 px-2 py-0.5 rounded border border-[#016e3f]/10">
+                                                        {new Date(item.date).toLocaleString('en-US', {
+                                                            day: '2-digit', month: 'short', year: 'numeric',
+                                                            hour: '2-digit', minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Never synced</span>
+                                                )}
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div>
-                            <h3 className="text-sm font-semibold text-gray-700 mb-3">Status Sinkronisasi Terakhir</h3>
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between items-center py-1 border-b border-gray-200 border-dashed">
-                                    <span className="text-gray-600">Profil & Outlet</span>
-                                    <span className={`italic ${syncStatus.business ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
-                                        {syncStatus.business ? new Date(syncStatus.business).toLocaleString('id-ID') : 'Belum pernah disinkronkan'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center py-1 border-b border-gray-200 border-dashed">
-                                    <span className="text-gray-600">Master Item / Menu</span>
-                                    <span className={`italic ${syncStatus.items ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
-                                        {syncStatus.items ? new Date(syncStatus.items).toLocaleString('id-ID') : 'Belum pernah disinkronkan'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center py-1 border-b border-gray-200 border-dashed">
-                                    <span className="text-gray-600">Laporan Penjualan</span>
-                                    <span className={`italic ${syncStatus.sales ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
-                                        {syncStatus.sales ? new Date(syncStatus.sales).toLocaleString('id-ID') : 'Belum pernah disinkronkan'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center py-1">
-                                    <span className="text-gray-600">Rincian Transaksi</span>
-                                    <span className={`italic ${syncStatus.transactions ? 'text-green-600 font-medium' : 'text-gray-400'}`}>
-                                        {syncStatus.transactions ? new Date(syncStatus.transactions).toLocaleString('id-ID') : 'Belum pernah disinkronkan'}
-                                    </span>
-                                </div>
-                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
                 </div>
             </div>
         </section>

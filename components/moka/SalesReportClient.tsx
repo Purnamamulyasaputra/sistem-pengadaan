@@ -1,9 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Calendar, Filter, RefreshCw, Download, Search, DollarSign, ShoppingCart, Percent, TrendingUp, TrendingDown, Store } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar, Filter, RefreshCw, Download, Search, DollarSign, ShoppingCart, Percent, TrendingUp, TrendingDown, Store, Package, ChevronLeft, ChevronRight, BarChart2, Table as TableIcon } from 'lucide-react';
 import { Toast } from '@/components/ui/Toast';
 import { useRouter } from 'next/navigation';
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    Cell
+} from 'recharts';
 
 interface Outlet {
     id: string;
@@ -37,43 +47,62 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
     const [startDate, setStartDate] = useState(initialStartDate);
     const [endDate, setEndDate] = useState(initialEndDate);
     const [isSyncing, setIsSyncing] = useState(false);
-    const [tab, setTab] = useState('sales');
-    
+
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
     const [toastOpen, setToastOpen] = useState(false);
 
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isFiltering, setIsFiltering] = useState(false);
+    const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
 
-    // Calculate KPIs
-    const filteredData = initialSalesData.filter(item => 
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+    const [isFiltering, setIsFiltering] = useState(false);
+    const [page, setPage] = useState(1);
+    const ITEMS_PER_PAGE = 20;
+
+    useEffect(() => {
+        setPage(1);
+    }, [searchTerm, selectedOutlet, startDate, endDate]);
+
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        setPage(1);
+        setSearchTerm(searchInput);
+    };
+
+    const filteredData = useMemo(() => {
+        return initialSalesData.filter(item =>
+            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+    }, [initialSalesData, searchTerm]);
 
     const totalUnitsSold = filteredData.reduce((sum, item) => sum + item.item_sold, 0);
     const totalGrossSales = filteredData.reduce((sum, item) => sum + item.gross_sales, 0);
     const totalNetSales = filteredData.reduce((sum, item) => sum + item.net_sales, 0);
     const totalRefund = filteredData.reduce((sum, item) => sum + item.refund, 0);
-    
-    // Average margin calculation (Net Sales - COGS) / Net Sales
+    const totalDiscounts = filteredData.reduce((sum, item) => sum + item.discount, 0);
+
     const totalCogs = filteredData.reduce((sum, item) => sum + item.cogs, 0);
     const avgMargin = totalNetSales > 0 ? ((totalNetSales - totalCogs) / totalNetSales) * 100 : 0;
 
+    const topProducts = useMemo(() => {
+        return [...filteredData]
+            .sort((a, b) => b.net_sales - a.net_sales)
+            .slice(0, 10);
+    }, [filteredData]);
+
     const formatRp = (val: number) => 'Rp ' + val.toLocaleString('id-ID');
+    const formatShortRp = (val: number) => {
+        if (val >= 1000000) return 'Rp ' + (val / 1000000).toFixed(1) + 'M';
+        if (val >= 1000) return 'Rp ' + (val / 1000).toFixed(0) + 'K';
+        return 'Rp ' + val;
+    };
 
     const showToast = (message: string, type: 'success' | 'error' | 'info') => {
         setToastMessage(message);
         setToastType(type);
         setToastOpen(true);
-    };
-
-    const handleFilter = () => {
-        setIsFiltering(true);
-        router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${selectedOutlet}`);
-        // simulate loading state finish after a short delay since router.push doesn't return a promise in App Router
-        setTimeout(() => setIsFiltering(false), 1000);
     };
 
     const handleSync = async () => {
@@ -90,10 +119,9 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                 })
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Gagal sinkronisasi data.');
-            
-            showToast(data.message || 'Sinkronisasi berhasil', 'success');
-            // Refresh to load new data
+            if (!res.ok) throw new Error(data.message || 'Failed to sync data.');
+
+            showToast(data.message || 'Sync successful', 'success');
             router.refresh();
         } catch (error: any) {
             showToast(error.message, 'error');
@@ -103,182 +131,373 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
         }
     };
 
-    const tabDefs = [
-        { key: 'sales', label: 'Item Sales' },
-        { key: 'cogs', label: 'COGS Comparison' },
-        { key: 'top', label: 'Top Products' }
-    ];
+    const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
 
     return (
         <div className="space-y-4">
-            {/* Header Card with KPIs */}
-            <div className="card">
-                <div className="card-head flex justify-between items-center">
-                    <div>
-                        <h3>Laporan Penjualan (Moka POS)</h3>
-                    </div>
-                    <div className="flex gap-2">
-                        <button 
-                            onClick={handleSync}
-                            disabled={isSyncing}
-                            className="btn btn-primary"
-                        >
-                            <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} /> 
-                            {isSyncing ? 'Menarik...' : 'Tarik Data Moka'}
-                        </button>
-                    </div>
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                    <h1 className="text-[20px] font-bold text-gray-900 font-['Cabin']">Sales Summary</h1>
+                    <p className="text-[13px] text-gray-500 mt-0.5 flex items-center gap-2">
+                        <span>Monitor your business performance from Moka POS</span>
+                        <span className="inline-block w-1 h-1 rounded-full bg-gray-300"></span>
+                        <span className="text-gray-400">Last synced: {lastSync ? new Date(lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
+                    </p>
                 </div>
-
-                {/* Stats Row */}
-                <div style={{ display: 'flex', gap: 0, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                    {[
-                        { label: 'Total Units Sold', value: totalUnitsSold.toLocaleString('id-ID'), iconColor: '#475569', icon: ShoppingCart },
-                        { label: 'Gross Sales', value: formatRp(totalGrossSales), iconColor: '#475569', icon: DollarSign },
-                        { label: 'Net Sales', value: formatRp(totalNetSales), iconColor: '#15803d', icon: TrendingUp },
-                        { label: 'Avg Margin', value: avgMargin.toFixed(1) + '%', iconColor: '#15803d', icon: Percent },
-                        { label: 'Total Refund', value: formatRp(totalRefund), iconColor: '#b91c1c', icon: TrendingDown },
-                    ].map((s, i) => {
-                        const Icon = s.icon;
-                        return (
-                            <div key={i} style={{
-                                flex: '1 1 140px', padding: '12px 16px', borderRight: i < 4 ? '1px solid var(--border)' : 'none',
-                                display: 'flex', flexDirection: 'column', gap: 4
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <Icon size={14} strokeWidth={2.5} style={{ color: s.iconColor }} />
-                                    <div className="muted" style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>{s.label}</div>
-                                </div>
-                                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--foreground)' }}>{s.value}</div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Sync Info Row */}
-                <div style={{ display: 'flex', gap: 16, padding: '12px 20px', borderTop: '1px solid var(--border)', background: '#f8fafc' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{
-                            background: '#016e3f', color: '#ffffff',
-                            padding: '2px 10px', borderRadius: 99, fontSize: 12, fontWeight: 600,
-                        }}>Status</span>
-                        <span className="muted" style={{ fontSize: 12 }}>
-                            Terakhir ditarik: {lastSync ? new Date(lastSync).toLocaleString('id-ID') : 'Belum pernah ditarik'}
-                        </span>
-                    </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                        onClick={handleSync}
+                        disabled={isSyncing}
+                        className={`btn flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-medium text-[12px] transition-colors shadow-sm w-full sm:w-auto ${isSyncing ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#016e3f] text-white hover:bg-[#015933]'}`}
+                    >
+                        <RefreshCw size={13} className={`${isSyncing ? 'animate-spin' : ''}`} />
+                        {isSyncing ? 'Syncing...' : 'Sync Moka Data'}
+                    </button>
                 </div>
             </div>
 
-            {/* Main Content Card */}
-            <div className="card">
-                {/* Tabs */}
-                <div className="tabs" style={{ marginBottom: 0 }}>
-                    {tabDefs.map(t => (
-                        <button
-                            key={t.key}
-                            className={`tab${tab === t.key ? ' active' : ''}`}
-                            onClick={() => setTab(t.key)}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Net Sales</div>
+                        <div className="p-1 rounded bg-emerald-50 text-emerald-600"><TrendingUp size={12} /></div>
+                    </div>
+                    <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{formatRp(totalNetSales)}</div>
+                    <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1">
+                        Gross: <span className="font-medium text-gray-600">{formatRp(totalGrossSales)}</span>
+                    </div>
                 </div>
 
-                {/* Filters Row */}
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 200, maxWidth: 300 }}>
-                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                            type="text"
-                            placeholder="Cari nama item..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="input"
-                            style={{ paddingLeft: '36px', width: '100%' }}
-                        />
+                <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Items Sold</div>
+                        <div className="p-1 rounded bg-blue-50 text-blue-600"><Package size={12} /></div>
                     </div>
-                    
-                    <select 
-                        value={selectedOutlet}
-                        onChange={(e) => {
-                            setSelectedOutlet(e.target.value);
-                            setIsFiltering(true);
-                            router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${e.target.value}`);
-                            setTimeout(() => setIsFiltering(false), 1000);
-                        }}
-                        className="input"
-                        style={{ width: '200px' }}
+                    <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{totalUnitsSold.toLocaleString('id-ID')}</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Total quantity sold</div>
+                </div>
+                
+                <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Refunds</div>
+                        <div className="p-1 rounded bg-red-50 text-red-600"><TrendingDown size={12} /></div>
+                    </div>
+                    <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{formatRp(totalRefund)}</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Total refunded amount</div>
+                </div>
+
+                <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Discounts</div>
+                        <div className="p-1 rounded bg-amber-50 text-amber-600"><Percent size={12} /></div>
+                    </div>
+                    <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{formatRp(totalDiscounts)}</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Total discount given</div>
+                </div>
+
+                <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Avg Margin</div>
+                        <div className="p-1 rounded bg-[#016e3f]/10 text-[#016e3f]"><DollarSign size={12} /></div>
+                    </div>
+                    <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{avgMargin.toFixed(1)}%</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Net Sales vs COGS</div>
+                </div>
+            </div>
+
+            {/* View Toggle Bar (Data Table & Top Products Buttons) */}
+            <div className="flex justify-end mt-3 mb-3">
+                <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                    <button
+                        onClick={() => setViewMode('table')}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-[13px] font-medium transition-all ${viewMode === 'table' ? 'bg-[#016e3f] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        <option value="">Semua Outlet</option>
-                        {outlets.map(o => (
-                            <option key={o.id} value={o.id}>{o.name}</option>
-                        ))}
-                    </select>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <input 
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="input"
-                        />
-                        <span className="muted">s/d</span>
-                        <input 
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="input"
-                        />
-                    </div>
-                    
-                    <button onClick={handleFilter} disabled={isFiltering} className="btn btn-outline" style={{ height: 38 }}>
-                        <Filter size={14} className={isFiltering ? 'animate-spin' : ''} /> {isFiltering ? 'Memuat...' : 'Terapkan Filter'}
+                        <TableIcon size={14} />
+                        Data Table
                     </button>
+                    <button
+                        onClick={() => setViewMode('chart')}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-[13px] font-medium transition-all ${viewMode === 'chart' ? 'bg-[#016e3f] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <BarChart2 size={14} />
+                        Top Products Chart
+                    </button>
+                </div>
+            </div>
 
-                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="muted" style={{ fontSize: 13 }}>{filteredData.length} items found</span>
+            {/* Bar Chart Section */}
+            {viewMode === 'chart' && (
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-[14px] font-bold text-gray-900 font-['Cabin']">Top 10 Best Selling Products (By Revenue)</h3>
+                        
+                        {/* Filters in Chart view */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-md px-2.5 py-1.5 shadow-sm">
+                                <Calendar size={13} className="text-gray-400" />
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => {
+                                        setStartDate(e.target.value);
+                                        setIsFiltering(true);
+                                        router.push(`/sales-report?startDate=${e.target.value}&endDate=${endDate}&outletId=${selectedOutlet}`);
+                                        setTimeout(() => setIsFiltering(false), 1000);
+                                    }}
+                                    className="bg-transparent text-[12px] text-gray-700 font-medium focus:outline-none cursor-pointer"
+                                />
+                                <span className="text-gray-300 text-[10px] font-bold mx-0.5">TO</span>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => {
+                                        setEndDate(e.target.value);
+                                        setIsFiltering(true);
+                                        router.push(`/sales-report?startDate=${startDate}&endDate=${e.target.value}&outletId=${selectedOutlet}`);
+                                        setTimeout(() => setIsFiltering(false), 1000);
+                                    }}
+                                    className="bg-transparent text-[12px] text-gray-700 font-medium focus:outline-none cursor-pointer"
+                                />
+                            </div>
+
+                            <select
+                                value={selectedOutlet}
+                                onChange={(e) => {
+                                    setSelectedOutlet(e.target.value);
+                                    setIsFiltering(true);
+                                    router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${e.target.value}`);
+                                    setTimeout(() => setIsFiltering(false), 1000);
+                                }}
+                                className="bg-white border border-gray-200 text-[11px] text-gray-700 font-medium rounded-md px-2 py-1 focus:outline-none focus:border-[#016e3f] shadow-sm w-auto max-w-[130px] truncate cursor-pointer"
+                            >
+                                <option value="">All Outlets</option>
+                                {outlets.map(o => (
+                                    <option key={o.id} value={o.id}>{o.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="p-4 h-[300px] w-full">
+                        {topProducts.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={topProducts}
+                                    margin={{ top: 10, right: 10, left: 20, bottom: 20 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                    <XAxis
+                                        dataKey="name"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 10, fill: '#64748b' }}
+                                        tickFormatter={(value) => value.length > 15 ? value.substring(0, 15) + '...' : value}
+                                        angle={-20}
+                                        textAnchor="end"
+                                        interval={0}
+                                        height={45}
+                                    />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 10, fill: '#64748b' }}
+                                        tickFormatter={formatShortRp}
+                                        width={60}
+                                    />
+                                    <Tooltip
+                                        cursor={{ fill: 'rgba(1, 110, 63, 0.05)' }}
+                                        formatter={(value: any) => [formatRp(Number(value || 0)), 'Net Sales']}
+                                        labelStyle={{ fontSize: 12, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}
+                                        contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        itemStyle={{ fontSize: 12, color: '#016e3f', fontWeight: 600 }}
+                                    />
+                                    <Bar dataKey="net_sales" radius={[4, 4, 0, 0]}>
+                                        {topProducts.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={index === 0 ? '#016e3f' : '#34d399'} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                                <TrendingDown size={32} className="mb-2 opacity-50" />
+                                <p className="text-[13px]">No sales data available for chart</p>
+                            </div>
+                        )}
                     </div>
                 </div>
+            )}
 
-                {/* Data Table */}
-                <div className="table-responsive">
-                    {filteredData.length === 0 ? (
-                        <div style={{ padding: '60px 20px', textAlign: 'center' }}>
-                            <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-bold text-gray-900 mb-2 font-['Cabin']">Tidak Ada Data</h3>
-                            <p className="text-sm text-gray-500 max-w-md mx-auto">
-                                Belum ada data penjualan pada rentang tanggal ini atau kata kunci tidak ditemukan. Silakan sesuaikan filter Anda atau klik "Tarik Data Moka".
-                            </p>
-                        </div>
-                    ) : (
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>KATEGORI</th>
-                                    <th>NAMA ITEM / VARIAN</th>
-                                    <th>SKU</th>
-                                    <th style={{ textAlign: 'right' }}>UNIT TERJUAL</th>
-                                    <th style={{ textAlign: 'right' }}>GROSS SALES</th>
-                                    <th style={{ textAlign: 'right' }}>NET SALES</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredData.map((item, idx) => (
-                                    <tr key={idx}>
-                                        <td className="muted">{item.category_name}</td>
-                                        <td style={{ fontWeight: 600 }}>{item.name}</td>
-                                        <td className="muted">{item.sku || '-'}</td>
-                                        <td style={{ textAlign: 'right' }}>{item.item_sold.toLocaleString('id-ID')}</td>
-                                        <td style={{ textAlign: 'right' }}>{formatRp(item.gross_sales)}</td>
-                                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--foreground)' }}>{formatRp(item.net_sales)}</td>
-                                    </tr>
+            {/* Table Section */}
+            {viewMode === 'table' && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-gray-100 flex flex-wrap gap-2.5 justify-between items-center bg-gray-50/50">
+                        {/* Search and Filters inline */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <form onSubmit={handleSearch} className="relative w-[140px] sm:w-[160px]">
+                                <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                                <input
+                                    type="text"
+                                    placeholder="Search item..."
+                                    value={searchInput}
+                                    onChange={(e) => {
+                                        setSearchInput(e.target.value);
+                                        setSearchTerm(e.target.value);
+                                        setPage(1);
+                                    }}
+                                    className="w-full text-[11px] border border-gray-200 rounded-md pl-6 pr-2 py-1 focus:outline-none focus:border-[#016e3f] bg-white shadow-sm"
+                                />
+                                <button type="submit" className="hidden">Search</button>
+                            </form>
+
+                            {/* Date Filter */}
+                            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-md px-2 py-1 shadow-sm">
+                                <Calendar size={11} className="text-gray-400" />
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => {
+                                        setStartDate(e.target.value);
+                                        setIsFiltering(true);
+                                        router.push(`/sales-report?startDate=${e.target.value}&endDate=${endDate}&outletId=${selectedOutlet}`);
+                                        setTimeout(() => setIsFiltering(false), 1000);
+                                    }}
+                                    className="bg-transparent text-[11px] text-gray-700 font-medium focus:outline-none cursor-pointer"
+                                />
+                                <span className="text-gray-300 text-[9px] font-bold mx-0.5">TO</span>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => {
+                                        setEndDate(e.target.value);
+                                        setIsFiltering(true);
+                                        router.push(`/sales-report?startDate=${startDate}&endDate=${e.target.value}&outletId=${selectedOutlet}`);
+                                        setTimeout(() => setIsFiltering(false), 1000);
+                                    }}
+                                    className="bg-transparent text-[11px] text-gray-700 font-medium focus:outline-none cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Outlet Filter */}
+                            <select
+                                value={selectedOutlet}
+                                onChange={(e) => {
+                                    setSelectedOutlet(e.target.value);
+                                    setIsFiltering(true);
+                                    router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${e.target.value}`);
+                                    setTimeout(() => setIsFiltering(false), 1000);
+                                }}
+                                className="bg-white border border-gray-200 text-[11px] text-gray-700 font-medium rounded-md px-2 py-1 focus:outline-none focus:border-[#016e3f] shadow-sm w-auto max-w-[125px] truncate cursor-pointer"
+                            >
+                                <option value="">All Outlets</option>
+                                {outlets.map(o => (
+                                    <option key={o.id} value={o.id}>{o.name}</option>
                                 ))}
-                            </tbody>
-                        </table>
+                            </select>
+
+                            {isFiltering && (
+                                <div className="text-[11px] font-medium text-[#016e3f] animate-pulse flex items-center gap-1.5 ml-1">
+                                    <RefreshCw size={12} className="animate-spin" /> Updating...
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="text-[12px] text-gray-500 whitespace-nowrap">
+                            <span className="font-medium text-gray-900">{filteredData.length}</span> items found
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto min-h-[300px]">
+                        {filteredData.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-4 py-8">
+                                <Package className="w-6 h-6 text-gray-400 mx-auto mb-2" />
+                                <h3 className="text-[15px] font-bold text-gray-900 font-['Cabin']">No Data Found</h3>
+                                <p className="text-[12px] text-gray-500 mt-1.5 max-w-sm">
+                                    No sales data found for this date range or keyword. Try adjusting filters or syncing from Moka.
+                                </p>
+                            </div>
+                        ) : (
+                            <table className="w-full text-left border-collapse min-w-[800px]">
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-[11px] font-bold uppercase tracking-wider">
+                                        <th className="px-4 py-3 w-[15%] text-left align-middle">CATEGORY</th>
+                                        <th className="px-4 py-3 w-[35%] text-left align-middle">ITEM / VARIANT NAME</th>
+                                        <th className="px-4 py-3 w-[15%] text-left align-middle">SKU</th>
+                                        <th className="px-4 py-3 w-[10%] text-center align-middle">UNITS SOLD</th>
+                                        <th className="px-4 py-3 w-[12%] text-right align-middle">GROSS SALES</th>
+                                        <th className="px-4 py-3 w-[13%] text-right align-middle">NET SALES</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 text-[13px]">
+                                    {filteredData.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map((item, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
+                                            <td className="px-4 py-2.5 text-gray-500 text-left align-middle truncate max-w-[150px]">{item.category_name || '-'}</td>
+                                            <td className="px-4 py-2.5 font-medium text-gray-900 text-left align-middle truncate max-w-[300px]">{item.name}</td>
+                                            <td className="px-4 py-2.5 text-gray-500 text-left align-middle truncate max-w-[150px]">{item.sku || '-'}</td>
+                                            <td className="px-4 py-2.5 font-semibold text-gray-700 text-center align-middle">{item.item_sold.toLocaleString('id-ID')}</td>
+                                            <td className="px-4 py-2.5 text-gray-500 text-right align-middle">{formatRp(item.gross_sales)}</td>
+                                            <td className="px-4 py-2.5 font-bold text-emerald-700 text-right align-middle">{formatRp(item.net_sales)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+
+                    {totalPages > 1 && (
+                        <div className="px-5 py-3 border-t border-gray-100 flex flex-wrap justify-between items-center gap-3">
+                            <div className="text-[12px] text-gray-500">
+                                Showing <span className="font-medium text-gray-900">{(page - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-medium text-gray-900">{Math.min(page * ITEMS_PER_PAGE, filteredData.length)}</span> of <span className="font-medium text-gray-900">{filteredData.length.toLocaleString('id-ID')}</span> items
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className={`w-7 h-7 flex items-center justify-center rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors ${page === 1 ? 'opacity-40 pointer-events-none' : ''}`}
+                                >
+                                    <ChevronLeft className="w-4 h-4" />
+                                </button>
+
+                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                    let pageNum = page;
+                                    if (totalPages <= 5) pageNum = i + 1;
+                                    else if (page <= 3) pageNum = i + 1;
+                                    else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+                                    else pageNum = page - 2 + i;
+
+                                    if (pageNum < 1 || pageNum > totalPages) return null;
+
+                                    return (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => setPage(pageNum)}
+                                            className={`w-7 h-7 flex items-center justify-center rounded border text-[12px] font-medium transition-colors ${
+                                                page === pageNum
+                                                    ? 'bg-[#016e3f] text-white border-[#016e3f]'
+                                                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    );
+                                })}
+
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page >= totalPages}
+                                    className={`w-7 h-7 flex items-center justify-center rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors ${page >= totalPages ? 'opacity-40 pointer-events-none' : ''}`}
+                                >
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </div>
-            </div>
+            )}
 
-            <Toast 
+            <Toast
                 isOpen={toastOpen}
                 message={toastMessage}
                 type={toastType}

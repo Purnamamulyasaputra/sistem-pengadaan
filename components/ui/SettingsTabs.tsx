@@ -24,14 +24,6 @@ export function SettingsTabs() {
       >
         User Management
       </Link>
-
-      <Link 
-        href="/settings/moka" 
-        className={`tab ${pathname.startsWith('/settings/moka') ? 'active' : ''}`} 
-        style={{ textDecoration: 'none', color: pathname.startsWith('/settings/moka') ? undefined : 'inherit' }}
-      >
-        Moka Integrations
-      </Link>
     </div>
   );
 }

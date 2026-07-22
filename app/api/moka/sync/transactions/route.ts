@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { syncSales } from "@/lib/queries/moka_sales";
-import { query } from "@/lib/db";
+import { syncTransactions } from "@/lib/queries/moka_transactions";
 import { getAllActiveMokaTokens } from "@/lib/queries/moka";
 
 export async function POST(req: Request) {
@@ -12,27 +11,24 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: "start_date and end_date are required (YYYY-MM-DD)" }, { status: 400 });
         }
 
+        // Convert start_date to epoch (WIB) 00:00:00
+        const start = new Date(`${start_date}T00:00:00+07:00`);
+        const sinceEpoch = Math.floor(start.getTime() / 1000);
+
+        // Convert end_date to epoch (WIB) 23:59:59
+        const end = new Date(`${end_date}T23:59:59+07:00`);
+        const untilEpoch = Math.floor(end.getTime() / 1000);
+
         const tokens = await getAllActiveMokaTokens();
         if (!tokens || tokens.length === 0) {
             return NextResponse.json({ message: "No active Moka accounts connected." }, { status: 400 });
         }
 
-        // Before inserting new data for the same period, we should probably delete the old data
-        // for this exact period and outlet to prevent duplicates
-        let deleteQuery = 'DELETE FROM moka_item_sales WHERE period_start = $1 AND period_end = $2';
-        let deleteParams: any[] = [start_date, end_date];
-        if (outlet_id) {
-            deleteQuery += ' AND outlet_id = $3';
-            deleteParams.push(outlet_id);
-        } else {
-            // Note: If no outlet_id is provided, it deletes for all outlets across all accounts for that period.
-            // This is acceptable behavior for a full date-range sync.
-        }
-        await query(deleteQuery, deleteParams);
-
         let totalCount = 0;
+        let totalItemsCount = 0;
+
         const results = await Promise.allSettled(
-            tokens.map(token => syncSales(token, start_date, end_date, outlet_id))
+            tokens.map(token => syncTransactions(token, sinceEpoch, untilEpoch, outlet_id))
         );
 
         let successful = 0;
@@ -40,6 +36,7 @@ export async function POST(req: Request) {
             if (r.status === 'fulfilled' && r.value.success) {
                 successful++;
                 if (r.value.count) totalCount += r.value.count;
+                if (r.value.itemsCount) totalItemsCount += r.value.itemsCount;
             }
         });
 
@@ -48,15 +45,15 @@ export async function POST(req: Request) {
         if (successful > 0) {
             return NextResponse.json({ 
                 success: true, 
-                message: `Successfully synced ${totalCount} sales data across ${successful}/${totalAccounts} accounts.`,
+                message: `Successfully synced ${totalCount} transactions (${totalItemsCount} items) across ${successful}/${totalAccounts} accounts.`,
                 count: totalCount
             });
         } else {
-            return NextResponse.json({ message: 'Failed to sync sales for all connected accounts.' }, { status: 500 });
+            return NextResponse.json({ message: 'Failed to sync transactions for all connected accounts.' }, { status: 500 });
         }
 
     } catch (error: any) {
-        console.error("Sync sales API error:", error);
+        console.error("Sync transactions API error:", error);
         return NextResponse.json(
             { message: error.message || "Internal server error" },
             { status: 500 }

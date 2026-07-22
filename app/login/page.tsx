@@ -10,7 +10,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [fullLoading, setFullLoading] = useState(false);
   const [error, setError] = useState('');
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -28,7 +29,7 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     setError('');
     try {
       const res = await fetch('/api/auth/login', {
@@ -38,22 +39,24 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        setError(data.message || 'Login gagal');
-        setLoading(false);
+        setError(data.message || 'Email atau password salah');
+        setSubmitting(false);
       } else {
+        setSubmitting(false);
+        setFullLoading(true);
         router.push('/dashboard');
         router.refresh();
       }
     } catch {
       setError('Terjadi kesalahan. Coba lagi.');
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
   return (
     <>
       <Toast isOpen={toastOpen} message={toastMessage} type="error" onClose={() => setToastOpen(false)} />
-      <FullScreenLoader open={loading} label="Loading" />
+      <FullScreenLoader open={fullLoading} label="Loading" />
       <div style={{ minHeight: '100dvh', background: 'linear-gradient(135deg, #014f2d 0%, #016e3f 50%, #1a7a4a 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
         {/* Background decoration */}
         <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
@@ -126,7 +129,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={loading}
+                  disabled={submitting || fullLoading}
                   style={{ width: '100%', marginTop: 2, padding: '10px', fontSize: 13.5, fontWeight: 600, letterSpacing: 0.3 }}
                 >
                   Masuk
@@ -142,10 +145,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setLoading(true);
+                  setFullLoading(true);
                   signIn('google', { callbackUrl: '/dashboard' });
                 }}
-                disabled={loading}
+                disabled={submitting || fullLoading}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px', fontSize: 13.5, fontWeight: 600, color: '#1e293b', cursor: 'pointer', transition: 'all 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.background = '#f8fafc')}
                 onMouseOut={(e) => (e.currentTarget.style.background = 'white')}

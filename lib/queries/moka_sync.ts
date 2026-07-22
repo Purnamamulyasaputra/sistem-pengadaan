@@ -1,10 +1,12 @@
 import { query } from "@/lib/db";
-import { fetchMokaAPI } from "@/lib/moka/api";
+import { fetchMokaAPIWithToken } from "@/lib/moka/api";
 
-export async function syncBusinessAndOutlets() {
+export async function syncBusinessAndOutlets(token: any) {
     try {
+        if (!token) throw new Error("No token provided");
+
         // 1. Fetch businesses
-        const bizData = await fetchMokaAPI('/v1/businesses');
+        const bizData = await fetchMokaAPIWithToken(token, '/v1/businesses');
         const businesses = bizData.data?.business ? [bizData.data.business] : [];
 
         const timestamp = new Date();
@@ -30,7 +32,7 @@ export async function syncBusinessAndOutlets() {
             ]);
 
             // 2. Fetch outlets for this business
-            const outletData = await fetchMokaAPI(`/v1/businesses/${biz.id}/outlets`);
+            const outletData = await fetchMokaAPIWithToken(token, `/v1/businesses/${biz.id}/outlets`);
             const outlets = outletData.data?.outlets || [];
 
             for (const out of outlets) {
@@ -62,10 +64,12 @@ export async function syncBusinessAndOutlets() {
     }
 }
 
-export async function syncItems() {
+export async function syncItems(token: any) {
     try {
-        // Get all active outlets
-        const outRes = await query('SELECT id FROM moka_outlets');
+        if (!token) throw new Error("No token provided");
+
+        // Get active outlets specific to this business
+        const outRes = await query('SELECT id FROM moka_outlets WHERE business_id = $1', [token.business_id]);
         const outlets = outRes.rows;
         const timestamp = new Date();
         let totalItemsSynced = 0;
@@ -75,7 +79,7 @@ export async function syncItems() {
             let totalPages = 1;
 
             do {
-                const itemData = await fetchMokaAPI(`/v1/outlets/${out.id}/items?page=${page}&per_page=50&include_deleted=false`);
+                const itemData = await fetchMokaAPIWithToken(token, `/v1/outlets/${out.id}/items?page=${page}&per_page=50&include_deleted=false`);
                 const items = itemData.data?.items || [];
                 totalPages = itemData.data?.total_pages || 1;
 
@@ -133,15 +137,28 @@ export async function getSyncStatus() {
         const bizRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_business');
         const itemRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_items');
         const salesRes = await query('SELECT MAX(sync_date) as last_sync FROM moka_item_sales');
+        const trxRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_transactions');
+        const custRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_customers');
 
         return {
             business: bizRes.rows[0]?.last_sync || null,
             items: itemRes.rows[0]?.last_sync || null,
             sales: salesRes.rows[0]?.last_sync || null,
-            transactions: null // Will add when transaction table sync is done
+            transactions: trxRes.rows[0]?.last_sync || null,
+            customers: custRes.rows[0]?.last_sync || null,
         };
     } catch (error) {
         console.error("Error getting sync status:", error);
-        return { business: null, items: null, sales: null, transactions: null };
+        return { business: null, items: null, sales: null, transactions: null, customers: null };
+    }
+}
+
+export async function getMokaOutlets() {
+    try {
+        const res = await query('SELECT id, name FROM moka_outlets ORDER BY name ASC');
+        return res.rows;
+    } catch (error) {
+        console.error("Error fetching moka outlets:", error);
+        return [];
     }
 }

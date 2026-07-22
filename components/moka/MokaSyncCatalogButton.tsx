@@ -25,22 +25,22 @@ export default function MokaSyncCatalogButton() {
             const bizRes = await fetch('/api/moka/sync/business', { method: 'POST' });
             if (!bizRes.ok) {
                 const data = await bizRes.json();
-                throw new Error(`Gagal sinkronisasi profil: ${data.message || 'Server error'}`);
+                throw new Error(`Failed to sync profile: ${data.message || 'Server error'}`);
             }
 
             // Fase 3: Sync Items
             const itemRes = await fetch('/api/moka/sync/items', { method: 'POST' });
             if (!itemRes.ok) {
                 const data = await itemRes.json();
-                throw new Error(`Gagal sinkronisasi produk: ${data.message || 'Server error'}`);
+                throw new Error(`Failed to sync products: ${data.message || 'Server error'}`);
             }
             const itemData = await itemRes.json();
 
-            showToast(`Sinkronisasi berhasil! ${itemData.message || 'Produk diperbarui.'}`, 'success');
+            showToast(`Sync successful! ${itemData.message || 'Products updated.'}`, 'success');
             router.refresh();
         } catch (error: any) {
             console.error(error);
-            showToast(error.message || 'Terjadi kesalahan jaringan', 'error');
+            showToast(error.message || 'Network error occurred', 'error');
         } finally {
             setIsSyncing(false);
         }
@@ -60,7 +60,7 @@ export default function MokaSyncCatalogButton() {
                 className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 flex items-center gap-2 transition-colors disabled:opacity-50"
             >
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-[#016e3f]' : ''}`} />
-                {isSyncing ? 'Menyinkronkan...' : 'Sinkronisasi Ulang'}
+                {isSyncing ? 'Syncing...' : 'Sync Now'}
             </button>
         </>
     );

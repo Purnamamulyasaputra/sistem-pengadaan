@@ -78,10 +78,10 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
 
     return (
         <section className="page-content">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-2.5">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 font-['Cabin']">Moka POS Catalog</h1>
-                    <p className="text-sm text-gray-500 mt-1">Sinkronisasi master produk dan harga dari Moka POS</p>
+                    <h1 className="text-[18px] font-bold text-gray-900 font-['Cabin']">Moka POS Catalog</h1>
+                    <p className="text-[12px] text-gray-500 mt-0.5">Sync product master and pricing from Moka POS</p>
                 </div>
                 <div className="flex gap-3">
                     <MokaSyncCatalogButton />
@@ -92,8 +92,8 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
                 {items.length === 0 ? (
                     <div className="px-6 py-12 text-center text-gray-500">
                         <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                        <p>Belum ada data dari Moka POS.</p>
-                        <p className="text-xs mt-1">Silakan lakukan Sinkronisasi Ulang.</p>
+                        <p>No data available from Moka POS.</p>
+                        <p className="text-xs mt-1">Please click Sync Now to fetch data.</p>
                     </div>
                 ) : (
                     <MokaCatalogTableClient items={items} recipes={allRecipes} />
@@ -102,7 +102,7 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
                 {totalPages > 1 && (
                     <div className="pagination border-t-0">
                         <div className="info">
-                            Menampilkan <span className="font-medium text-gray-900">{(safePage - 1) * ITEMS_PER_PAGE + 1}</span> hingga <span className="font-medium text-gray-900">{Math.min(safePage * ITEMS_PER_PAGE, allItems.length)}</span> dari <span className="font-medium text-gray-900">{allItems.length}</span> item
+                            Showing <span className="font-medium text-gray-900">{(safePage - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-medium text-gray-900">{Math.min(safePage * ITEMS_PER_PAGE, allItems.length)}</span> of <span className="font-medium text-gray-900">{allItems.length}</span> items
                         </div>
                         <div className="page-btns">
                             <Link

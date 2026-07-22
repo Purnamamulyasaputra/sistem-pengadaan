@@ -49,7 +49,6 @@ const CENTRAL_MENU: NavItem[] = [
   { section: 'MASTER DATA & INVENTORY' },
   { href: '/master-data/items', label: 'Master Items', icon: <Icon name="db" /> },
   { href: '/hpp', label: 'Menus & COGS', icon: <Icon name="hpp" /> },
-  { href: '/master-data/moka-catalog', label: 'Moka POS Catalog', icon: <Icon name="package" /> },
   { href: '/stock-card', label: 'Central Stock', icon: <Icon name="clipboard" /> },
   { href: '/opname/central', label: 'Stock Opname', icon: <Icon name="package" /> },
   
@@ -59,8 +58,14 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/requests', label: 'Outlet Requests', icon: <Icon name="list" /> },
   { href: '/delivery-orders', label: 'Delivery Orders', icon: <Icon name="truck" /> },
 
+  { section: 'MOKA POS INTEGRATION' },
+  { href: '/master-data/moka-catalog', label: 'Moka POS Catalog', icon: <Icon name="package" /> },
+  { href: '/sales-report', label: 'Sales Summary', icon: <Icon name="trend" /> },
+  { href: '/sales-report/transactions', label: 'Transaction Data', icon: <Icon name="list" /> },
+  { href: '/sales-report/customers', label: 'Customer Data', icon: <Icon name="user" /> },
+  { href: '/settings/moka', label: 'Moka Settings', icon: <Icon name="settings" /> },
+
   { section: 'REPORTS & SETTINGS' },
-  { href: '/sales-report', label: 'Moka Sales Report', icon: <Icon name="trend" /> },
   { href: '/reports/sales-analytics', label: 'Sales Analytics', icon: <Icon name="trend" /> },
   { href: '/reports', label: 'System Reports', icon: <Icon name="report" /> },
   { href: '/settings', label: 'System Settings', icon: <Icon name="settings" /> },
@@ -257,6 +262,15 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
               return <div key={i} className="nav-section-title">{item.section}</div>;
             }
             let isActive = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href!);
+            
+            // Fix overlapping active states for Moka POS Integration
+            if (item.href === '/sales-report') {
+              isActive = pathname === '/sales-report';
+            }
+            if (item.href === '/settings') {
+              isActive = pathname === '/settings' || pathname.startsWith('/settings/profile');
+            }
+            
             if (item.href === '/purchase-orders' && pathname.startsWith('/goods-receipt')) isActive = true;
             if (item.href === '/reports') {
               isActive = pathname === '/reports' || pathname.startsWith('/reports/profit-projection') || pathname.startsWith('/price-history');
@@ -264,8 +278,9 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             if (item.href === '/reports/sales-analytics') {
               isActive = pathname.startsWith('/reports/sales-analytics');
             }
-            if (item.href === '/master-data/items' && pathname.startsWith('/master-data')) isActive = true;
+            if (item.href === '/master-data/items' && pathname.startsWith('/master-data/items')) isActive = true;
             if (item.href === '/hpp' && pathname.startsWith('/hpp')) isActive = true;
+
             return (
               <Link
                 key={item.href}

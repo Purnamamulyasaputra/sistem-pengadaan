@@ -1,13 +1,15 @@
-import { fetchMokaAPI } from '@/lib/moka/api';
+import { fetchMokaAPIWithToken } from '@/lib/moka/api';
 import { query } from '@/lib/db';
 
-export async function syncSales(startDateStr: string, endDateStr: string, outletId?: string) {
+export async function syncSales(token: any, startDateStr: string, endDateStr: string, outletId?: string) {
     try {
+        if (!token) throw new Error("No token provided");
+
         let outlets = [];
         if (outletId) {
             outlets = [{ id: outletId }];
         } else {
-            const outRes = await query('SELECT id FROM moka_outlets');
+            const outRes = await query('SELECT id FROM moka_outlets WHERE business_id = $1', [token.business_id]);
             outlets = outRes.rows;
         }
 
@@ -15,9 +17,13 @@ export async function syncSales(startDateStr: string, endDateStr: string, outlet
         let totalItemsSynced = 0;
 
         for (const out of outlets) {
-            // Moka API v3 item_sales
-            // Example format: 2024-01-01
-            const salesData = await fetchMokaAPI(`/v3/outlets/${out.id}/reports/item_sales?start=${startDateStr}&end=${endDateStr}`);
+            // Convert YYYY-MM-DD to DD/MM/YYYY for Moka API v3 item_sales
+            const [sYear, sMonth, sDay] = startDateStr.split('-');
+            const [eYear, eMonth, eDay] = endDateStr.split('-');
+            const mokaStart = `${sDay}/${sMonth}/${sYear}`;
+            const mokaEnd = `${eDay}/${eMonth}/${eYear}`;
+
+            const salesData = await fetchMokaAPIWithToken(token, `/v3/outlets/${out.id}/reports/item_sales?start=${mokaStart}&end=${mokaEnd}`);
             
             // Wait, does Moka API v3 return data.item_sales? 
             // Often it's data.item_sales or data.reports. Let's assume data.item_sales or data

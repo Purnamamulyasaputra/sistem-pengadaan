@@ -1,8 +1,9 @@
 import { query } from "@/lib/db";
 
+// Mempertahankan kompatibilitas untuk kode lama (mengambil 1 token aktif sembarang)
 export async function getMokaToken() {
     try {
-        const result = await query('SELECT * FROM moka_tokens ORDER BY id DESC LIMIT 1');
+        const result = await query('SELECT * FROM moka_tokens WHERE is_active = true ORDER BY created_at DESC LIMIT 1');
         return result.rows[0] || null;
     } catch (error) {
         console.error("Error fetching Moka token:", error);
@@ -10,18 +11,61 @@ export async function getMokaToken() {
     }
 }
 
+// BARU: Mengambil seluruh token Moka yang aktif (Multi-Account)
+export async function getAllActiveMokaTokens() {
+    try {
+        const result = await query('SELECT * FROM moka_tokens WHERE is_active = true ORDER BY created_at ASC');
+        return result.rows || [];
+    } catch (error) {
+        console.error("Error fetching all active Moka tokens:", error);
+        return [];
+    }
+}
+
+// BARU: Mengambil token Moka berdasarkan ID Bisnis spesifik
+export async function getMokaTokenByBusinessId(businessId: number) {
+    try {
+        const result = await query('SELECT * FROM moka_tokens WHERE business_id = $1 LIMIT 1', [businessId]);
+        return result.rows[0] || null;
+    } catch (error) {
+        console.error(`Error fetching Moka token for business ${businessId}:`, error);
+        return null;
+    }
+}
+
+// DIPERBARUI: Menyimpan token dengan UPSERT berdasarkan business_id
 export async function saveMokaToken(
     accessToken: string,
     refreshToken: string,
     expiresIn: number,
     scope: string,
-    mokaCreatedAt: number
+    mokaCreatedAt: number,
+    businessId: number,
+    accountName: string,
+    accountEmail: string = ''
 ) {
+    if (!businessId) {
+        console.error("FATAL ERROR: saveMokaToken called with null/undefined businessId!");
+        return false;
+    }
     try {
         await query(`
-            INSERT INTO moka_tokens (access_token, refresh_token, expires_in, scope, moka_created_at)
-            VALUES ($1, $2, $3, $4, $5)
-        `, [accessToken, refreshToken, expiresIn, scope, mokaCreatedAt]);
+            INSERT INTO moka_tokens (
+                access_token, refresh_token, expires_in, scope, moka_created_at, 
+                business_id, account_name, account_email, is_active
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+            ON CONFLICT (business_id) DO UPDATE SET
+                access_token = EXCLUDED.access_token,
+                refresh_token = EXCLUDED.refresh_token,
+                expires_in = EXCLUDED.expires_in,
+                scope = EXCLUDED.scope,
+                moka_created_at = EXCLUDED.moka_created_at,
+                account_name = EXCLUDED.account_name,
+                account_email = EXCLUDED.account_email,
+                is_active = true,
+                updated_at = CURRENT_TIMESTAMP
+        `, [accessToken, refreshToken, expiresIn, scope, mokaCreatedAt, businessId, accountName, accountEmail]);
         return true;
     } catch (error) {
         console.error("Error saving Moka token:", error);
@@ -29,6 +73,18 @@ export async function saveMokaToken(
     }
 }
 
+// BARU: Menonaktifkan satu akun Moka tanpa menghapus data
+export async function deactivateMokaAccount(businessId: number) {
+    try {
+        await query('UPDATE moka_tokens SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE business_id = $1', [businessId]);
+        return true;
+    } catch (error) {
+        console.error(`Error deactivating Moka account ${businessId}:`, error);
+        return false;
+    }
+}
+
+// Dipertahankan: menghapus semua token (hati-hati)
 export async function deleteMokaTokens() {
     try {
         await query('DELETE FROM moka_tokens');

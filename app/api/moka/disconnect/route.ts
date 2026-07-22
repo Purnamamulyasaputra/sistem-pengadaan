@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { deleteMokaTokens } from '@/lib/queries/moka';
+import { deactivateMokaAccount } from '@/lib/queries/moka';
 
 export async function POST(request: NextRequest) {
     try {
-        const success = await deleteMokaTokens();
+        const body = await request.json();
+        const { business_id } = body;
+
+        if (!business_id) {
+            return NextResponse.json({ error: 'business_id is required' }, { status: 400 });
+        }
+
+        const success = await deactivateMokaAccount(Number(business_id));
+        
         if (success) {
-            return NextResponse.json({ success: true });
+            return NextResponse.json({ success: true, message: `Account ${business_id} deactivated successfully` });
         } else {
-            return NextResponse.json({ error: 'Failed to disconnect from database' }, { status: 500 });
+            return NextResponse.json({ error: 'Failed to disconnect account from database' }, { status: 500 });
         }
     } catch (error) {
+        console.error("Disconnect error:", error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
