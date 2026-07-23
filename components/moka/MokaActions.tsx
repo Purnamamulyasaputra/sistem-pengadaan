@@ -40,7 +40,7 @@ export function ConnectMokaButton() {
                 return;
             }
             setShowModal(false);
-            window.open(data.auth_url, '_blank');
+            window.location.href = data.auth_url;
         } catch {
             setError('Network error. Please try again.');
         } finally {

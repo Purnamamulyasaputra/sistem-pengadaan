@@ -4,11 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { Search, RefreshCw, Users, Mail, Phone, ChevronDown, ChevronRight } from 'lucide-react';
 import { Toast } from '@/components/ui/Toast';
 
-export default function CustomerTableClient() {
+export default function CustomerTableClient({ outletsGrouped, activeOutletId }: { outletsGrouped?: Record<string, any[]>, activeOutletId?: string }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchInput, setSearchInput] = useState('');
     const [sort, setSort] = useState('newest');
     const [hasEmail, setHasEmail] = useState('all');
+    const [outletId, setOutletId] = useState(activeOutletId || '');
     const [page, setPage] = useState(1);
     const [data, setData] = useState<any[]>([]);
     const [total, setTotal] = useState(0);
@@ -33,7 +34,7 @@ export default function CustomerTableClient() {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`/api/moka/customers?page=${page}&limit=${ITEMS_PER_PAGE}&search=${encodeURIComponent(searchTerm)}&sort=${sort}&hasEmail=${hasEmail}`);
+            const res = await fetch(`/api/moka/customers?page=${page}&limit=${ITEMS_PER_PAGE}&search=${encodeURIComponent(searchTerm)}&sort=${sort}&hasEmail=${hasEmail}&outlet_id=${outletId}`);
             const json = await res.json();
             if (json.success) {
                 setData(json.data);
@@ -48,7 +49,7 @@ export default function CustomerTableClient() {
 
     useEffect(() => {
         fetchData();
-    }, [page, searchTerm, sort, hasEmail]);
+    }, [page, searchTerm, sort, hasEmail, outletId]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -108,22 +109,49 @@ export default function CustomerTableClient() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 
                 {/* Search & Filter Bar */}
-                <div className="px-3 py-2 border-b border-gray-100 flex flex-col sm:flex-row gap-3 justify-between items-center bg-gray-50/50">
-                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <form onSubmit={handleSearch} className="relative w-full sm:w-[280px]">
+                <div className="px-3 py-2 border-b border-gray-100 flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center bg-gray-50/50">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <form onSubmit={handleSearch} className="relative" style={{ width: '220px', minWidth: '220px' }}>
                             <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                             <input
                                 type="text"
                                 placeholder="Search name or phone..."
                                 value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setSearchInput(val);
+                                    setSearchTerm(val);
+                                    setPage(1);
+                                }}
                                 className="w-full text-[12px] border border-gray-200 rounded-md pl-8 pr-3 py-1.5 focus:outline-none focus:border-[#016e3f] focus:ring-1 focus:ring-[#016e3f] bg-white shadow-sm"
                             />
                             <button type="submit" className="hidden">Search</button>
                         </form>
+                        
+                        {outletsGrouped && Object.keys(outletsGrouped).length > 0 && (
+                            <select 
+                                value={outletId} 
+                                onChange={(e) => { setOutletId(e.target.value); setPage(1); }}
+                                style={{ width: '145px', minWidth: '145px' }}
+                                className="text-[12px] border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#016e3f] bg-white text-gray-700 shadow-sm"
+                            >
+                                <option value="">All Outlets</option>
+                                {Object.entries(outletsGrouped).map(([bizName, outlets]) => (
+                                    <optgroup key={bizName} label={`--- ${bizName} ---`}>
+                                        {outlets.map((o: any) => (
+                                            <option key={o.id} value={o.id}>
+                                                {o.name}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </select>
+                        )}
+
                         <select 
                             value={hasEmail} 
                             onChange={(e) => { setHasEmail(e.target.value); setPage(1); }}
+                            style={{ width: '130px', minWidth: '130px' }}
                             className="text-[12px] border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#016e3f] bg-white text-gray-700 shadow-sm"
                         >
                             <option value="all">All Customers</option>
@@ -133,6 +161,7 @@ export default function CustomerTableClient() {
                         <select 
                             value={sort} 
                             onChange={(e) => { setSort(e.target.value); setPage(1); }}
+                            style={{ width: '130px', minWidth: '130px' }}
                             className="text-[12px] border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#016e3f] bg-white text-gray-700 shadow-sm"
                         >
                             <option value="newest">Newest First</option>

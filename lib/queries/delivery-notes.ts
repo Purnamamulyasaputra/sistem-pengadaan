@@ -47,6 +47,22 @@ export async function createDeliveryNote(data: {
     const dn = dnRes.rows[0];
 
     for (const item of data.items) {
+      // Validate physical stock
+      const balRes = await client.query(
+        `SELECT log.ending_balance, i.name as item_name 
+         FROM inventory_logs log
+         JOIN items i ON i.id = log.item_id 
+         WHERE log.item_id = $1 
+         ORDER BY log.created_at DESC LIMIT 1`,
+        [item.item_id]
+      );
+      const currentStock = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
+      const itemName = balRes.rows[0]?.item_name ?? 'Unknown Item';
+      
+      if (item.qty_shipped > currentStock) {
+        throw new Error(`Stok ${itemName} tidak mencukupi. Dikirim: ${item.qty_shipped}, Tersedia: ${currentStock}`);
+      }
+
       const uniqueBarcode = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000).toString();
       await client.query(
         `INSERT INTO delivery_note_items (delivery_note_id, order_item_id, item_id, qty_shipped, price_at_shipment, keterangan, unique_barcode)
@@ -176,6 +192,10 @@ export async function recordScan(data: {
       );
       const oldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
       const newBalance = oldBalance - dni.qty_shipped;
+
+      if (newBalance < 0) {
+        throw new Error(`Gagal Scan OUT: Stok fisik tersisa ${oldBalance}, tidak cukup untuk mengirim ${dni.qty_shipped}`);
+      }
 
       await client.query(
         `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)

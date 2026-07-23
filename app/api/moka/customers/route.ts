@@ -9,6 +9,7 @@ export async function GET(req: Request) {
         const search = searchParams.get('search') || '';
         const sort = searchParams.get('sort') || 'newest';
         const hasEmail = searchParams.get('hasEmail') || 'all';
+        const outletId = searchParams.get('outlet_id') || '';
         
         const offset = (page - 1) * limit;
 
@@ -27,6 +28,13 @@ export async function GET(req: Request) {
 
         const params: any[] = [];
         let paramCount = 1;
+
+        if (outletId) {
+            queryStr += ` AND outlet_id = $${paramCount}`;
+            countQueryStr += ` AND outlet_id = $${paramCount}`;
+            params.push(outletId);
+            paramCount++;
+        }
 
         if (search) {
             queryStr += ` AND (name ILIKE $${paramCount} OR phone ILIKE $${paramCount})`;

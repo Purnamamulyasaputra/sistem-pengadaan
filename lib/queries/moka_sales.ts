@@ -7,7 +7,8 @@ export async function syncSales(token: any, startDateStr: string, endDateStr: st
 
         let outlets = [];
         if (outletId) {
-            outlets = [{ id: outletId }];
+            const outRes = await query('SELECT id FROM moka_outlets WHERE id = $1 AND business_id = $2', [outletId, token.business_id]);
+            outlets = outRes.rows;
         } else {
             const outRes = await query('SELECT id FROM moka_outlets WHERE business_id = $1', [token.business_id]);
             outlets = outRes.rows;
@@ -34,13 +35,26 @@ export async function syncSales(token: any, startDateStr: string, endDateStr: st
                 for (const sale of sales) {
                     await query(`
                         INSERT INTO moka_item_sales (
-                            outlet_id, name, sku, category_name, item_sold, item_refunded, 
+                            business_id, outlet_id, name, sku, category_name, item_sold, item_refunded, 
                             gross_sales, discount, refund, net_sales, cogs, gross_profit, 
                             period_start, period_end, sync_date
                         ) VALUES (
-                            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+                            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
                         )
+                        ON CONFLICT (outlet_id, name, category_name, period_start, period_end) DO UPDATE SET
+                            business_id = EXCLUDED.business_id,
+                            sku = EXCLUDED.sku,
+                            item_sold = EXCLUDED.item_sold,
+                            item_refunded = EXCLUDED.item_refunded,
+                            gross_sales = EXCLUDED.gross_sales,
+                            discount = EXCLUDED.discount,
+                            refund = EXCLUDED.refund,
+                            net_sales = EXCLUDED.net_sales,
+                            cogs = EXCLUDED.cogs,
+                            gross_profit = EXCLUDED.gross_profit,
+                            sync_date = EXCLUDED.sync_date
                     `, [
+                        token.business_id,
                         out.id, 
                         sale.name || sale.item_name, 
                         sale.sku || null, 

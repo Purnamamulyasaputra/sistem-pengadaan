@@ -64,7 +64,17 @@ export async function fetchMokaAPIWithToken(token: any, endpoint: string, method
     }
 
     const baseUrl = 'https://api.mokapos.com';
-    const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+    let url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+
+    try {
+        const urlObj = new URL(url);
+        if (urlObj.searchParams.has('access_token')) {
+            urlObj.searchParams.delete('access_token');
+            url = urlObj.toString();
+        }
+    } catch (e) {
+        console.warn("Invalid URL format:", url);
+    }
 
     const headers: Record<string, string> = {
         'Authorization': `Bearer ${token.access_token}`,

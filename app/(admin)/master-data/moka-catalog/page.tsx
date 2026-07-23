@@ -8,8 +8,8 @@ export const metadata = {
     title: 'Moka POS Catalog - Sunrise Daily',
 };
 
-async function getMokaCatalog() {
-    const res = await query(`
+async function getMokaCatalog(outletId?: string, search?: string, status?: string) {
+    let sql = `
         SELECT 
             i.id as item_id,
             i.name as item_name,
@@ -21,18 +21,67 @@ async function getMokaCatalog() {
             v.cogs,
             v.sku,
             v.in_stock,
-            (SELECT name FROM recipes r WHERE r.id = i.internal_recipe_id) as mapped_recipe_name
+            (SELECT name FROM recipes r WHERE r.id = i.internal_recipe_id) as mapped_recipe_name,
+            o.name as outlet_name
         FROM moka_items i
         LEFT JOIN moka_item_variants v ON i.id = v.item_id
-        ORDER BY i.category_name, i.name, v.name
-    `);
+        LEFT JOIN moka_outlets o ON i.outlet_id = o.id
+        WHERE 1=1
+    `;
+    const params: any[] = [];
+    let paramCount = 1;
+
+    if (outletId) {
+        sql += ` AND i.outlet_id = $${paramCount}`;
+        params.push(outletId);
+        paramCount++;
+    }
+
+    if (search) {
+        sql += ` AND i.name ILIKE $${paramCount}`;
+        params.push(`%${search}%`);
+        paramCount++;
+    }
+
+    if (status === 'mapped') {
+        sql += ` AND i.internal_recipe_id IS NOT NULL`;
+    } else if (status === 'unmapped') {
+        sql += ` AND i.internal_recipe_id IS NULL`;
+    }
+
+    sql += ` ORDER BY i.category_name, i.name, v.name`;
+
+    const res = await query(sql, params);
     return res.rows;
 }
 
-export default async function MokaCatalogPage(props: { searchParams: Promise<{ page?: string }> }) {
+async function getOutletsWithBusiness() {
+    const res = await query(`
+        SELECT o.id, o.name as outlet_name, t.account_name as business_name
+        FROM moka_outlets o
+        LEFT JOIN moka_tokens t ON o.business_id = t.business_id
+        ORDER BY t.account_name, o.name
+    `);
+    
+    // Group outlets by business
+    const grouped: Record<string, any[]> = {};
+    for (const row of res.rows) {
+        const bName = row.business_name || 'Unknown Business';
+        if (!grouped[bName]) grouped[bName] = [];
+        grouped[bName].push({ id: row.id, name: row.outlet_name });
+    }
+    return grouped;
+}
+
+export default async function MokaCatalogPage(props: { searchParams: Promise<{ page?: string, outlet_id?: string, search?: string, status?: string }> }) {
     const searchParams = await props.searchParams;
     const page = parseInt(searchParams?.page || '1', 10);
-    const catalog = await getMokaCatalog();
+    const outletId = searchParams?.outlet_id || '';
+    const search = searchParams?.search || '';
+    const status = searchParams?.status || 'all';
+    
+    const catalog = await getMokaCatalog(outletId, search, status);
+    const outletsGrouped = await getOutletsWithBusiness();
 
     // Fetch active recipes for mapping dropdown
     const recipesRes = await query(`
@@ -52,6 +101,7 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
                 category: row.category_name,
                 internal_recipe_id: row.internal_recipe_id,
                 mapped_recipe_name: row.mapped_recipe_name,
+                outlet_name: row.outlet_name,
                 variants: []
             };
         }
@@ -76,6 +126,16 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
     const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
     const items = allItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
+    const buildQueryString = (pageOverride?: number) => {
+        const params = new URLSearchParams();
+        if (pageOverride && pageOverride > 1) params.set('page', pageOverride.toString());
+        if (outletId) params.set('outlet_id', outletId);
+        if (search) params.set('search', search);
+        if (status && status !== 'all') params.set('status', status);
+        const qs = params.toString();
+        return qs ? `?${qs}` : '';
+    };
+
     return (
         <section className="page-content">
             <div className="flex justify-between items-center mb-2.5">
@@ -89,24 +149,31 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                {items.length === 0 ? (
-                    <div className="px-6 py-12 text-center text-gray-500">
+                <MokaCatalogTableClient 
+                    items={items} 
+                    recipes={allRecipes} 
+                    outletsGrouped={outletsGrouped} 
+                    activeOutletId={outletId}
+                    activeSearch={search}
+                    activeStatus={status} 
+                />
+                
+                {items.length === 0 && (
+                    <div className="px-6 py-12 text-center text-gray-500 border-t border-gray-100">
                         <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                        <p>No data available from Moka POS.</p>
-                        <p className="text-xs mt-1">Please click Sync Now to fetch data.</p>
+                        <p>No data available for the selected filters.</p>
+                        <p className="text-xs mt-1">Please try changing the filters or click Sync Now.</p>
                     </div>
-                ) : (
-                    <MokaCatalogTableClient items={items} recipes={allRecipes} />
                 )}
                 
                 {totalPages > 1 && (
-                    <div className="pagination border-t-0">
+                    <div className="pagination border-t border-gray-200">
                         <div className="info">
-                            Showing <span className="font-medium text-gray-900">{(safePage - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-medium text-gray-900">{Math.min(safePage * ITEMS_PER_PAGE, allItems.length)}</span> of <span className="font-medium text-gray-900">{allItems.length}</span> items
+                            Showing <span className="font-medium text-gray-900">{(safePage - 1) * ITEMS_PER_PAGE + (items.length > 0 ? 1 : 0)}</span> to <span className="font-medium text-gray-900">{Math.min(safePage * ITEMS_PER_PAGE, allItems.length)}</span> of <span className="font-medium text-gray-900">{allItems.length}</span> items
                         </div>
                         <div className="page-btns">
                             <Link
-                                href={safePage > 1 ? `/master-data/moka-catalog?page=${safePage - 1}` : '#'}
+                                href={`/master-data/moka-catalog${buildQueryString(safePage > 1 ? safePage - 1 : 1)}`}
                                 className={`page-btn flex items-center justify-center ${safePage === 1 ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -124,7 +191,7 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
                                 return (
                                     <Link
                                         key={pageNum}
-                                        href={`/master-data/moka-catalog?page=${pageNum}`}
+                                        href={`/master-data/moka-catalog${buildQueryString(pageNum)}`}
                                         className={`page-btn flex items-center justify-center ${safePage === pageNum ? 'active' : ''}`}
                                     >
                                         {pageNum}
@@ -133,7 +200,7 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
                             })}
 
                             <Link
-                                href={safePage < totalPages ? `/master-data/moka-catalog?page=${safePage + 1}` : '#'}
+                                href={`/master-data/moka-catalog${buildQueryString(safePage < totalPages ? safePage + 1 : totalPages)}`}
                                 className={`page-btn flex items-center justify-center ${safePage === totalPages ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <ChevronRight className="w-3.5 h-3.5" />

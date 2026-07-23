@@ -1,15 +1,38 @@
 import { Suspense } from 'react';
 import CustomerTableClient from '@/components/moka/CustomerTableClient';
+import { query } from '@/lib/db';
 
 export const metadata = {
     title: 'Data Pelanggan Moka | Sunrise Daily',
 };
 
-export default function CustomersPage() {
+async function getOutletsWithBusiness() {
+    const res = await query(`
+        SELECT o.id, o.name as outlet_name, t.account_name as business_name
+        FROM moka_outlets o
+        LEFT JOIN moka_tokens t ON o.business_id = t.business_id
+        ORDER BY t.account_name, o.name
+    `);
+    
+    // Group outlets by business
+    const grouped: Record<string, any[]> = {};
+    for (const row of res.rows) {
+        const bName = row.business_name || 'Unknown Business';
+        if (!grouped[bName]) grouped[bName] = [];
+        grouped[bName].push({ id: row.id, name: row.outlet_name });
+    }
+    return grouped;
+}
+
+export default async function CustomersPage(props: { searchParams: Promise<{ outlet_id?: string }> }) {
+    const searchParams = await props.searchParams;
+    const outletId = searchParams?.outlet_id || '';
+    const outletsGrouped = await getOutletsWithBusiness();
+
     return (
         <section className="screen">
             <Suspense fallback={<div className="h-64 flex items-center justify-center">Memuat data...</div>}>
-                <CustomerTableClient />
+                <CustomerTableClient outletsGrouped={outletsGrouped} activeOutletId={outletId} />
             </Suspense>
         </section>
     );

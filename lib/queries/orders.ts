@@ -157,7 +157,8 @@ export async function getOrderRecap(opts?: { status?: string; outletId?: number 
     `SELECT o.id AS order_id, o.outlet_id, outlet.name AS outlet_name, o.order_date, o.delivery_date, o.status,
             oi.id AS order_item_id, oi.item_id, i.name AS item_name, i.purchase_unit, i.smallest_unit, i.conversion_ratio,
             oi.qty_request, oi.qty_approved, oi.smallest_unit_qty, oi.approved_smallest_qty, oi.additional_notes, oi.fulfillment_status, oi.item_status, oi.distribution_price,
-            c.name AS category_name, i.current_average_price
+            c.name AS category_name, i.current_average_price,
+            (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_stock
      FROM orders o
      LEFT JOIN outlets outlet ON outlet.id = o.outlet_id
      LEFT JOIN order_items oi ON oi.order_id = o.id

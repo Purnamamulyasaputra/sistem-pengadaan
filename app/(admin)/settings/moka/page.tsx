@@ -3,6 +3,7 @@ import { getSyncStatus } from '@/lib/queries/moka_sync';
 import { ConnectMokaButton, SyncMasterButton, DisconnectAccountButton } from '@/components/moka/MokaActions';
 import MokaToaster from '@/components/moka/MokaToaster';
 import { Store, AlertCircle, Database } from 'lucide-react';
+import Link from 'next/link';
 
 export const metadata = {
     title: 'Moka POS Integration - Sunrise Daily',
@@ -14,7 +15,8 @@ export default async function MokaIntegrationPage(props: {
     const searchParams = await props.searchParams;
     const tokens = await getAllActiveMokaTokens();
     
-    const syncStatus = await getSyncStatus();
+    const selectedAccountId = searchParams.account_id as string || (tokens.length > 0 ? tokens[0].business_id.toString() : null);
+    const syncStatus = await getSyncStatus(selectedAccountId);
 
     const errorMsg = searchParams.error as string;
     const successMsg = searchParams.success as string;
@@ -60,37 +62,42 @@ export default async function MokaIntegrationPage(props: {
                                 </h3>
                                 
                                 <div className="space-y-3">
-                                    {tokens.map((token: any) => (
-                                        <div key={token.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-gray-300 transition-colors">
-                                            <div className="flex items-start sm:items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-[#016e3f]/10 text-[#016e3f] flex items-center justify-center shrink-0">
-                                                    <Store className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-sm font-bold text-gray-900">{token.account_name || `Account ID: ${token.business_id}`}</h4>
-                                                    {token.account_email && (
-                                                        <p className="text-[11px] text-gray-500 mt-0.5">{token.account_email}</p>
-                                                    )}
-                                                    <div className="flex items-center gap-2 mt-1.5">
-                                                        <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">
-                                                            ID: {token.business_id}
-                                                        </span>
-                                                        <span className="text-[10px] flex items-center gap-1 font-medium text-[#016e3f] bg-[#016e3f]/10 px-1.5 py-0.5 rounded border border-[#016e3f]/20">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-[#016e3f] animate-pulse"></span>
-                                                            Active
-                                                        </span>
+                                    {tokens.map((token: any) => {
+                                        const isSelected = selectedAccountId === token.business_id.toString();
+                                        return (
+                                        <div key={token.id} className={`relative p-4 rounded-xl border transition-colors ${isSelected ? 'bg-green-50/50 border-[#016e3f] shadow-sm ring-1 ring-[#016e3f]/20' : 'bg-white border-gray-200 shadow-sm hover:border-gray-300'}`}>
+                                            <Link href={`?account_id=${token.business_id}`} className="absolute inset-0 z-0 rounded-xl" title="Click to view sync status" />
+                                            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pointer-events-none">
+                                                <div className="flex items-start sm:items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isSelected ? 'bg-[#016e3f] text-white' : 'bg-[#016e3f]/10 text-[#016e3f]'}`}>
+                                                        <Store className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-bold text-gray-900">{token.account_name || `Account ID: ${token.business_id}`}</h4>
+                                                        {token.account_email && (
+                                                            <p className="text-[11px] text-gray-500 mt-0.5">{token.account_email}</p>
+                                                        )}
+                                                        <div className="flex items-center gap-2 mt-1.5">
+                                                            <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">
+                                                                ID: {token.business_id}
+                                                            </span>
+                                                            <span className="text-[10px] flex items-center gap-1 font-medium text-[#016e3f] bg-[#016e3f]/10 px-1.5 py-0.5 rounded border border-[#016e3f]/20">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-[#016e3f] animate-pulse"></span>
+                                                                Active
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            
-                                            <div className="shrink-0 pt-3 sm:pt-0 border-t sm:border-0 border-gray-100 w-full sm:w-auto flex justify-end">
-                                                <DisconnectAccountButton 
-                                                    businessId={token.business_id} 
-                                                    accountName={token.account_name || 'Account'} 
-                                                />
+                                                
+                                                <div className="shrink-0 pt-3 sm:pt-0 border-t sm:border-0 border-gray-100 w-full sm:w-auto flex justify-end pointer-events-auto">
+                                                    <DisconnectAccountButton 
+                                                        businessId={token.business_id} 
+                                                        accountName={token.account_name || 'Account'} 
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             </div>
 
@@ -98,12 +105,14 @@ export default async function MokaIntegrationPage(props: {
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <AlertCircle className="w-4 h-4 text-[#016e3f]" />
-                                    Global Sync Status
+                                    {selectedAccountId ? 'Account Sync Status' : 'Global Sync Status'}
                                 </h3>
                                 
                                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                                     <p className="text-[11px] text-gray-500 mb-4 pb-3 border-b border-gray-100">
-                                        This shows the latest successful synchronization time across all connected accounts.
+                                        {selectedAccountId 
+                                            ? 'This shows the latest successful synchronization time for the selected account.'
+                                            : 'This shows the latest successful synchronization time across all connected accounts.'}
                                     </p>
                                     
                                     <div className="divide-y divide-gray-100">

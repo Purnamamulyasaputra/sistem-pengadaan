@@ -132,13 +132,23 @@ export async function syncItems(token: any) {
     }
 }
 
-export async function getSyncStatus() {
+export async function getSyncStatus(businessId?: number | string | null) {
     try {
-        const bizRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_business');
-        const itemRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_items');
-        const salesRes = await query('SELECT MAX(sync_date) as last_sync FROM moka_item_sales');
-        const trxRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_transactions');
-        const custRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_customers');
+        let bizRes, itemRes, salesRes, trxRes, custRes;
+
+        if (businessId) {
+            bizRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_business WHERE id = $1', [businessId]);
+            itemRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_items WHERE business_id = $1', [businessId]);
+            salesRes = await query('SELECT MAX(sync_date) as last_sync FROM moka_item_sales WHERE business_id = $1', [businessId]);
+            trxRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_transactions t JOIN moka_outlets o ON t.outlet_id = o.id WHERE o.business_id = $1', [businessId]);
+            custRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_customers WHERE business_id = $1', [businessId]);
+        } else {
+            bizRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_business');
+            itemRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_items');
+            salesRes = await query('SELECT MAX(sync_date) as last_sync FROM moka_item_sales');
+            trxRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_transactions');
+            custRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_customers');
+        }
 
         return {
             business: bizRes.rows[0]?.last_sync || null,

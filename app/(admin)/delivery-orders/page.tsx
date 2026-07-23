@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -14,6 +15,7 @@ interface DeliveryNote {
 }
 
 export default function DeliveryOrdersPage() {
+  const router = useRouter();
   const [notes, setNotes] = useState<DeliveryNote[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,12 +61,16 @@ export default function DeliveryOrdersPage() {
                   <th>Destination Outlet</th>
                   <th>Delivery Date</th>
                   <th className="center">Status</th>
-                  <th className="right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {notes.map(n => (
-                  <tr key={n.id}>
+                  <tr 
+                    key={n.id} 
+                    onClick={() => router.push(`/delivery-orders/${n.id}`)}
+                    style={{ cursor: 'pointer' }}
+                    className="hover-bg-muted"
+                  >
                     <td className="font-mono text-primary font-bold">{n.delivery_note_number}</td>
                     <td className="font-bold">{n.outlet_name}</td>
                     <td>{new Date(n.delivery_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
@@ -72,11 +78,6 @@ export default function DeliveryOrdersPage() {
                       <Badge variant={n.status === 'DITERIMA' ? 'green' : n.status === 'DIKIRIM' ? 'blue' : 'gray'}>
                         {n.status}
                       </Badge>
-                    </td>
-                    <td className="right">
-                      <Link href={`/delivery-orders/${n.id}`}>
-                        <Button size="sm" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>View & Scan</Button>
-                      </Link>
                     </td>
                   </tr>
                 ))}

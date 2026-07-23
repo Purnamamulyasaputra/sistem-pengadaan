@@ -50,8 +50,8 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
 
     if (!isOpen || !mokaItem) return null;
 
-    const filteredRecipes = recipes.filter(r => 
-        r.name.toLowerCase().includes(search.toLowerCase()) || 
+    const filteredRecipes = recipes.filter(r =>
+        r.name.toLowerCase().includes(search.toLowerCase()) ||
         (r.category && r.category.toLowerCase().includes(search.toLowerCase()))
     );
 
@@ -78,12 +78,12 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
             }
 
             showToast("Berhasil menautkan item ke resep!", "success");
-            
+
             setTimeout(() => {
                 onClose();
                 router.refresh();
             }, 1000);
-            
+
         } catch (error: any) {
             showToast(error.message, "error");
             setIsSaving(false);
@@ -92,7 +92,7 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
 
     const handleRemoveMapping = async () => {
         if (!confirm("Apakah Anda yakin ingin menghapus tautan item ini?")) return;
-        
+
         setIsSaving(true);
         try {
             const res = await fetch('/api/moka/map-item', {
@@ -105,7 +105,7 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
             });
 
             if (!res.ok) throw new Error('Gagal menghapus penautan.');
-            
+
             showToast("Berhasil menghapus tautan.", "success");
             setTimeout(() => {
                 onClose();
@@ -143,11 +143,11 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
                         <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2">
                             Pilih Master Resep
                         </label>
-                        
+
                         {/* Search Box */}
                         <div className="relative">
                             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                            <input 
+                            <input
                                 type="text"
                                 placeholder="Cari nama resep..."
                                 value={search}
@@ -164,7 +164,7 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
                                 </div>
                             ) : (
                                 filteredRecipes.map(recipe => (
-                                    <div 
+                                    <div
                                         key={recipe.id}
                                         onClick={() => setSelectedRecipeId(recipe.id)}
                                         className={`p-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-gray-50 ${selectedRecipeId === recipe.id ? 'bg-green-50/50' : ''}`}
@@ -186,8 +186,8 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
 
                 <div className="modal-footer px-6 py-4 border-t border-gray-200 bg-white flex justify-between items-center shrink-0">
                     {mokaItem.internal_recipe_id ? (
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={handleRemoveMapping}
                             disabled={isSaving}
                             className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
@@ -197,17 +197,17 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
                     ) : (
                         <div />
                     )}
-                    
+
                     <div className="flex gap-3">
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={onClose}
                             disabled={isSaving}
                             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                         >
                             Batal
                         </button>
-                        <button 
+                        <button
                             type="button"
                             onClick={handleSave}
                             disabled={isSaving || !selectedRecipeId || selectedRecipeId === mokaItem.internal_recipe_id}
@@ -219,7 +219,7 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
                 </div>
             </div>
 
-            <Toast 
+            <Toast
                 isOpen={toast.isOpen}
                 message={toast.message}
                 type={toast.type}

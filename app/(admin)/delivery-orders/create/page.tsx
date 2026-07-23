@@ -6,6 +6,7 @@ import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { Toast } from '@/components/ui/Toast';
 
 export default function CreateDeliveryOrderPage() {
   const router = useRouter();
@@ -73,6 +74,7 @@ export default function CreateDeliveryOrderPage() {
       setOrderItems(selected.items.map((i: any) => ({
         ...i,
         qty_shipped: parseFloat(Number(i.qty_request).toFixed(3)),
+        current_stock: parseFloat(i.current_stock ?? '0'),
         selected: i.item_status === 'READY_DI_GUDANG',
         keterangan: ''
       })));
@@ -95,6 +97,13 @@ export default function CreateDeliveryOrderPage() {
     const selectedItems = orderItems.filter(i => i.selected && i.qty_shipped > 0);
     if (selectedItems.length === 0) {
       setError('Please select at least one valid item to ship.');
+      return;
+    }
+
+    const overStockItems = selectedItems.filter(i => (i.qty_shipped * (Number(i.conversion_ratio) || 1)) > i.current_stock);
+    if (overStockItems.length > 0) {
+      const names = overStockItems.map(i => i.item_name).join(', ');
+      setError(`Stock insufficient for: ${names}. Please reduce the Qty to Ship.`);
       return;
     }
 
@@ -138,17 +147,27 @@ export default function CreateDeliveryOrderPage() {
   return (
     <section className="screen">
       <div className="card" style={{ maxWidth: 1000 }}>
-        <div className="card-head">
+        <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h3>Create Delivery Order</h3>
           </div>
-          <Link href="/delivery-orders">
-            <Button variant="outline" size="sm">Back to List</Button>
-          </Link>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Link href="/delivery-orders">
+              <Button variant="outline" size="sm">Cancel</Button>
+            </Link>
+            <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || !selectedOrderId || orderItems.filter(i => i.selected).length === 0}>
+              {saving ? 'Creating DO...' : 'Generate Delivery Order'}
+            </Button>
+          </div>
         </div>
 
         <div className="card-body flush" style={{ padding: 24 }}>
-          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 20 }}>{error}</div>}
+          <Toast 
+            isOpen={!!error} 
+            message={error} 
+            type="error" 
+            onClose={() => setError('')} 
+          />
 
           <div className="form-grid" style={{ marginBottom: 32 }}>
             <div className="form-group">
@@ -209,17 +228,20 @@ export default function CreateDeliveryOrderPage() {
                     <th>Item</th>
                     <th className="center">Requested Qty</th>
                     <th className="center" style={{ width: 160 }}>Qty to Ship</th>
+                    <th className="center" style={{ width: 150 }}>Available Stock</th>
                     <th className="center" style={{ width: 180 }}>Keterangan</th>
                     <th className="center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orderItems.map(item => (
+                  {orderItems.map(item => {
+                    const isExceeded = (item.qty_shipped * (Number(item.conversion_ratio) || 1)) > item.current_stock;
+                    return (
                     <tr
                       key={item.order_item_id}
                       style={{
                         opacity: item.selected ? 1 : 0.6,
-                        backgroundColor: item.selected ? '#f8fafc' : '#fafafa',
+                        backgroundColor: item.selected ? (isExceeded ? '#fef2f2' : '#f8fafc') : '#fafafa',
                         transition: 'all 0.2s ease-in-out'
                       }}
                     >
@@ -233,6 +255,7 @@ export default function CreateDeliveryOrderPage() {
                       </td>
                       <td className="font-bold">
                         <div>{item.item_name}</div>
+                        {isExceeded && item.selected && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4 }}>Insufficient Stock</div>}
                       </td>
                       <td className="center num font-bold">
                         {parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
@@ -248,12 +271,16 @@ export default function CreateDeliveryOrderPage() {
                             style={{
                               width: 90,
                               height: 32,
-                              borderColor: item.selected ? 'var(--primary)' : 'var(--border)',
-                              background: item.selected ? '#ffffff' : '#f1f5f9'
+                              borderColor: item.selected ? (isExceeded ? 'var(--danger)' : 'var(--primary)') : 'var(--border)',
+                              background: item.selected ? '#ffffff' : '#f1f5f9',
+                              color: isExceeded ? 'var(--danger)' : 'inherit'
                             }}
                           />
                           <span className="muted font-bold" style={{ fontSize: 12, width: 35, textAlign: 'left' }}>{item.purchase_unit}</span>
                         </div>
+                      </td>
+                      <td className="center num font-bold" style={{ color: isExceeded ? 'var(--danger)' : 'var(--muted)' }}>
+                        {parseFloat((item.current_stock / (Number(item.conversion_ratio) || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
                       </td>
                       <td className="center">
                         <input
@@ -278,21 +305,14 @@ export default function CreateDeliveryOrderPage() {
                         </Badge>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {orderItems.length === 0 && (
                     <tr><td colSpan={6} className="center muted" style={{ padding: 32 }}>No items available to ship.</td></tr>
                   )}
                 </tbody>
               </Table>
 
-              <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                <Link href="/delivery-orders">
-                  <Button variant="outline">Cancel</Button>
-                </Link>
-                <Button variant="primary" onClick={handleSave} disabled={saving || orderItems.filter(i => i.selected).length === 0}>
-                  {saving ? 'Creating DO...' : 'Generate Delivery Order'}
-                </Button>
-              </div>
             </>
           ) : (
             <div className="muted" style={{ padding: 40, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 8 }}>
