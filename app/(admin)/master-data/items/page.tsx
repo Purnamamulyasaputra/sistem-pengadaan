@@ -10,6 +10,7 @@ import { Pagination } from '@/components/ui/Pagination';
 import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
 import { Toggle } from '@/components/ui/Toggle';
 import { Toast } from '@/components/ui/Toast';
+import { Select } from '@/components/ui/Select';
 
 interface Item {
   id: number; name: string; category_id: number; category_name: string; barcode?: string;
@@ -98,10 +99,10 @@ export default function ItemsPage() {
 
   async function handleSave() {
     if (!form.name || !form.category_id || !form.purchase_unit || (form.has_conversion && !form.smallest_unit)) {
-      setError('Nama, kategori, satuan beli, dan kelengkapan konversi wajib diisi');
+      setToastInfo({ show: true, msg: 'Nama, kategori, satuan beli, dan kelengkapan konversi wajib diisi', type: 'error' });
       return;
     }
-    setSaving(true); setError('');
+    setSaving(true);
     try {
       const url = editing ? `/api/items/${editing.id}` : '/api/items';
       const method = editing ? 'PATCH' : 'POST';
@@ -121,8 +122,14 @@ export default function ItemsPage() {
         ingredient_id: form.ingredient_id ? Number(form.ingredient_id) : null
       };
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (!data.success) { setError(data.message); return; }
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        setToastInfo({ show: true, msg: 'Terjadi kesalahan server saat menyimpan data.', type: 'error' });
+        return;
+      }
+      if (!data.success) { setToastInfo({ show: true, msg: data.message, type: 'error' }); return; }
       setShowModal(false);
       fetchItems();
     } finally { setSaving(false); }
@@ -170,18 +177,36 @@ export default function ItemsPage() {
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input className="input" placeholder="Cari nama barang..." style={{ width: '200px' }} value={search} onChange={e => setSearch(e.target.value)} />
-              <select className="input" style={{ width: '160px' }} value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-                <option value="">Semua Kategori</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <select className="input" style={{ width: '130px' }} value={filterUnit} onChange={e => setFilterUnit(e.target.value)}>
-                <option value="">Semua Satuan</option>
-                {uniqueUnits.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-              <select className="input" style={{ width: '150px' }} value={filterExpiry} onChange={e => setFilterExpiry(e.target.value)}>
-                <option value="">Semua Kedaluwarsa</option>
-                <option value="SHORT">Hanya Cepat Basi</option>
-              </select>
+              <Select
+                value={catFilter}
+                onChange={val => setCatFilter(val)}
+                options={[
+                  { value: '', label: 'Semua Kategori' },
+                  ...categories.map(c => ({ value: String(c.id), label: c.name }))
+                ]}
+                style={{ width: 160 }}
+                inputStyle={{ height: 32 }}
+              />
+              <Select
+                value={filterUnit}
+                onChange={val => setFilterUnit(val)}
+                options={[
+                  { value: '', label: 'Semua Satuan' },
+                  ...uniqueUnits.map(u => ({ value: u, label: u }))
+                ]}
+                style={{ width: 130 }}
+                inputStyle={{ height: 32 }}
+              />
+              <Select
+                value={filterExpiry}
+                onChange={val => setFilterExpiry(val)}
+                options={[
+                  { value: '', label: 'Semua Kedaluwarsa' },
+                  { value: 'SHORT', label: 'Hanya Cepat Basi' }
+                ]}
+                style={{ width: 150 }}
+                inputStyle={{ height: 32 }}
+              />
             </div>
             <Button variant="primary" size="sm" onClick={openAdd}>+ Tambah Barang</Button>
           </div>
@@ -274,7 +299,6 @@ export default function ItemsPage() {
         }
       >
         <div style={{ padding: '0px' }}>
-          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '20px' }}>
 
             {/* LEFT COLUMN: Main Inputs */}
@@ -303,28 +327,41 @@ export default function ItemsPage() {
                 </div>
                 <div className="form-group" style={{ flex: 1.8, marginBottom: 0 }}>
                   <label className="req">Kategori</label>
-                  <select className="input" value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
-                    <option value="">Pilih kategori...</option>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <Select
+                    value={form.category_id}
+                    onChange={val => setForm(f => ({ ...f, category_id: val }))}
+                    options={[
+                      { value: '', label: 'Pilih kategori...' },
+                      ...categories.map(c => ({ value: String(c.id), label: c.name }))
+                    ]}
+                  />
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: '12px' }}>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <label className="req">Satuan Beli (Terbesar)</label>
-                  <select className="input" value={form.purchase_unit} onChange={e => setForm(f => ({ ...f, purchase_unit: e.target.value }))}>
-                    <option value="">Pilih...</option>
-                    {['Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Roll', 'Pcs'].map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
+                  <Select
+                    value={form.purchase_unit}
+                    onChange={val => setForm(f => ({ ...f, purchase_unit: val }))}
+                    options={[
+                      { value: '', label: 'Pilih...' },
+                      ...['Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Roll', 'Pcs'].map(u => ({ value: u, label: u }))
+                    ]}
+                  />
                 </div>
 
                 <div className="form-group" style={{ flex: 1, marginBottom: 0, opacity: form.has_conversion ? 1 : 0.4, transition: 'opacity 0.2s' }}>
                   <label className="req">Satuan Terkecil (Outlet)</label>
-                  <select className="input" value={form.smallest_unit} onChange={e => setForm(f => ({ ...f, smallest_unit: e.target.value }))} disabled={!form.has_conversion} style={{ cursor: form.has_conversion ? 'pointer' : 'not-allowed' }}>
-                    <option value="">Pilih...</option>
-                    {['gr', 'ml', 'pcs', 'shoot', 'slice', 'lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks', 'Roll', 'Kg', 'Liter', 'Pack'].map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
+                  <Select
+                    value={form.smallest_unit}
+                    onChange={val => setForm(f => ({ ...f, smallest_unit: val }))}
+                    disabled={!form.has_conversion}
+                    options={[
+                      { value: '', label: 'Pilih...' },
+                      ...['gr', 'ml', 'pcs', 'shoot', 'slice', 'lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks', 'Roll', 'Kg', 'Liter', 'Pack'].map(u => ({ value: u, label: u }))
+                    ]}
+                  />
                 </div>
 
                 <div className="form-group" style={{ flex: 1.5, marginBottom: 0, opacity: form.has_conversion ? 1 : 0.4, transition: 'opacity 0.2s' }}>
@@ -348,10 +385,14 @@ export default function ItemsPage() {
                   <input className="input" type="number" min="0" value={form.minimum_threshold} onChange={e => setForm(f => ({ ...f, minimum_threshold: e.target.value }))} />
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Jenis Peringatan</label>
-                  <select className="input" value={form.threshold_type} onChange={e => setForm(f => ({ ...f, threshold_type: e.target.value }))}>
-                    <option value="ABSOLUT">Absolut</option>
-                    <option value="PERSENTASE">Persentase (%)</option>
-                  </select>
+                  <Select
+                    value={form.threshold_type}
+                    onChange={val => setForm(f => ({ ...f, threshold_type: val }))}
+                    options={[
+                      { value: 'ABSOLUT', label: 'Absolut' },
+                      { value: 'PERSENTASE', label: 'Persentase (%)' }
+                    ]}
+                  />
                 </div>
               </div>
 

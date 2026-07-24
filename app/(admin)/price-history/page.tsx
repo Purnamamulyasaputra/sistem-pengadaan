@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Table } from '@/components/ui/Table';
+import { Select } from '@/components/ui/Select';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function PriceHistoryPage() {
@@ -43,41 +44,42 @@ export default function PriceHistoryPage() {
     <section className="screen">
       <div className="card">
         <div className="tabs" style={{ marginBottom: 0 }}>
-          <a href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Financial Report</a>
-          <a href="/price-history" className="tab active" style={{ textDecoration: 'none' }}>Price History</a>
-          <a href="/reports/profit-projection" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Profit Simulator</a>
+          <a href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Grafik Keuangan</a>
+          <a href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</a>
+          <a href="/price-history" className="tab active" style={{ textDecoration: 'none' }}>Riwayat Harga</a>
+          <a href="/reports/profit-projection" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Simulator Laba</a>
         </div>
         <div className="card-head">
           <div>
-            <h3>Purchase Price History</h3>
-            <p className="muted" style={{ margin: 0, marginTop: 4 }}>Track item price fluctuations and moving average updates.</p>
+            <h3>Riwayat Harga Beli</h3>
+            <p className="muted" style={{ margin: 0, marginTop: 4 }}>Pantau fluktuasi harga barang dan pembaruan moving average.</p>
           </div>
         </div>
 
         <div style={{ padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16 }}>
-          <select
-            className="input"
+          <Select
             value={selectedItemId}
-            onChange={e => setSelectedItemId(e.target.value)}
+            onChange={val => setSelectedItemId(val)}
+            options={[
+              { value: '', label: 'Semua Barang' },
+              ...items.map(i => ({ value: String(i.id), label: i.name }))
+            ]}
             style={{ minWidth: 250 }}
-          >
-            <option value="">All Items</option>
-            {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-          </select>
-          <select
-            className="input"
+          />
+          <Select
             value={selectedVendorId}
-            onChange={e => setSelectedVendorId(e.target.value)}
+            onChange={val => setSelectedVendorId(val)}
+            options={[
+              { value: '', label: 'Semua Vendor' },
+              ...vendors.map(v => ({ value: String(v.id), label: v.name }))
+            ]}
             style={{ minWidth: 250 }}
-          >
-            <option value="">All Vendors</option>
-            {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-          </select>
+          />
         </div>
 
         {selectedItemId && chartData.length > 0 && (
           <div style={{ padding: 24, borderBottom: '1px solid var(--border)' }}>
-            <h4 style={{ marginBottom: 16 }}>Price Trend</h4>
+            <h4 style={{ marginBottom: 16 }}>Tren Harga</h4>
             <div style={{ height: 300, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -89,8 +91,8 @@ export default function PriceHistoryPage() {
                     contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} />
-                  <Line type="monotone" dataKey="Purchase Price" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  <Line type="stepAfter" dataKey="Moving Average" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                  <Line type="monotone" name="Harga Beli" dataKey="Purchase Price" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="stepAfter" name="Moving Average" dataKey="Moving Average" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -99,25 +101,25 @@ export default function PriceHistoryPage() {
 
         <div className="card-body flush">
           {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading price history...</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat riwayat harga...</div>
           ) : history.length === 0 ? (
             <div className="empty-state" style={{ padding: 40 }}>
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: 16, color: 'var(--muted)' }}>
                 <path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16" />
               </svg>
-              <h4>No price history found</h4>
-              <p className="muted">Adjust your filters or record a goods receipt to generate history.</p>
+              <h4>Tidak ada riwayat harga ditemukan</h4>
+              <p className="muted">Sesuaikan filter Anda atau catat penerimaan barang untuk menghasilkan riwayat.</p>
             </div>
           ) : (
             <Table>
               <thead>
                 <tr>
-                  <th>Purchase Date</th>
-                  <th>Item</th>
+                  <th>Tanggal Pembelian</th>
+                  <th>Barang</th>
                   <th>Vendor</th>
-                  <th className="right">Qty Received</th>
-                  <th className="right">Purchase Price</th>
-                  <th className="right">New Moving Average</th>
+                  <th className="right">Jml Diterima</th>
+                  <th className="right">Harga Beli</th>
+                  <th className="right">Moving Average Baru</th>
                 </tr>
               </thead>
               <tbody>
@@ -125,7 +127,7 @@ export default function PriceHistoryPage() {
                   <tr key={h.id}>
                     <td>
                       {new Date(h.purchase_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      <div className="muted font-mono" style={{ fontSize: 12 }}>{h.purchase_order_item_id ? `PO Item: ${h.purchase_order_item_id}` : 'Manual Entry'}</div>
+                      <div className="muted font-mono" style={{ fontSize: 12 }}>{h.purchase_order_item_id ? `PO Item: ${h.purchase_order_item_id}` : 'Entri Manual'}</div>
                     </td>
                     <td className="font-bold">{h.item_name}</td>
                     <td>{h.vendor_name || '-'}</td>

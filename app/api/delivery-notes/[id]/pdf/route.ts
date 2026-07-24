@@ -144,9 +144,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const qrX = (210 - qrSize) / 2; // Centered
   
   try {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host') || 'localhost:3000'}`;
+    const qrUrl = `${baseUrl}/receive?kode=${encodeURIComponent(dn.delivery_note_number)}`;
+
     const barcodeBuffer = await bwipjs.toBuffer({
       bcid: 'qrcode',
-      text: dn.delivery_note_number,
+      text: qrUrl,
       scale: 3,
       height: 10,
       includetext: false,

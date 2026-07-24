@@ -7,6 +7,7 @@ import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Select } from '@/components/ui/Select';
 import { ChevronLeft } from 'lucide-react';
 
 interface Item { id: number; name: string; category_name: string; purchase_unit: string; smallest_unit: string; conversion_ratio: number; }
@@ -236,18 +237,27 @@ export default function CreateRequestPage() {
                 <tr key={c.id}>
                   <td className={c.item_id ? "font-bold" : ""}>
                     {!c.item_id ? (
-                      <select className="input" style={{ width: '100%', maxWidth: 300 }} value={c.item_id || ''} onChange={e => updateCartItemSelect(c.id, e.target.value)}>
-                        <option value="">-- Pilih Barang --</option>
-                        {items.map(i => {
-                          const isActive = activeItemIds.includes(i.id);
-                          const inCart = cart.some(cartItem => String(cartItem.item_id) === String(i.id));
-                          return (
-                            <option key={i.id} value={i.id} disabled={inCart || isActive}>
-                              {i.name} {isActive ? '(Sedang dipesan)' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      <Select
+                        value={c.item_id || ''}
+                        onChange={val => updateCartItemSelect(c.id, String(val))}
+                        options={[
+                          { value: '', label: '-- Pilih Barang --' },
+                          ...items.map(i => {
+                            const isActive = activeItemIds.includes(i.id);
+                            const inCart = cart.some(cartItem => String(cartItem.item_id) === String(i.id));
+                            return {
+                              value: i.id,
+                              label: `${i.name}${isActive ? ' (Sedang dipesan)' : ''}`,
+                              disabled: inCart || isActive
+                            };
+                          })
+                        ]}
+                        searchable
+                        placeholder="-- Pilih Barang --"
+                        style={{ width: '100%', maxWidth: 300 }}
+                        inputStyle={{ height: 32, fontSize: 13 }}
+                        optionStyle={{ fontSize: 13 }}
+                      />
                     ) : c.name}
                   </td>
                   <td>

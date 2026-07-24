@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Search, RefreshCw, CreditCard, X, Loader2, Calendar, Store, TrendingUp, TrendingDown, ShoppingCart, DollarSign, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Toast } from '@/components/ui/Toast';
+import { Select } from '@/components/ui/Select';
 
 interface Outlet {
     id: string;
@@ -191,14 +192,16 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                         </div>
 
                         {/* Outlet Select Dropdown */}
-                        <select
+                        <Select
                             value={outletId}
-                            onChange={(e) => { setOutletId(e.target.value); setPage(1); }}
-                            className="bg-white border border-gray-200 text-[12px] text-gray-700 font-medium rounded-md px-2.5 py-1 shadow-sm focus:outline-none focus:border-[#016e3f] cursor-pointer max-w-[130px] truncate"
-                        >
-                            <option value="">All Outlets</option>
-                            {outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                        </select>
+                            onChange={(val) => { setOutletId(val); setPage(1); }}
+                            options={[
+                                { value: '', label: 'All Outlets' },
+                                ...outlets.map(o => ({ value: o.id, label: o.name }))
+                            ]}
+                            style={{ width: 130 }}
+                            inputStyle={{ height: 30, fontSize: 12, padding: '0 8px' }}
+                        />
                     </div>
 
                     {/* Right-aligned items found count */}

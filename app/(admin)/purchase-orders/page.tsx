@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable';
 import { Modal } from '@/components/ui/Modal';
 import { Toast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Select } from '@/components/ui/Select';
 interface PO {
   id: number; po_number: string; vendor_name: string; order_date: string;
   order_deadline?: string; status: string; total: number; buyer_name: string;
@@ -639,10 +640,14 @@ export default function PurchaseOrdersPage() {
                   <div style={{ flex: 1, minWidth: 300, display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div className="form-group">
                       <label className="req">Vendor</label>
-                      <select className="input" value={form.vendor_id} onChange={e => setForm(f => ({ ...f, vendor_id: e.target.value }))}>
-                        <option value="">Pilih vendor...</option>
-                        {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                      </select>
+                      <Select
+                        value={form.vendor_id}
+                        onChange={val => setForm(f => ({ ...f, vendor_id: val }))}
+                        options={[
+                          { value: '', label: 'Pilih vendor...' },
+                          ...vendors.map(v => ({ value: String(v.id), label: v.name }))
+                        ]}
+                      />
                     </div>
                     <div className="form-group">
                       <label>Referensi Vendor</label>

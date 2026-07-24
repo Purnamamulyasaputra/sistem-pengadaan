@@ -20,9 +20,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const item = await updateItem(Number(id), body);
-  if (!item) return NextResponse.json({ success: false, message: 'Item tidak ditemukan', data: null }, { status: 404 });
-  return NextResponse.json({ success: true, message: 'Item berhasil diperbarui', data: item });
+
+  if (body.barcode === '') {
+    body.barcode = null;
+  }
+
+  try {
+    const item = await updateItem(Number(id), body);
+    if (!item) return NextResponse.json({ success: false, message: 'Item tidak ditemukan', data: null }, { status: 404 });
+    return NextResponse.json({ success: true, message: 'Item berhasil diperbarui', data: item });
+  } catch (error: any) {
+    if (error.code === '23505') {
+      return NextResponse.json({ success: false, message: 'Gagal menyimpan: Barcode sudah digunakan oleh barang lain.', data: null }, { status: 400 });
+    }
+    return NextResponse.json({ success: false, message: 'Gagal memperbarui: ' + error.message, data: null }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

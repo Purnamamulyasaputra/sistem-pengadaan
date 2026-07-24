@@ -109,14 +109,19 @@ export default function CreateDeliveryOrderPage() {
   const handleSave = async () => {
     const selectedItems = orderItems.filter(i => i.selected && i.qty_shipped > 0);
     if (selectedItems.length === 0) {
-      setError('Please select at least one valid item to ship.');
+      setError('Pilih setidaknya satu barang untuk dikirim.');
       return;
     }
 
     const overStockItems = selectedItems.filter(i => (i.qty_shipped * (Number(i.conversion_ratio) || 1)) > i.current_stock);
     if (overStockItems.length > 0) {
       const names = overStockItems.map(i => i.item_name).join(', ');
-      setError(`Stock insufficient for: ${names}. Please reduce the Qty to Ship.`);
+      setError(`Stok tidak mencukupi untuk: ${names}. Kurangi jumlah yang akan dikirim.`);
+      return;
+    }
+
+    if (!form.driver_name.trim()) {
+      setError('Nama sopir/pengirim wajib diisi.');
       return;
     }
 
@@ -162,14 +167,14 @@ export default function CreateDeliveryOrderPage() {
       <div className="card" style={{ maxWidth: 1000 }}>
         <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3>Create Delivery Order</h3>
+            <h3>Buat Surat Jalan</h3>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <Link href="/delivery-orders">
-              <Button variant="outline" size="sm">Cancel</Button>
+              <Button variant="outline" size="sm">Batal</Button>
             </Link>
             <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || !selectedOrderId || orderItems.filter(i => i.selected).length === 0}>
-              {saving ? 'Creating DO...' : 'Generate Delivery Order'}
+              {saving ? 'Membuat Surat Jalan...' : 'Buat Surat Jalan'}
             </Button>
           </div>
         </div>
@@ -184,9 +189,9 @@ export default function CreateDeliveryOrderPage() {
 
           <div className="form-grid" style={{ marginBottom: 32 }}>
             <div className="form-group">
-              <label className="req">Source Request (PO)</label>
+              <label className="req">Sumber Permintaan</label>
               <select className="input" value={selectedOrderId} onChange={e => handleSelectOrder(e.target.value)}>
-                <option value="">-- Select Pending Order --</option>
+                <option value="">-- Pilih Permintaan --</option>
                 {orders.map(o => (
                   <option key={o.order_id} value={o.order_id}>
                     PO-{new Date(o.order_date).getFullYear()}-{String(o.order_id).padStart(5, '0')}
@@ -195,7 +200,7 @@ export default function CreateDeliveryOrderPage() {
               </select>
             </div>
             <div className="form-group">
-              <label>Deliver To (Outlet)</label>
+              <label>Kirim Ke (Outlet)</label>
               <select 
                 className="input" 
                 value={targetOutletId} 
@@ -203,14 +208,14 @@ export default function CreateDeliveryOrderPage() {
                 disabled={!selectedOrderId}
                 style={{ fontWeight: 600, background: !selectedOrderId ? '#f1f5f9' : '#fff' }}
               >
-                <option value="">-- Select Destination --</option>
+                <option value="">-- Pilih Tujuan --</option>
                 {outlets.map(o => (
                   <option key={o.id} value={o.id}>{o.name}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="req">Delivery Date</label>
+              <label className="req">Tanggal Pengiriman</label>
               <Input
                 type="date"
                 value={form.delivery_date}
@@ -221,27 +226,27 @@ export default function CreateDeliveryOrderPage() {
               />
             </div>
             <div className="form-group">
-              <label>Driver Name</label>
-              <Input type="text" placeholder="Optional" value={form.driver_name} onChange={e => setForm(f => ({ ...f, driver_name: e.target.value }))} />
+              <label className="req">Nama Sopir / Pengirim</label>
+              <Input type="text" placeholder="Wajib diisi" value={form.driver_name} onChange={e => setForm(f => ({ ...f, driver_name: e.target.value }))} />
             </div>
           </div>
 
           {selectedOrderId ? (
             <>
-              <h4 style={{ marginBottom: 12, fontWeight: 600 }}>Items to Ship</h4>
+              <h4 style={{ marginBottom: 12, fontWeight: 600 }}>Daftar Barang yang Dikirim</h4>
               <Table>
                 <thead>
                   <tr>
-                    <th style={{ width: 40 }} className="center" title="Select Items">
+                    <th style={{ width: 40 }} className="center" title="Pilih Barang">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                         <polyline points="9 11 12 14 22 4"></polyline>
                         <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
                       </svg>
                     </th>
-                    <th>Item</th>
-                    <th className="center">Request Qty</th>
-                    <th className="center" style={{ width: 160 }}>Qty to Ship</th>
-                    <th className="center" style={{ width: 150 }}>Available Stock</th>
+                    <th>Barang</th>
+                    <th className="center">Jml Diminta</th>
+                    <th className="center" style={{ width: 160 }}>Jml Dikirim</th>
+                    <th className="center" style={{ width: 150 }}>Stok Tersedia</th>
                     <th className="center" style={{ width: 180 }}>Keterangan</th>
                     <th className="center">Status</th>
                   </tr>
@@ -271,7 +276,7 @@ export default function CreateDeliveryOrderPage() {
                       </td>
                       <td className="font-bold">
                         <div>{item.item_name}</div>
-                        {isExceeded && item.selected && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4 }}>Insufficient Stock</div>}
+                        {isExceeded && item.selected && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4 }}>Stok Tidak Cukup</div>}
                       </td>
                       <td className="center num font-bold">
                         {parseFloat(Number(item.qty_request / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
@@ -302,7 +307,7 @@ export default function CreateDeliveryOrderPage() {
                         <input
                           type="text"
                           className="input"
-                          placeholder="Optional notes..."
+                          placeholder="Catatan opsional..."
                           value={item.keterangan || ''}
                           onChange={(e) => handleKeteranganChange(item.order_item_id, e.target.value)}
                           disabled={!item.selected}
@@ -317,14 +322,14 @@ export default function CreateDeliveryOrderPage() {
                       </td>
                       <td className="center">
                         <Badge variant={item.item_status === 'READY_DI_GUDANG' ? 'green' : 'amber'}>
-                          {item.item_status === 'READY_DI_GUDANG' ? 'Ready' : 'Proses Belanja'}
+                          {item.item_status === 'READY_DI_GUDANG' ? 'Tersedia' : 'Proses Belanja'}
                         </Badge>
                       </td>
                     </tr>
                     );
                   })}
                   {orderItems.length === 0 && (
-                    <tr><td colSpan={6} className="center muted" style={{ padding: 32 }}>No items available to ship.</td></tr>
+                    <tr><td colSpan={7} className="center muted" style={{ padding: 32 }}>Tidak ada barang yang bisa dikirim.</td></tr>
                   )}
                 </tbody>
               </Table>
@@ -332,7 +337,7 @@ export default function CreateDeliveryOrderPage() {
             </>
           ) : (
             <div className="muted" style={{ padding: 40, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 8 }}>
-              Please select a pending order to view and select items for delivery.
+              Silakan pilih permintaan (PO) terlebih dahulu untuk melihat dan memilih barang yang akan dikirim.
             </div>
           )}
         </div>

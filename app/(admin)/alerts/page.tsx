@@ -54,16 +54,16 @@ export default function AlertsPage() {
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Reorder Point Alerts</h3>
+            <h3>Peringatan Stok Gudang</h3>
             <p className="muted" style={{ margin: 0, marginTop: 4 }}>
-              Items that have fallen below their minimum stock threshold.
+              Daftar barang yang jumlah stoknya sudah berada di bawah batas minimum (Reorder Point).
             </p>
           </div>
         </div>
         
         <div className="card-body flush">
           {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading alerts...</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
           ) : alerts.length === 0 ? (
             <div className="empty-state" style={{ padding: 60, textAlign: 'center' }}>
               <div style={{ color: '#16a34a', marginBottom: 16 }}>
@@ -72,20 +72,20 @@ export default function AlertsPage() {
                   <polyline points="22 4 12 14.01 9 11.01"></polyline>
                 </svg>
               </div>
-              <h4>All item stocks are safe</h4>
-              <p className="muted">There are no items currently below the minimum stock threshold.</p>
+              <h4>Semua stok aman</h4>
+              <p className="muted">Saat ini tidak ada barang yang stoknya berada di bawah batas minimum.</p>
             </div>
           ) : (
             <Table>
               <thead>
                 <tr>
-                  <th>Alert Date</th>
-                  <th>Item</th>
-                  <th>Category</th>
-                  <th className="right">Current Stock</th>
-                  <th className="right">Threshold</th>
+                  <th>Tanggal</th>
+                  <th>Barang</th>
+                  <th>Kategori</th>
+                  <th className="right">Stok Saat Ini</th>
+                  <th className="right">Batas Minimum</th>
                   <th className="center">Status</th>
-                  <th className="right">Actions</th>
+                  <th className="right">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,13 +109,13 @@ export default function AlertsPage() {
                       </td>
                       <td className="center">
                         <Badge variant={stockPct <= 0 ? 'red' : 'amber'}>
-                          {stockPct <= 0 ? 'Stock Empty' : 'Low Stock'}
+                          {stockPct <= 0 ? 'Stok Kosong' : 'Stok Menipis'}
                         </Badge>
                       </td>
                       <td className="right">
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                           <Link href={`/purchase-orders/create?item=${a.item_id}`}>
-                            <Button variant="outline" size="sm">Create PO</Button>
+                            <Button variant="outline" size="sm">Buat PO</Button>
                           </Link>
                           <Button 
                             variant="primary" 
@@ -123,7 +123,7 @@ export default function AlertsPage() {
                             onClick={() => handleResolve(a.id)}
                             disabled={resolvingId === a.id}
                           >
-                            {resolvingId === a.id ? 'Resolving...' : 'Mark Resolved'}
+                            {resolvingId === a.id ? 'Memproses...' : 'Tandai Selesai'}
                           </Button>
                         </div>
                       </td>

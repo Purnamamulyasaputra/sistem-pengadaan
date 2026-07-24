@@ -29,21 +29,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'Field wajib tidak lengkap', data: null }, { status: 400 });
   }
 
-  const item = await createItem({
-    name, category_id: Number(category_id), purchase_unit, smallest_unit,
-    conversion_ratio: Number(conversion_ratio ?? 1),
-    minimum_threshold: Number(minimum_threshold ?? 0),
-    threshold_type: threshold_type ?? 'ABSOLUT',
-    is_perishable: Boolean(is_perishable),
-    current_average_price: Number(current_average_price ?? 0),
-    ingredient_id: ingredient_id ? Number(ingredient_id) : null,
-  });
+  try {
+    const item = await createItem({
+      name, category_id: Number(category_id), purchase_unit, smallest_unit,
+      conversion_ratio: Number(conversion_ratio ?? 1),
+      minimum_threshold: Number(minimum_threshold ?? 0),
+      threshold_type: threshold_type ?? 'ABSOLUT',
+      is_perishable: Boolean(is_perishable),
+      current_average_price: Number(current_average_price ?? 0),
+      ingredient_id: ingredient_id ? Number(ingredient_id) : null,
+    });
 
-  // Auto-generate barcode
-  if (!item.barcode) {
-    await generateBarcode(item.id);
-    item.barcode = `ERC${String(item.id).padStart(6, '0')}`;
+    // Auto-generate barcode
+    if (!item.barcode) {
+      await generateBarcode(item.id);
+      item.barcode = `ERC${String(item.id).padStart(6, '0')}`;
+    }
+
+    return NextResponse.json({ success: true, message: 'Item berhasil ditambahkan', data: item }, { status: 201 });
+  } catch (error: any) {
+    if (error.code === '23505') {
+      return NextResponse.json({ success: false, message: 'Gagal menambahkan: Barcode sudah digunakan oleh barang lain.', data: null }, { status: 400 });
+    }
+    return NextResponse.json({ success: false, message: 'Gagal menambahkan: ' + error.message, data: null }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true, message: 'Item berhasil ditambahkan', data: item }, { status: 201 });
 }

@@ -94,9 +94,9 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
     if (!targetItem) {
       const alreadyScanned = dn.items.find((i: any) => (i.unique_barcode === barcodeInput.trim() || i.barcode === barcodeInput.trim()) && i.scanned_out_at);
       if (alreadyScanned) {
-        setScanMessage({ type: 'error', text: `Item with barcode ${barcodeInput} has already been scanned OUT.` });
+        setScanMessage({ type: 'error', text: `Barang dengan barcode ${barcodeInput} sudah di-scan OUT.` });
       } else {
-        setScanMessage({ type: 'error', text: `Barcode ${barcodeInput} not found in this Delivery Order.` });
+        setScanMessage({ type: 'error', text: `Barcode ${barcodeInput} tidak ditemukan dalam Surat Jalan ini.` });
       }
       setBarcodeInput('');
       return;
@@ -120,7 +120,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
-      setScanMessage({ type: 'success', text: `Successfully scanned OUT: ${targetItem.item_name}` });
+      setScanMessage({ type: 'success', text: `Berhasil scan OUT: ${targetItem.item_name}` });
       await fetchDn(); // Refresh list to update scanned status
     } catch (err: any) {
       setScanMessage({ type: 'error', text: err.message });
@@ -172,8 +172,8 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
     }
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading Delivery Order...</div>;
-  if (!dn) return <div style={{ padding: 40, textAlign: 'center' }}>Delivery Order not found.</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat Surat Jalan...</div>;
+  if (!dn) return <div style={{ padding: 40, textAlign: 'center' }}>Surat Jalan tidak ditemukan.</div>;
 
   const totalItems = dn.items.length;
   const scannedOutItems = dn.items.filter((i: any) => i.scanned_out_at).length;
@@ -190,22 +190,22 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
                 <Badge variant={dn.status === 'DITERIMA' ? 'green' : dn.status === 'DIKIRIM' ? 'blue' : dn.status === 'CANCELED' ? 'red' : 'gray'}>
                   {dn.status}
                 </Badge>
-                <span className="muted">To: {dn.outlet_name}</span>
+                <span className="muted">Ke: {dn.outlet_name}</span>
               </div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Link href="/delivery-orders">
-              <Button variant="outline" size="sm">Back to List</Button>
+              <Button variant="outline" size="sm">Kembali</Button>
             </Link>
             {dn.status === 'DRAFT' && (
               <Button variant="outline" size="sm" onClick={() => setConfirmCancel(true)} disabled={scanning} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
-                Cancel Order
+                Batalkan
               </Button>
             )}
             <Button variant="primary" size="sm" onClick={() => window.open(`/api/delivery-notes/${id}/pdf`, '_blank')} style={{ display: 'flex', alignItems: 'center' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect width="12" height="8" x="6" y="14"></rect></svg>
-              Print PDF
+              Cetak PDF
             </Button>
           </div>
         </div>
@@ -213,26 +213,26 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
         <div className="card-body flush">
           {dn.status === 'DRAFT' && (
             <div style={{ padding: 24, background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-              <h4 style={{ marginBottom: 12 }}>Barcode Scanner (OUT)</h4>
+              <h4 style={{ marginBottom: 12 }}>Pemindai Barcode (OUT)</h4>
 
 
               <form onSubmit={handleScan} style={{ display: 'flex', gap: 12, maxWidth: 600 }}>
                 <Input
                   ref={inputRef}
                   type="text"
-                  placeholder="Scan barcode here..."
+                  placeholder="Pindai barcode di sini..."
                   value={barcodeInput}
                   onChange={e => setBarcodeInput(e.target.value)}
                   disabled={scanning}
                   autoFocus
                 />
                 <Button variant="primary" onClick={handleScan} disabled={scanning || !barcodeInput.trim()}>
-                  Scan Manual
+                  Pindai Manual
                 </Button>
                 {dn.status === 'DRAFT' && (
                   <Button variant="outline" onClick={() => setConfirmBulk({ open: true, type: 'OUT' })} disabled={scanning} style={{ color: 'var(--primary)', borderColor: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
-                    Validate All
+                    Validasi Semua
                   </Button>
                 )}
               </form>
@@ -240,7 +240,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
               {isFullyScannedOut && (
                 <div style={{ marginTop: 16, padding: '12px 16px', background: '#dcfce7', color: '#166534', borderRadius: 6, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                  All items have been scanned OUT. Delivery Order status is automatically changed to SHIPPED (Waiting for Outlet receipt).
+                  Semua barang telah di-scan OUT. Status Surat Jalan otomatis berubah menjadi DIKIRIM (Menunggu penerimaan Outlet).
                 </div>
               )}
             </div>
@@ -248,16 +248,16 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
           {dn.status === 'DIKIRIM' && (
             <div style={{ padding: 24, background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-              <h4 style={{ marginBottom: 12 }}>Barcode Scanner (IN) - Outlet</h4>
+              <h4 style={{ marginBottom: 12 }}>Pemindai Barcode (IN) - Outlet</h4>
               <div style={{ padding: '12px 16px', background: '#e0f2fe', color: '#0369a1', borderRadius: 6, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8, flexShrink: 0 }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                <span><strong>Status: SHIPPED (In Transit).</strong> Waiting for the Destination Outlet to receive the goods and perform Scan IN.</span>
+                <span><strong>Status: DIKIRIM (Dalam Perjalanan).</strong> Menunggu Outlet Tujuan untuk menerima barang dan melakukan Scan IN.</span>
               </div>
 
               <div style={{ display: 'flex', gap: 12, maxWidth: 600 }}>
                 <Button type="button" variant="primary" onClick={() => setConfirmBulk({ open: true, type: 'IN' })} disabled={scanning} style={{ display: 'flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                  Validate All Received (Bypass)
+                  Validasi Semua Diterima (Lewati)
                 </Button>
               </div>
             </div>
@@ -265,27 +265,36 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
           <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24, borderBottom: '1px solid var(--border)' }}>
             <div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Order Reference (PO)</p>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Referensi Pesanan (PO)</p>
               <div className="font-bold">PO-{new Date(dn.created_at).getFullYear()}-{String(dn.order_id).padStart(5, '0')}</div>
             </div>
             <div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Destination Outlet</p>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Outlet Tujuan</p>
               <div className="font-bold">{dn.outlet_name}</div>
             </div>
             <div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Delivery Date</p>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Tanggal Pengiriman</p>
               <div className="font-bold">{new Date(dn.delivery_date).toLocaleDateString('id-ID')}</div>
             </div>
             <div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Driver Name</p>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Nama Pengirim</p>
               <div className="font-bold">{dn.driver_name || '-'}</div>
             </div>
             <div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Received By (Staff)</p>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Diterima Oleh</p>
               <div className="font-bold">{dn.recipient_name || '-'}</div>
             </div>
+            {dn.proof_image_url && (
+              <div>
+                <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Bukti Penerimaan</p>
+                <a href={dn.proof_image_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                  Lihat Foto
+                </a>
+              </div>
+            )}
             <div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Tracking Code</p>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Kode Pelacakan</p>
               <div className="font-bold font-mono" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {dn.delivery_note_number}
                 <CopyButton text={dn.delivery_note_number} />
@@ -296,13 +305,14 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
           <Table>
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Notes</th>
-                <th className="right">Qty Shipped</th>
-                <th className="right">Price/Unit</th>
-                <th className="right">Total Cost</th>
-                <th className="center">Scan OUT</th>
-                <th className="center">Scan IN</th>
+                <th>BARANG</th>
+                <th>CATATAN</th>
+                <th className="right">DIKIRIM</th>
+                <th className="right">DITERIMA</th>
+                <th className="right">HARGA/UNIT</th>
+                <th className="right">TOTAL BIAYA</th>
+                <th className="center">SCAN OUT</th>
+                <th className="center">SCAN IN</th>
               </tr>
             </thead>
             <tbody>
@@ -312,12 +322,20 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
                     {item.item_name}
                   </td>
                   <td>
-                    {item.additional_notes && <div style={{ fontSize: 12, marginBottom: 4 }}><span className="muted"></span> {item.additional_notes}</div>}
-                    {item.keterangan && <div style={{ fontSize: 12 }}><span className="muted"></span> {item.keterangan}</div>}
-                    {!item.additional_notes && !item.keterangan && <span className="muted italic" style={{ fontSize: 13 }}>-</span>}
+                    {item.additional_notes && <div style={{ fontSize: 12, marginBottom: 4 }}><span className="muted">PO:</span> {item.additional_notes}</div>}
+                    {item.keterangan && <div style={{ fontSize: 12, marginBottom: 4 }}><span className="muted">SJ:</span> {item.keterangan}</div>}
+                    {item.receive_notes && <div style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}><span className="muted">Penerima:</span> {item.receive_notes}</div>}
+                    {!item.additional_notes && !item.keterangan && !item.receive_notes && <span className="muted italic" style={{ fontSize: 13 }}>-</span>}
                   </td>
                   <td className="right font-bold num">
                     {parseFloat((Number(item.qty_shipped) / (Number(item.conversion_ratio) || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
+                  </td>
+                  <td className="right font-bold num" style={{ color: item.qty_received != null && item.qty_received !== item.qty_shipped ? 'var(--danger)' : 'inherit' }}>
+                    {item.qty_received != null ? (
+                      <>{parseFloat((Number(item.qty_received) / (Number(item.conversion_ratio) || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</>
+                    ) : (
+                      <span className="muted">-</span>
+                    )}
                   </td>
                   <td className="right font-bold num">
                     Rp {(Number(item.price_at_shipment || 0) * (Number(item.conversion_ratio) || 1)).toLocaleString('id-ID')}
@@ -354,8 +372,8 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
       <ConfirmDialog
         open={confirmBulk.open}
-        title={confirmBulk.type === 'OUT' ? 'Validate Outbound' : 'Validate Inbound'}
-        message={`Are you sure you want to perform Bulk Validation ?`}
+        title={confirmBulk.type === 'OUT' ? 'Validasi Pengiriman' : 'Validasi Penerimaan'}
+        message={`Apakah Anda yakin ingin melakukan Validasi Massal?`}
         onConfirm={handleBulkScan}
         onCancel={() => setConfirmBulk({ open: false, type: null })}
         loading={scanning}
@@ -363,8 +381,8 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
       <ConfirmDialog
         open={confirmCancel}
-        title="Cancel Delivery Order"
-        message="Are you sure you want to cancel this Delivery Order?"
+        title="Batalkan Surat Jalan"
+        message="Apakah Anda yakin ingin membatalkan Surat Jalan ini?"
         danger={true}
         onConfirm={handleCancel}
         onCancel={() => setConfirmCancel(false)}

@@ -4,6 +4,7 @@ import { Table } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 
 // ─── Types ───────────────────────────────────────────────────
 type Category = { id: number; name: string };
@@ -149,16 +150,28 @@ function MenusTab({ categories }: { categories: Category[] }) {
           onChange={e => { setSearch(e.target.value); setPage(1); }}
           style={{ width: 220 }}
         />
-        <select className="input" value={catId} onChange={e => { setCatId(e.target.value); setPage(1); }} style={{ width: 180 }}>
-          <option value="">Semua Kategori</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select className="input" value={marginFlag} onChange={e => { setMarginFlag(e.target.value); setPage(1); }} style={{ width: 150 }}>
-          <option value="">Semua Margin</option>
-          <option value="GREEN">Hijau (&lt;35%)</option>
-          <option value="YELLOW">Kuning (35–50%)</option>
-          <option value="RED">Merah (&gt;50%)</option>
-        </select>
+        <Select
+          value={catId}
+          onChange={val => { setCatId(val); setPage(1); }}
+          options={[
+            { value: '', label: 'Semua Kategori' },
+            ...categories.map(c => ({ value: String(c.id), label: c.name }))
+          ]}
+          style={{ width: 180 }}
+          inputStyle={{ height: 32 }}
+        />
+        <Select
+          value={marginFlag}
+          onChange={val => { setMarginFlag(val); setPage(1); }}
+          options={[
+            { value: '', label: 'Semua Margin' },
+            { value: 'GREEN', label: 'Hijau (<35%)' },
+            { value: 'YELLOW', label: 'Kuning (35–50%)' },
+            { value: 'RED', label: 'Merah (>50%)' }
+          ]}
+          style={{ width: 150 }}
+          inputStyle={{ height: 32 }}
+        />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
           <span className="muted" style={{ fontSize: 13 }}>
             {total} Menu ditemukan
@@ -416,14 +429,26 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
         <input className="input" placeholder="Cari nama resep..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 220 }} />
-        <select className="input" value={venueId} onChange={e => { setVenueId(e.target.value); setPage(1); }} style={{ width: 150 }}>
-          <option value="">Semua Venue</option>
-          {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select>
-        <select className="input" value={sheet} onChange={e => { setSheet(e.target.value); setPage(1); }} style={{ width: 160 }}>
-          <option value="">Semua Sheet</option>
-          {SHEETS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <Select
+          value={venueId}
+          onChange={val => { setVenueId(val); setPage(1); }}
+          options={[
+            { value: '', label: 'Semua Venue' },
+            ...venues.map(v => ({ value: String(v.id), label: v.name }))
+          ]}
+          style={{ width: 150 }}
+          inputStyle={{ height: 32 }}
+        />
+        <Select
+          value={sheet}
+          onChange={val => { setSheet(val); setPage(1); }}
+          options={[
+            { value: '', label: 'Semua Sheet' },
+            ...SHEETS.map(s => ({ value: s, label: s }))
+          ]}
+          style={{ width: 160 }}
+          inputStyle={{ height: 32 }}
+        />
         <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} resep</span>
         <a href="/hpp/recipe-builder/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>+ Tambah Resep</a>
       </div>
@@ -781,10 +806,16 @@ function KitchenTab() {
   return (
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-        <select className="input" value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 180 }}>
-          <option value="">Semua Kitchen</option>
-          <option value="Kitchen 2025">Kitchen 2025</option>
-        </select>
+        <Select
+          value={filter}
+          onChange={val => setFilter(val)}
+          options={[
+            { value: '', label: 'Semua Kitchen' },
+            { value: 'Kitchen 2025', label: 'Kitchen 2025' }
+          ]}
+          style={{ width: 180 }}
+          inputStyle={{ height: 32 }}
+        />
         <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{filtered.length} resep</span>
       </div>
       <div className="card-body flush">

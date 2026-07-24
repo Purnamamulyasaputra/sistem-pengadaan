@@ -13,6 +13,8 @@ interface OpnameSession {
   pic_name: string;
   total_value: number;
   status: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function OutletOpnamePage() {
@@ -108,6 +110,8 @@ export default function OutletOpnamePage() {
               <thead>
                 <tr>
                   <th>Tanggal Opname</th>
+                  <th>Waktu Mulai</th>
+                  <th>Terakhir Diubah</th>
                   <th>Dilakukan Oleh</th>
                   <th className="right">Est. Biaya Pemakaian</th>
                   <th className="center">Status</th>
@@ -118,6 +122,12 @@ export default function OutletOpnamePage() {
                 {(limit === 'all' ? sessions : sessions.slice((currentPage - 1) * limit, currentPage * limit)).map(s => (
                   <tr key={s.id}>
                     <td className="font-bold">{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
+                    <td className="muted" style={{ fontSize: 13 }}>
+                      {new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="muted" style={{ fontSize: 13 }}>
+                      {new Date(s.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    </td>
                     <td className="muted">{s.pic_name}</td>
                     <td className="right font-mono">Rp {Number(s.total_value).toLocaleString('id-ID')}</td>
                     <td className="center">

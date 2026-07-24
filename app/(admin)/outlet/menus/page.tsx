@@ -124,16 +124,28 @@ function MenusTab({ categories }: { categories: Category[] }) {
           onChange={e => { setSearch(e.target.value); setPage(1); }}
           style={{ width: 220 }}
         />
-        <select className="input" value={catId} onChange={e => { setCatId(e.target.value); setPage(1); }} style={{ width: 180 }}>
-          <option value="">Semua Kategori</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select className="input" value={marginFlag} onChange={e => { setMarginFlag(e.target.value); setPage(1); }} style={{ width: 150 }}>
-          <option value="">Semua Margin</option>
-          <option value="GREEN">Hijau (&lt;35%)</option>
-          <option value="YELLOW">Kuning (35–50%)</option>
-          <option value="RED">Merah (&gt;50%)</option>
-        </select>
+        <Select
+          value={catId}
+          onChange={val => { setCatId(val); setPage(1); }}
+          options={[
+            { value: '', label: 'Semua Kategori' },
+            ...categories.map(c => ({ value: String(c.id), label: c.name }))
+          ]}
+          style={{ width: 180 }}
+          inputStyle={{ height: 32 }}
+        />
+        <Select
+          value={marginFlag}
+          onChange={val => { setMarginFlag(val); setPage(1); }}
+          options={[
+            { value: '', label: 'Semua Margin' },
+            { value: 'GREEN', label: 'Hijau (<35%)' },
+            { value: 'YELLOW', label: 'Kuning (35–50%)' },
+            { value: 'RED', label: 'Merah (>50%)' }
+          ]}
+          style={{ width: 150 }}
+          inputStyle={{ height: 32 }}
+        />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
           <span className="muted" style={{ fontSize: 12 }}>
             {total} Menu ditemukan
@@ -162,13 +174,13 @@ function MenusTab({ categories }: { categories: Category[] }) {
               </button>
             </div>
           )}
-          <div 
-            className="group" 
+          <div
+            className="group"
             style={{ position: 'relative', cursor: 'help', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}
           >
             <AlertCircle size={18} />
-            <div 
-              className="hidden group-hover:flex" 
+            <div
+              className="hidden group-hover:flex"
               style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 8, zIndex: 50,
                 background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
@@ -380,18 +392,30 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   return (
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input className="input" placeholder="Search recipe name..." value={search}
+        <input className="input" placeholder="Cari nama resep..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 220 }} />
-        <select className="input" value={venueId} onChange={e => { setVenueId(e.target.value); setPage(1); }} style={{ width: 150 }}>
-          <option value="">All Venues</option>
-          {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select>
-        <select className="input" value={sheet} onChange={e => { setSheet(e.target.value); setPage(1); }} style={{ width: 160 }}>
-          <option value="">All Sheets</option>
-          {SHEETS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <Select
+          value={venueId}
+          onChange={val => { setVenueId(val); setPage(1); }}
+          options={[
+            { value: '', label: 'Semua Venue' },
+            ...venues.map(v => ({ value: String(v.id), label: v.name }))
+          ]}
+          style={{ width: 150 }}
+          inputStyle={{ height: 32 }}
+        />
+        <Select
+          value={sheet}
+          onChange={val => { setSheet(val); setPage(1); }}
+          options={[
+            { value: '', label: 'Semua Sheet' },
+            ...SHEETS.map(s => ({ value: s, label: s }))
+          ]}
+          style={{ width: 160 }}
+          inputStyle={{ height: 32 }}
+        />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-          <span className="muted" style={{ fontSize: 12 }}>{total} recipes</span>
+          <span className="muted" style={{ fontSize: 12 }}>{total} resep</span>
           {totalPages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>
@@ -415,17 +439,17 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
 
       <div className="card-body flush">
         {loading ? (
-          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
           <Table>
             <thead>
               <tr>
-                <th>Recipe Name</th>
+                <th>Nama Resep</th>
                 <th>Venue / Sheet</th>
-                <th className="right">Yield</th>
-                <th className="right">Ingredients Subtotal</th>
-                <th className="right">Total COGS</th>
-                <th className="right">Sale Price</th>
+                <th className="right">Hasil (Yield)</th>
+                <th className="right">Subtotal Bahan</th>
+                <th className="right">Total HPP</th>
+                <th className="right">Harga Jual</th>
               </tr>
             </thead>
             <tbody>
@@ -439,7 +463,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                   <td className="right ">{Number(row.yield).toLocaleString('id-ID')} <span className="muted">{row.yield_unit ?? 'pcs'}</span></td>
                   <td className="right ">{rp(row.subtotal)}</td>
                   <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost)}</td>
-                  <td className="right ">{row.sale_price ? rp(row.sale_price) : <span className="muted">Base Prep</span>}</td>
+                  <td className="right ">{row.sale_price ? rp(row.sale_price) : <span className="muted">Bahan Dasar</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -450,9 +474,9 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
 
 
       {/* Recipe Viewer Modal */}
-      <Modal isOpen={!!viewRecipeModal} onClose={() => setViewRecipeModal(null)} title="Recipe Details" maxWidth={680}>
+      <Modal isOpen={!!viewRecipeModal} onClose={() => setViewRecipeModal(null)} title="Detail Resep" maxWidth={680}>
         {viewRecipeLoading ? (
-          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading recipe...</div>
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Memuat resep...</div>
         ) : viewRecipeData ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 4px' }}>
@@ -463,7 +487,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Yield</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Hasil (Yield)</div>
                 <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>
                   {Number(viewRecipeData.recipe.yield).toLocaleString('id-ID')} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>{viewRecipeData.recipe.yield_unit ?? 'pcs'}</span>
                 </div>
@@ -474,9 +498,9 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
               <Table>
                 <thead>
                   <tr>
-                    <th>Ingredient</th>
+                    <th>Bahan Baku</th>
                     <th className="right">Qty</th>
-                    <th className="center">Unit</th>
+                    <th className="center">Satuan</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -492,7 +516,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
             </div>
           </div>
         ) : (
-          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Failed to load recipe.</div>
+          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Gagal memuat resep.</div>
         )}
       </Modal>
     </>
@@ -525,7 +549,7 @@ function IngredientsTab() {
       .finally(() => setLoading(false));
   }, [search, page]);
 
-  useEffect(() => { 
+  useEffect(() => {
     load();
     fetch('/api/items').then(r => r.json()).then(d => {
       if (d.success) setMasterItems(d.data);
@@ -599,10 +623,10 @@ function IngredientsTab() {
   return (
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-        <input className="input" placeholder="Search ingredient name..." value={search}
+        <input className="input" placeholder="Cari nama bahan baku..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 260 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-          <span className="muted" style={{ fontSize: 12 }}>{total} ingredients</span>
+          <span className="muted" style={{ fontSize: 12 }}>{total} bahan baku</span>
           {totalPages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>
@@ -626,16 +650,16 @@ function IngredientsTab() {
 
       <div className="card-body flush">
         {loading ? (
-          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
           <Table>
             <thead>
               <tr>
-                <th>Ingredient Name</th>
-                <th>Unit</th>
-                <th className="right">Standard Cost/Unit</th>
-                <th className="right">Used in Recipes</th>
-                <th>Description</th>
+                <th>Nama Bahan Baku</th>
+                <th>Satuan</th>
+                <th className="right">Biaya Standar/Satuan</th>
+                <th className="right">Digunakan di Resep</th>
+                <th>Deskripsi</th>
               </tr>
             </thead>
             <tbody>
@@ -643,7 +667,7 @@ function IngredientsTab() {
                 <tr key={row.id}>
                   <td style={{ fontWeight: 600 }}>
                     {row.name}
-                    {row.is_linked && <span style={{ marginLeft: 8, fontSize: 10, background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: 4 }}>Linked</span>}
+                    {row.is_linked && <span style={{ marginLeft: 8, fontSize: 10, background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: 4 }}>Terhubung</span>}
                   </td>
                   <td><span style={{ fontSize: 13 }}>{row.default_unit ?? '—'}</span></td>
                   <td className="right ">{rp(row.standard_cost_per_unit)}</td>
@@ -689,29 +713,33 @@ function KitchenTab() {
   return (
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-        <select className="input" value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 180 }}>
-          <option value="">All Kitchen / Sheets</option>
-          {Array.from(new Set(data.map(r => r.source_sheet))).map(sheet => (
-            <option key={sheet} value={sheet}>{sheet}</option>
-          ))}
-        </select>
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{filtered.length} recipes</span>
+        <Select
+          value={filter}
+          onChange={val => setFilter(val)}
+          options={[
+            { value: '', label: 'Semua Dapur / Sheet' },
+            ...Array.from(new Set(data.map(r => r.source_sheet))).map(sheet => ({ value: sheet, label: sheet }))
+          ]}
+          style={{ width: 180 }}
+          inputStyle={{ height: 32 }}
+        />
+        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{filtered.length} resep</span>
       </div>
       <div className="card-body flush">
         {loading ? (
-          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
           <Table>
             <thead>
               <tr>
-                <th>Recipe Name</th>
+                <th>Nama Resep</th>
                 <th>Sheet</th>
-                <th className="right">Yield</th>
-                <th className="right">Raw Cost</th>
-                <th className="right">COGS (+10%)</th>
-                <th className="right">Cost/Unit Yield</th>
-                <th className="right">Sale Price</th>
-                <th className="right">COGS %</th>
+                <th className="right">Hasil (Yield)</th>
+                <th className="right">Biaya Bahan</th>
+                <th className="right">HPP (+10%)</th>
+                <th className="right">Biaya/Satuan Hasil</th>
+                <th className="right">Harga Jual</th>
+                <th className="right">HPP %</th>
               </tr>
             </thead>
             <tbody>
@@ -723,7 +751,7 @@ function KitchenTab() {
                   <td className="right ">{rp(row.raw_cost)}</td>
                   <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost_with_xfactor)}</td>
                   <td className="right ">{rp(row.cost_per_unit_yield)}</td>
-                  <td className="right ">{row.sale_price > 0 ? rp(row.sale_price) : <span className="muted">Base Prep</span>}</td>
+                  <td className="right ">{row.sale_price > 0 ? rp(row.sale_price) : <span className="muted">Bahan Dasar</span>}</td>
                   <td className="right " style={{ color: row.hpp_ratio_pct && row.hpp_ratio_pct > 50 ? '#dc2626' : row.hpp_ratio_pct && row.hpp_ratio_pct > 35 ? '#d97706' : '#166534' }}>
                     {row.hpp_ratio_pct != null ? `${row.hpp_ratio_pct}%` : '—'}
                   </td>
@@ -789,7 +817,7 @@ function CapacityTab() {
   const filteredData = data.filter(d => {
     const matchSearch = d.name.toLowerCase().includes(search.toLowerCase());
     const portions = Math.max(0, d.estimated_portions || 0);
-    
+
     if (statusFilter === 'green') return matchSearch && d.has_ingredients && portions > 10;
     if (statusFilter === 'yellow') return matchSearch && d.has_ingredients && portions > 0 && portions <= 10;
     if (statusFilter === 'red') return matchSearch && d.has_ingredients && portions === 0;
@@ -811,7 +839,7 @@ function CapacityTab() {
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', width: 220 }}>
             <Search style={{ position: 'absolute', left: 10, top: 7, width: 14, height: 14, color: 'var(--muted)' }} />
@@ -823,7 +851,7 @@ function CapacityTab() {
             <RefreshCw size={12} className={loading ? 'spin' : ''} style={{ marginRight: 6 }} /> Refresh
           </Button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, alignSelf: 'flex-end' }}>
           {!loading && totalPages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>
@@ -835,7 +863,7 @@ function CapacityTab() {
               <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}><ChevronRight size={13} /></button>
             </div>
           )}
-          <span className="muted" style={{ fontSize: 12 }}>{filteredData.length} Menu found</span>
+          <span className="muted" style={{ fontSize: 12 }}>{filteredData.length} Menu</span>
         </div>
       </div>
 
@@ -863,17 +891,17 @@ function CapacityTab() {
               ) : (
                 paginatedData.map(item => {
                   const portions = Math.max(0, item.estimated_portions || 0);
-                  
+
                   let badgeConfig = { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca', label: 'Habis' };
                   let numColor = 'var(--red)';
-                  
+
                   if (!item.has_ingredients) {
                     badgeConfig = { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0', label: 'Belum Ada Resep' };
                     numColor = 'var(--muted)';
-                  } else if (portions > 10) { 
+                  } else if (portions > 10) {
                     badgeConfig = { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', label: 'Aman' };
                     numColor = 'var(--foreground)';
-                  } else if (portions > 0) { 
+                  } else if (portions > 0) {
                     badgeConfig = { bg: '#fefce8', text: '#a16207', border: '#fef08a', label: 'Menipis' };
                     numColor = '#d97706';
                   }
@@ -964,7 +992,7 @@ function CapacityTab() {
                 </tbody>
               </Table>
             </div>
-            
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
               <Button variant="primary" onClick={() => setDetailModalItem(null)}>Tutup</Button>
             </div>
@@ -994,7 +1022,7 @@ export default function HppPage() {
     { key: 'menus', label: 'Menu POS' },
     { key: 'recipes', label: 'Resep' },
     { key: 'ingredients', label: 'Bahan Baku' },
-    { key: 'capacity', label: 'Kapasitas Penjualan (Estimasi)' },
+    { key: 'capacity', label: 'Kapasitas Penjualan' },
   ];
   if (stats?.byVenue?.some(v => v.venue === 'Kitchen' || v.venue === 'Turangga')) {
     tabDefs.push({ key: 'kitchen', label: 'Ringkasan Dapur' });
@@ -1010,7 +1038,7 @@ export default function HppPage() {
           <div>
             <h3>Menu POS & HPP</h3>
             <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 13 }}>
-              Daftar menu dan Harga Pokok Penjualan (HPP) khusus untuk outlet Anda. (Hanya Baca)
+              Daftar menu dan Harga Pokok Penjualan (HPP) Outlet.
             </p>
           </div>
         </div>

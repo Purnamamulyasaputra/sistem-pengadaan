@@ -23,7 +23,9 @@ export default function LoginPage() {
     if (err) {
       setToastMessage(err);
       setToastOpen(true);
-      window.history.replaceState(null, '', window.location.pathname);
+      params.delete('error');
+      const newSearch = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''));
     }
   }, []);
 
@@ -44,7 +46,9 @@ export default function LoginPage() {
       } else {
         setSubmitting(false);
         setFullLoading(true);
-        router.push('/dashboard');
+        const params = new URLSearchParams(window.location.search);
+        const cbUrl = params.get('callbackUrl');
+        router.push(cbUrl || '/dashboard');
         router.refresh();
       }
     } catch {
@@ -146,7 +150,9 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => {
                   setFullLoading(true);
-                  signIn('google', { callbackUrl: '/dashboard' });
+                  const params = new URLSearchParams(window.location.search);
+                  const cbUrl = params.get('callbackUrl') || '/dashboard';
+                  signIn('google', { callbackUrl: cbUrl });
                 }}
                 disabled={submitting || fullLoading}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px', fontSize: 13.5, fontWeight: 600, color: '#1e293b', cursor: 'pointer', transition: 'all 0.2s' }}

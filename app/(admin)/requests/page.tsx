@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Toast } from '@/components/ui/Toast';
 import { OrderStatusBadge } from '@/components/shared/OrderStatusBadge';
 import { Pagination } from '@/components/ui/Pagination';
+import { Select } from '@/components/ui/Select';
 
 interface Order {
   id: number; outlet_name: string; order_date: string; delivery_date: string;
@@ -204,13 +205,19 @@ function RequestsContent() {
               title="End Date"
             />
             {viewMode === 'by-outlet' && (
-              <select className="input" style={{ width: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                <option value="">Semua Status</option>
-                <option value="PENDING">Pending</option>
-                <option value="PROCESSING">Diproses</option>
-                <option value="SHIPPED">Dikirim</option>
-                <option value="COMPLETED">Selesai</option>
-              </select>
+              <Select 
+                value={statusFilter} 
+                onChange={val => setStatusFilter(val)}
+                options={[
+                  { value: '', label: 'Semua Status' },
+                  { value: 'PENDING', label: 'Pending' },
+                  { value: 'PROCESSING', label: 'Diproses' },
+                  { value: 'SHIPPED', label: 'Dikirim' },
+                  { value: 'COMPLETED', label: 'Selesai' }
+                ]}
+                style={{ width: 140 }}
+                inputStyle={{ height: 32 }}
+              />
             )}
           </div>
         </div>
@@ -426,26 +433,24 @@ function RequestsContent() {
                         </div>
                       </td>
                       <td>
-                        <select
-                          className="input"
-                          style={{ height: 30, padding: '2px 8px', ...getFulfillmentStyle(item.fulfillment_status) }}
+                        <Select
+                          inputStyle={{ height: 30, padding: '2px 8px', ...getFulfillmentStyle(item.fulfillment_status) }}
                           value={item.fulfillment_status}
-                          onChange={e => handleUpdateItem(item.id, { fulfillment_status: e.target.value })}
-                        >
-                          <option value="MENUNGGU">Menunggu</option>
-                          <option value="SANGGUP">Sanggup</option>
-                          <option value="TIDAK">Tidak</option>
-                        </select>
+                          onChange={val => handleUpdateItem(item.id, { fulfillment_status: val })}
+                          options={[
+                            { value: 'MENUNGGU', label: 'Menunggu' },
+                            { value: 'SANGGUP', label: 'Sanggup' },
+                            { value: 'TIDAK', label: 'Tidak' }
+                          ]}
+                        />
                       </td>
                       <td>
-                        <select
-                          className="input"
-                          style={{ height: 30, padding: '2px 8px', ...getStatusStyle(item.item_status) }}
+                        <Select
+                          inputStyle={{ height: 30, padding: '2px 8px', ...getStatusStyle(item.item_status) }}
                           value={item.item_status}
-                          onChange={e => handleUpdateItem(item.id, { item_status: e.target.value })}
-                        >
-                          {Object.entries(ITEM_STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                        </select>
+                          onChange={val => handleUpdateItem(item.id, { item_status: val })}
+                          options={Object.entries(ITEM_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l as string }))}
+                        />
                       </td>
                       <td>
                         {saving === item.id && <span className="muted" style={{ fontSize: 11 }}>...</span>}

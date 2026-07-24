@@ -132,6 +132,62 @@ export async function getDeliveryNoteById(id: number) {
   return { ...dn, items: itemsRes.rows };
 }
 
+export async function getDeliveryNoteByCode(code: string) {
+  const dnRes = await query<DeliveryNote>(
+    `SELECT dn.*, o.name AS outlet_name
+     FROM delivery_notes dn
+     LEFT JOIN outlets o ON o.id = dn.outlet_id
+     WHERE dn.delivery_note_number = $1`,
+    [code]
+  );
+  const dn = dnRes.rows[0] ?? null;
+  if (!dn) return null;
+
+  const itemsRes = await query(
+    `SELECT dni.*, i.name AS item_name, i.barcode, i.smallest_unit, i.purchase_unit, i.conversion_ratio,
+            oi.fulfillment_status, oi.item_status, oi.additional_notes
+     FROM delivery_note_items dni
+     LEFT JOIN items i ON i.id = dni.item_id
+     LEFT JOIN order_items oi ON oi.id = dni.order_item_id
+     WHERE dni.delivery_note_id = $1
+     ORDER BY dni.id`,
+    [dn.id]
+  );
+  return { ...dn, items: itemsRes.rows };
+}
+
+export async function processPublicReceive(data: {
+  delivery_note_id: number;
+  recipient_name: string;
+  proof_image_url: string;
+  items: Array<{ order_item_id: number; qty_received: number; receive_notes: string }>;
+}) {
+  return withTransaction(async (client) => {
+    // Update Delivery Note
+    await client.query(
+      `UPDATE delivery_notes 
+       SET status = 'DITERIMA', 
+           recipient_name = $1, 
+           proof_image_url = $2, 
+           updated_at = NOW() 
+       WHERE id = $3`,
+      [data.recipient_name, data.proof_image_url, data.delivery_note_id]
+    );
+
+    // Update Delivery Note Items
+    for (const item of data.items) {
+      await client.query(
+        `UPDATE delivery_note_items 
+         SET scanned_in_at = NOW(), 
+             qty_received = $1, 
+             receive_notes = $2 
+         WHERE delivery_note_id = $3 AND order_item_id = $4`,
+        [item.qty_received, item.receive_notes || null, data.delivery_note_id, item.order_item_id]
+      );
+    }
+  });
+}
+
 export async function recordScan(data: {
   delivery_note_item_id: number;
   item_id: number;

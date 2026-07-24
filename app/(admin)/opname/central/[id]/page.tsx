@@ -5,14 +5,25 @@ import { useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Pagination } from '@/components/ui/Pagination';
+import { Select } from '@/components/ui/Select';
 
 const REASON_CATEGORIES = [
-  { value: 'RUSAK', label: 'Damaged (Rusak)' },
-  { value: 'KADALUARSA', label: 'Expired (Kadaluarsa)' },
-  { value: 'SALAH_CATAT', label: 'Misrecorded (Salah Catat)' },
-  { value: 'HILANG_SUSUT', label: 'Lost/Shrinkage (Hilang/Susut)' },
-  { value: 'LAINNYA', label: 'Other (Lainnya)' },
+  { value: 'RUSAK', label: 'Rusak' },
+  { value: 'KADALUARSA', label: 'Kadaluarsa' },
+  { value: 'SALAH_CATAT', label: 'Salah Catat' },
+  { value: 'HILANG_SUSUT', label: 'Hilang / Susut' },
+  { value: 'LAINNYA', label: 'Lainnya' },
 ];
+
+function formatUnit(unit: string | null | undefined): string {
+  if (!unit) return '';
+  const u = unit.toLowerCase().trim();
+  if (u === 'l') return 'liter';
+  if (u === 'g' || u === 'gr') return 'gram';
+  return unit;
+}
+
 
 export default function CentralOpnameDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -23,6 +34,8 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [limit, setLimit] = useState<number | 'all'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchOpname = useCallback(async () => {
     setLoading(true);
@@ -33,7 +46,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
       setHeader(hData.data);
       setIsLocked(hData.data?.status === 'LOCKED');
     }
-    
+
     // Fetch all items for input
     const iRes = await fetch(`/api/opname/items?location_type=PUSAT`);
     const iData = await iRes.json();
@@ -58,7 +71,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
     const qtySmall = qtyLarge * (ratio || 1);
     const existing = details.find(d => d.item_id === itemId);
     const variance = qtySmall - systemBalance;
-    
+
     // Reset reason if variance becomes 0
     let reason_category = existing?.reason_category;
     let reason_notes = existing?.reason_notes;
@@ -109,7 +122,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
 
       if (submit) {
         // Lock the opname session
-        const res = await fetch(`/api/opname/${id}/lock`, { 
+        const res = await fetch(`/api/opname/${id}/lock`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ location_type: 'PUSAT' })
@@ -131,118 +144,156 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
     }
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading opname data...</div>;
-  if (!header) return <div style={{ padding: 40, textAlign: 'center' }}>Session not found.</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat data opname...</div>;
+  if (!header) return <div style={{ padding: 40, textAlign: 'center' }}>Sesi tidak ditemukan.</div>;
+
+  const paginatedItems = limit === 'all' ? items : items.slice((currentPage - 1) * limit, currentPage * limit);
+  const totalPages = limit === 'all' ? 1 : Math.ceil(items.length / limit);
 
   return (
-    <section className="screen">
-      <div className="card">
-        <div className="card-head">
+    <section style={{ margin: '-16px -20px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h3>Central Opname Detail — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
-            <div style={{ marginTop: 8 }}>
+            <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Detail Opname Pusat — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
+            <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
               <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
+              <span className="muted" style={{ fontSize: 13 }}>
+                <span className="font-bold">Mulai:</span> {new Date(header.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <span className="muted" style={{ fontSize: 13 }}>
+                <span className="font-bold">Terakhir Diubah:</span> {new Date(header.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
           </div>
-          <Link href="/opname/central">
-            <Button variant="outline" size="sm">Back to List</Button>
-          </Link>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Select
+              value={limit}
+              onChange={(val) => { setLimit(val); setCurrentPage(1); }}
+              options={[
+                { value: 'all', label: 'Semua' },
+                { value: 8, label: '8' },
+                { value: 32, label: '32' }
+              ]}
+              inputStyle={{ padding: '4px 10px', height: 32, fontSize: 13, minWidth: 90 }}
+              style={{ width: 100 }}
+            />
+            {!isLocked && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving}>Simpan Draft</Button>
+                <Button variant="primary" size="sm" onClick={() => {
+                  if (confirm('Apakah Anda yakin ingin mengunci sesi ini? Data tidak dapat diubah setelah dikunci.')) {
+                    handleSave(true);
+                  }
+                }} disabled={saving}>
+                  Kunci & Submit
+                </Button>
+              </>
+            )}
+            <Link href="/opname/central">
+              <Button variant="outline" size="sm">Kembali</Button>
+            </Link>
+          </div>
         </div>
-        
-        <div className="card-body flush">
+
+        <div style={{ flex: 1, overflowY: 'auto' }}>
           <Table>
             <thead>
               <tr>
-                <th style={{ padding: '4px 8px', fontSize: 11 }}>Item Name</th>
-                <th className="right" style={{ padding: '4px 8px', fontSize: 11, width: 100 }}>Harga / Besar</th>
-                <th className="right" style={{ padding: '4px 8px', fontSize: 11, width: 90 }}>Sys Bal</th>
-                <th className="right" style={{ width: 90, padding: '4px 8px', fontSize: 11 }}>Phys Qty</th>
-                <th className="right" style={{ width: 70, padding: '4px 8px', fontSize: 11 }}>Var.</th>
-                <th className="right" style={{ width: 100, padding: '4px 8px', fontSize: 11 }}>Nilai Selisih</th>
-                <th style={{ width: 150, padding: '4px 8px', fontSize: 11 }}>Reason Category</th>
-                <th style={{ width: 180, padding: '4px 8px', fontSize: 11 }}>Notes</th>
+                <th style={{ padding: '12px 16px', fontSize: 12, minWidth: 200 }}>Nama Barang</th>
+                <th className="right" style={{ padding: '12px 16px', fontSize: 12, width: 140 }}>Harga</th>
+                <th className="right" style={{ padding: '12px 16px', fontSize: 12, width: 120 }}>Stok Sistem</th>
+                <th className="right" style={{ width: 140, padding: '12px 16px', fontSize: 12 }}>Stok Fisik</th>
+                <th className="right" style={{ width: 100, padding: '12px 16px', fontSize: 12 }}>Selisih</th>
+                <th className="right" style={{ width: 130, padding: '12px 16px', fontSize: 12 }}>Est. Biaya</th>
+                <th style={{ width: 180, padding: '12px 16px', fontSize: 12 }}>Alasan</th>
+                <th style={{ width: 220, padding: '12px 16px', fontSize: 12 }}>Catatan</th>
               </tr>
             </thead>
             <tbody style={{ fontSize: 12 }}>
-              {items.map(item => {
+              {paginatedItems.map(item => {
                 const detail = getDetail(item.item_id);
                 const ratio = item.conversion_ratio || 1;
-                const largeUnit = item.purchase_unit || item.smallest_unit;
+                const largeUnit = formatUnit(item.purchase_unit || item.smallest_unit);
+                const smallUnit = formatUnit(item.smallest_unit);
                 const priceLarge = Number(item.current_average_price) * ratio;
 
                 const actualSmall = detail?.actual_physical_qty;
-                const actualLarge = actualSmall !== undefined ? Number((actualSmall / ratio).toFixed(2)) : '';
-                
+                const actualLarge = actualSmall !== undefined ? Math.round(actualSmall / ratio) : '';
+
                 const varianceSmall = detail?.variance ?? 0;
-                const varianceLarge = Number((varianceSmall / ratio).toFixed(2));
-                const varianceValue = Math.abs(varianceSmall) * Number(item.current_average_price);
-                
+                const varianceLarge = Math.round(varianceSmall / ratio);
+                const varianceValue = Math.round(Math.abs(varianceSmall) * Number(item.current_average_price));
+
+                const sysBalLarge = Math.round(item.system_balance / ratio);
+
                 return (
-                  <tr key={item.item_id}>
-                    <td className="font-bold" style={{ padding: '2px 8px' }}>
+                  <tr key={item.item_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td className="font-bold" style={{ padding: '8px 16px', fontSize: 13 }}>
                       {item.item_name}
-                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
-                        Satuan Kecil: {item.smallest_unit} (Rasio: {ratio})
+                      <div className="muted font-normal" style={{ fontSize: 11, marginTop: 2 }}>
+                        Satuan Kecil: {smallUnit} (Rasio: {ratio})
                       </div>
                     </td>
-                    <td className="right num" style={{ padding: '2px 8px' }}>
-                      Rp {priceLarge.toLocaleString('id-ID')}
-                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
+                    <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
+                      Rp {Math.round(priceLarge).toLocaleString('id-ID')}
+                      <div className="muted font-normal" style={{ fontSize: 11, marginTop: 2 }}>
                         / {largeUnit}
                       </div>
                     </td>
-                    <td className="right num" style={{ padding: '2px 8px' }}>
-                      {Number((item.system_balance / ratio).toFixed(2)).toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 10 }}>{largeUnit}</span>
+                    <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
+                      {sysBalLarge.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{largeUnit}</span>
                     </td>
-                    <td className="right" style={{ padding: '2px 8px' }}>
-                      <input 
-                        type="number" 
-                        className="input right" 
-                        value={actualLarge} 
-                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, ratio, e.target.value)} 
+                    <td className="right" style={{ padding: '8px 16px' }}>
+                      <input
+                        type="number"
+                        className="input right"
+                        value={actualLarge}
+                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, ratio, e.target.value)}
                         onWheel={(e) => (e.target as HTMLInputElement).blur()}
                         disabled={isLocked}
                         placeholder="0"
                         step="any"
-                        style={{ height: 24, width: '100%', fontSize: 12, padding: '2px 6px', borderColor: actualLarge === '' ? '#fca5a5' : 'var(--border)' }} 
+                        style={{ height: 32, width: '100%', fontSize: 13, padding: '4px 8px', borderColor: actualLarge === '' ? '#fca5a5' : 'var(--border)' }}
                       />
                     </td>
-                    <td className="right num" style={{ padding: '2px 8px' }}>
+                    <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
                       {varianceLarge !== 0 ? (
                         <span style={{ color: varianceLarge > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
                           {varianceLarge > 0 ? '+' : ''}{varianceLarge.toLocaleString('id-ID')}
                         </span>
                       ) : '-'}
                     </td>
-                    <td className="right num font-bold" style={{ padding: '2px 8px', color: varianceSmall !== 0 ? '#dc2626' : 'inherit' }}>
+                    <td className="right num font-bold" style={{ padding: '8px 16px', fontSize: 13, color: varianceSmall !== 0 ? '#dc2626' : 'inherit' }}>
                       {varianceSmall !== 0 ? `Rp ${varianceValue.toLocaleString('id-ID')}` : '-'}
                     </td>
-                    <td style={{ padding: '2px 8px' }}>
+                    <td style={{ padding: '8px 16px' }}>
                       {varianceSmall !== 0 ? (
-                        <select 
-                          className="input" 
-                          value={detail?.reason_category || ''} 
-                          onChange={e => handleReasonChange(item.item_id, 'reason_category', e.target.value)}
+                        <Select
+                          value={detail?.reason_category || ''}
+                          onChange={val => handleReasonChange(item.item_id, 'reason_category', val)}
                           disabled={isLocked}
-                          style={{ height: 24, padding: '0px 6px', fontSize: 11, borderColor: !detail?.reason_category ? '#fca5a5' : 'var(--border)' }}
-                        >
-                          <option value="">-- Select Reason --</option>
-                          {REASON_CATEGORIES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                        </select>
+                          options={[
+                            { value: '', label: '-- Pilih Alasan --' },
+                            ...REASON_CATEGORIES
+                          ]}
+                          inputStyle={{ height: 32, padding: '0px 8px', fontSize: 12, borderColor: !detail?.reason_category ? '#fca5a5' : 'var(--border)' }}
+                          optionStyle={{ padding: '6px 10px', fontSize: 12 }}
+                        />
                       ) : (
-                        <span className="muted italic" style={{ fontSize: 11 }}>No variance</span>
+                        <span className="muted italic" style={{ fontSize: 12 }}>Tidak ada selisih</span>
                       )}
                     </td>
-                    <td style={{ padding: '2px 8px' }}>
+                    <td style={{ padding: '8px 16px' }}>
                       {varianceSmall !== 0 && detail?.reason_category ? (
-                        <input 
-                          type="text" 
-                          className="input" 
-                          value={detail?.reason_notes || ''} 
+                        <input
+                          type="text"
+                          className="input"
+                          value={detail?.reason_notes || ''}
                           onChange={e => handleReasonChange(item.item_id, 'reason_notes', e.target.value)}
                           disabled={isLocked}
-                          placeholder={detail?.reason_category === 'LAINNYA' ? 'Required notes...' : 'Optional notes...'}
-                          style={{ height: 24, padding: '2px 6px', fontSize: 11, width: '100%', borderColor: (detail?.reason_category === 'LAINNYA' && !detail?.reason_notes?.trim()) ? '#fca5a5' : 'var(--border)' }}
+                          placeholder={detail?.reason_category === 'LAINNYA' ? 'Wajib diisi...' : 'Opsional...'}
+                          style={{ height: 32, padding: '4px 8px', fontSize: 12, width: '100%', borderColor: (detail?.reason_category === 'LAINNYA' && !detail?.reason_notes?.trim()) ? '#fca5a5' : 'var(--border)' }}
                         />
                       ) : null}
                     </td>
@@ -251,24 +302,17 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
               })}
             </tbody>
           </Table>
-          
-          {!isLocked && (
-            <div style={{ padding: 24, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-                Items without input will be considered having 0 variance.
-              </p>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <Button variant="outline" onClick={() => handleSave(false)} disabled={saving}>Save Draft</Button>
-                <Button variant="primary" onClick={() => {
-                  if (confirm('Are you sure you want to lock this session? All discrepancies will be posted as ADJ to inventory.')) {
-                    handleSave(true);
-                  }
-                }} disabled={saving}>
-                  Lock & Adjust Inventory
-                </Button>
-              </div>
-            </div>
-          )}
+          <div style={{ padding: '16px' }}>
+            {totalPages > 1 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={items.length}
+                itemsPerPage={limit as number}
+                onPageChange={setCurrentPage}
+              />
+            )}
+          </div>
         </div>
       </div>
     </section>

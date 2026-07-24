@@ -13,7 +13,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, role, outlet_id } = body;
+    const { name, email, role, outlet_id, password } = body;
     
     if (!name || !email || !role) {
       return NextResponse.json({ success: false, message: 'Semua kolom wajib diisi' }, { status: 400 });
@@ -22,9 +22,9 @@ export async function POST(req: NextRequest) {
     const newUser = await createUser({
       name,
       email,
+      password: role === 'ADMIN_OUTLET' ? password : null,
       role,
       outlet_id: outlet_id || null,
-      // Password is null to enforce Google Login (Option B)
     });
 
     return NextResponse.json({ success: true, data: newUser, message: 'Pengguna berhasil ditambahkan' });

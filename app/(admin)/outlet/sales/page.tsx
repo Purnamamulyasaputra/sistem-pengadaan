@@ -121,7 +121,7 @@ export default function SalesAnalyticsPage() {
         loadData(); // Reload sales data
       } else {
         setToastType('error');
-        setToastMsg('Failed: ' + json.message);
+        setToastMsg('Gagal: ' + json.message);
         setIsToastOpen(true);
       }
     } catch (err: any) {
@@ -190,7 +190,7 @@ export default function SalesAnalyticsPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16 }}>Analisis Penjualan</h3>
+            <h3 style={{ margin: 0, fontSize: 16 }}>Analitik Penjualan</h3>
             <p className="muted" style={{ margin: '2px 0 0', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>Pantau penjualan Moka POS</span>
               <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--muted)' }}></span>
@@ -273,13 +273,11 @@ export default function SalesAnalyticsPage() {
         {/* Filter & Toolbar Section */}
         <div style={{
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
           gap: 16,
           padding: '8px 12px',
           background: '#f8fafc',
           borderBottom: '1px solid var(--border)',
-          flexWrap: 'wrap'
         }}>
           {/* Left Controls: Date Range, Search, Category, Sort, Limit */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -353,11 +351,8 @@ export default function SalesAnalyticsPage() {
           </div>
 
           {/* Right: Items found count & Pagination Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span className="muted" style={{ fontSize: 12 }}>
-              {activeTab === 'summary' ? `${filteredData.length} Menu ditemukan` : `${filteredHistory.length} Transaksi ditemukan`}
-            </span>
-
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, alignSelf: 'flex-end' }}>
+            {/* Pagination buttons */}
             {!loading && totalPages > 1 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <button
@@ -392,6 +387,10 @@ export default function SalesAnalyticsPage() {
                 </button>
               </div>
             )}
+            {/* Item count text */}
+            <span className="muted" style={{ fontSize: 12 }}>
+              {activeTab === 'summary' ? `${filteredData.length} menu` : `${filteredHistory.length} transaksi`}
+            </span>
           </div>
         </div>
 

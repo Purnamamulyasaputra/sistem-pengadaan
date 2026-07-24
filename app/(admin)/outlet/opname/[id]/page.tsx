@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { HelpCircle } from 'lucide-react';
 import { Pagination } from '@/components/ui/Pagination';
+import { Select } from '@/components/ui/Select';
 
 export default function OutletOpnameDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -110,16 +111,28 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
         <div className="card-head">
           <div>
             <h3>Detail Opname — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
               <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
+              <span className="muted" style={{ fontSize: 13 }}>
+                <span className="font-bold">Mulai:</span> {new Date(header.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <span className="muted" style={{ fontSize: 13 }}>
+                <span className="font-bold">Terakhir Diubah:</span> {new Date(header.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <select className="input" style={{ width: 90, padding: '6px 10px', fontSize: 13 }} value={limit} onChange={(e) => { setLimit(e.target.value === 'all' ? 'all' : Number(e.target.value)); setCurrentPage(1); }}>
-              <option value="all">Semua</option>
-              <option value="8">8</option>
-              <option value="32">32</option>
-            </select>
+            <Select 
+              value={limit}
+              onChange={(val) => { setLimit(val); setCurrentPage(1); }}
+              options={[
+                { value: 'all', label: 'Semua' },
+                { value: 8, label: '8' },
+                { value: 32, label: '32' }
+              ]}
+              inputStyle={{ padding: '4px 10px', height: 32, fontSize: 13, minWidth: 90 }}
+              style={{ width: 100 }}
+            />
             {!isLocked && (
               <>
                 <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving}>Simpan Draft</Button>

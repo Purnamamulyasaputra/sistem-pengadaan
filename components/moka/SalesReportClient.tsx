@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Filter, RefreshCw, Download, Search, DollarSign, ShoppingCart, Percent, TrendingUp, TrendingDown, Store, Package, ChevronLeft, ChevronRight, BarChart2, Table as TableIcon } from 'lucide-react';
 import { Toast } from '@/components/ui/Toast';
 import { useRouter } from 'next/navigation';
+import { Select } from '@/components/ui/Select';
 import {
     BarChart,
     Bar,
@@ -262,21 +263,21 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                                 />
                             </div>
 
-                            <select
+                            <Select
                                 value={selectedOutlet}
-                                onChange={(e) => {
-                                    setSelectedOutlet(e.target.value);
+                                onChange={(val) => {
+                                    setSelectedOutlet(val);
                                     setIsFiltering(true);
-                                    router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${e.target.value}`);
+                                    router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${val}`);
                                     setTimeout(() => setIsFiltering(false), 1000);
                                 }}
-                                className="bg-white border border-gray-200 text-[11px] text-gray-700 font-medium rounded-md px-2 py-1 focus:outline-none focus:border-[#016e3f] shadow-sm w-auto max-w-[130px] truncate cursor-pointer"
-                            >
-                                <option value="">All Outlets</option>
-                                {outlets.map(o => (
-                                    <option key={o.id} value={o.id}>{o.name}</option>
-                                ))}
-                            </select>
+                                options={[
+                                    { value: '', label: 'All Outlets' },
+                                    ...outlets.map(o => ({ value: o.id, label: o.name }))
+                                ]}
+                                style={{ width: 130 }}
+                                inputStyle={{ height: 28, fontSize: 11, padding: '0 8px' }}
+                            />
                         </div>
                     </div>
                     <div className="p-4 h-[300px] w-full">
@@ -380,21 +381,21 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                             </div>
 
                             {/* Outlet Filter */}
-                            <select
+                            <Select
                                 value={selectedOutlet}
-                                onChange={(e) => {
-                                    setSelectedOutlet(e.target.value);
+                                onChange={(val) => {
+                                    setSelectedOutlet(val);
                                     setIsFiltering(true);
-                                    router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${e.target.value}`);
+                                    router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${val}`);
                                     setTimeout(() => setIsFiltering(false), 1000);
                                 }}
-                                className="bg-white border border-gray-200 text-[11px] text-gray-700 font-medium rounded-md px-2 py-1 focus:outline-none focus:border-[#016e3f] shadow-sm w-auto max-w-[125px] truncate cursor-pointer"
-                            >
-                                <option value="">All Outlets</option>
-                                {outlets.map(o => (
-                                    <option key={o.id} value={o.id}>{o.name}</option>
-                                ))}
-                            </select>
+                                options={[
+                                    { value: '', label: 'All Outlets' },
+                                    ...outlets.map(o => ({ value: o.id, label: o.name }))
+                                ]}
+                                style={{ width: 130 }}
+                                inputStyle={{ height: 28, fontSize: 11, padding: '0 8px' }}
+                            />
 
                             {isFiltering && (
                                 <div className="text-[11px] font-medium text-[#016e3f] animate-pulse flex items-center gap-1.5 ml-1">

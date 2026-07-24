@@ -23,31 +23,7 @@ export default function ReportsPage() {
       .catch(() => setLoading(false));
   }, [month, year]);
 
-  const exportExcel = () => {
-    if (reportData.length === 0) {
-      alert("Tidak ada data untuk diekspor");
-      return;
-    }
-    
-    const wsData = reportData.map(r => ({
-      'Item Name': r.item_name,
-      'Category': r.category_name,
-      'Total IN (Qty)': Number(r.total_in_qty),
-      'Total IN (Value Rp)': Number(r.total_in_qty) * Number(r.current_average_price),
-      'Total Distributed (Qty)': Number(r.total_distribution_qty),
-      'Total Distributed (Value Rp)': Number(r.total_distribution_qty) * Number(r.current_average_price),
-      'Total Adjusted (Qty)': Number(r.total_adj_qty),
-      'Total Adjusted (Value Rp)': Math.abs(Number(r.total_adj_qty)) * Number(r.current_average_price),
-      'Current Balance (Qty)': Number(r.current_balance),
-      'Current MA Price': Number(r.current_average_price),
-      'Current Value (Rp)': Number(r.current_balance) * Number(r.current_average_price),
-    }));
 
-    const ws = XLSX.utils.json_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Laporan Nilai Persediaan');
-    XLSX.writeFile(wb, `Laporan_Persediaan_${year}_${month}.xlsx`);
-  };
 
   let grandTotalIn = 0;
   let grandTotalDist = 0;
@@ -81,13 +57,14 @@ export default function ReportsPage() {
     <section className="screen">
       <div className="card">
         <div className="tabs" style={{ marginBottom: 0 }}>
-          <a href="/reports" className="tab active" style={{ textDecoration: 'none' }}>Laporan Keuangan</a>
+          <a href="/reports" className="tab active" style={{ textDecoration: 'none' }}>Grafik Keuangan</a>
+          <a href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</a>
           <a href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</a>
           <a href="/reports/profit-projection" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Simulator Laba</a>
         </div>
         <div className="card-head">
           <div>
-            <h3>Laporan Keuangan Pengadaan & Persediaan</h3>
+            <h3>Grafik Keuangan Pengadaan & Persediaan</h3>
             <p className="muted" style={{ margin: 0, marginTop: 4 }}>Nilai dihitung menggunakan algoritma Moving Average.</p>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -103,12 +80,11 @@ export default function ReportsPage() {
               options={[year-1, year, year+1].map(y => ({ value: y, label: String(y) }))}
               style={{ width: 100 }}
             />
-            <Button variant="outline" size="sm" onClick={exportExcel}>⬇ Ekspor Excel</Button>
           </div>
         </div>
         
         {chartData.length > 0 && (
-          <div style={{ padding: '24px 24px 0 24px' }}>
+          <div style={{ padding: '24px' }}>
             <h4 style={{ marginBottom: 16 }}>Nilai Persediaan Saat Ini Berdasarkan Kategori</h4>
             <div style={{ height: 220, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -127,60 +103,6 @@ export default function ReportsPage() {
             </div>
           </div>
         )}
-
-        <div className="card-body flush" style={{ marginTop: 24 }}>
-          {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data keuangan...</div>
-          ) : reportData.length === 0 ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Tidak ada transaksi ditemukan untuk periode ini.</div>
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <th style={{ padding: '8px 12px', fontSize: 12 }}>Nama Barang</th>
-                  <th style={{ padding: '8px 12px', fontSize: 12 }}>Kategori</th>
-                  <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Total Nilai MASUK</th>
-                  <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Nilai Distribusi</th>
-                  <th className="right" style={{ padding: '8px 12px', fontSize: 12, color: '#dc2626' }}>Nilai Penyesuaian</th>
-                  <th className="right" style={{ padding: '8px 12px', fontSize: 12, background: '#f8fafc' }}>Nilai Stok Saat Ini</th>
-                </tr>
-              </thead>
-              <tbody style={{ fontSize: 13 }}>
-                {reportData.map((r, i) => {
-                  const ma = Number(r.current_average_price);
-                  const valIn = Number(r.total_in_qty) * ma;
-                  const valDist = Number(r.total_distribution_qty) * ma;
-                  const valAdj = Math.abs(Number(r.total_adj_qty)) * ma;
-                  const valCurrent = Number(r.current_balance) * ma;
-                  
-                  return (
-                    <tr key={i}>
-                      <td className="font-bold" style={{ padding: '6px 12px' }}>{r.item_name}</td>
-                      <td className="muted" style={{ padding: '6px 12px' }}>{r.category_name}</td>
-                      <td className="right num" style={{ padding: '6px 12px' }}>Rp {valIn.toLocaleString('id-ID')}</td>
-                      <td className="right num" style={{ padding: '6px 12px' }}>Rp {valDist.toLocaleString('id-ID')}</td>
-                      <td className="right num" style={{ padding: '6px 12px', color: valAdj > 0 ? '#dc2626' : 'inherit' }}>
-                        Rp {valAdj.toLocaleString('id-ID')}
-                      </td>
-                      <td className="right num font-bold" style={{ padding: '6px 12px', background: '#f8fafc', color: '#016e3f' }}>
-                        Rp {valCurrent.toLocaleString('id-ID')}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr style={{ background: '#f1f5f9', fontWeight: 700, borderTop: '2px solid var(--border)', fontSize: 13 }}>
-                  <td colSpan={2} className="right" style={{ padding: '8px 12px' }}>TOTAL KESELURUHAN</td>
-                  <td className="right num" style={{ padding: '8px 12px' }}>Rp {grandTotalIn.toLocaleString('id-ID')}</td>
-                  <td className="right num" style={{ padding: '8px 12px' }}>Rp {grandTotalDist.toLocaleString('id-ID')}</td>
-                  <td className="right num" style={{ padding: '8px 12px', color: '#dc2626' }}>Rp {grandTotalAdj.toLocaleString('id-ID')}</td>
-                  <td className="right num" style={{ padding: '8px 12px', color: '#016e3f', fontSize: 15 }}>Rp {grandTotalValue.toLocaleString('id-ID')}</td>
-                </tr>
-              </tfoot>
-            </Table>
-          )}
-        </div>
       </div>
     </section>
   );

@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import MapRecipeModal from './MapRecipeModal';
 import { Table } from '@/components/ui/Table';
 import { Pagination } from '@/components/ui/Pagination';
+import { Select } from '@/components/ui/Select';
 
 const rp = (v: number | null | undefined) =>
     v == null || isNaN(Number(v)) || Number(v) === 0 ? '—' : `Rp ${Math.round(Number(v)).toLocaleString('id-ID')}`;
@@ -227,36 +228,33 @@ export default function MokaCatalogTableClient({
                     </form>
 
                     {outletsGrouped && Object.keys(outletsGrouped).length > 0 && (
-                        <select
-                            className="input"
+                        <Select
                             value={activeOutletId || ''}
-                            onChange={(e) => updateFilters(e.target.value, activeSearch || '', activeStatus || 'all')}
+                            onChange={(val) => updateFilters(val, activeSearch || '', activeStatus || 'all')}
+                            options={[
+                                { value: '', label: 'Semua Outlet' },
+                                ...Object.entries(outletsGrouped).flatMap(([bizName, outlets]) => [
+                                    { value: '', label: bizName, isGroup: true },
+                                    ...outlets.map((o: any) => ({ value: o.id, label: o.name }))
+                                ])
+                            ]}
                             style={{ width: 190 }}
-                        >
-                            <option value="">Semua Outlet</option>
-                            {Object.entries(outletsGrouped).map(([bizName, outlets]) => (
-                                <optgroup key={bizName} label={`--- ${bizName} ---`}>
-                                    {outlets.map((o: any) => (
-                                        <option key={o.id} value={o.id}>
-                                            {o.name}
-                                        </option>
-                                    ))}
-                                </optgroup>
-                            ))}
-                        </select>
+                            inputStyle={{ height: 32 }}
+                        />
                     )}
 
-                    <select 
-                        className="input" 
-                        value={activeStatus || 'all'} 
-                        onChange={handleStatusChange} 
+                    <Select
+                        value={activeStatus || 'all'}
+                        onChange={(val) => handleStatusChange({ target: { value: val } } as any)}
+                        options={[
+                            { value: 'all', label: 'Semua Status Pemetaan' },
+                            { value: 'ready', label: 'Hijau (Siap)' },
+                            { value: 'no_ingredients', label: 'Kuning (Tidak Ada Bahan)' },
+                            { value: 'unmapped', label: 'Merah (Belum Dipetakan)' }
+                        ]}
                         style={{ width: 210 }}
-                    >
-                        <option value="all">Semua Status Pemetaan</option>
-                        <option value="ready">Hijau (Siap)</option>
-                        <option value="no_ingredients">Kuning (Tidak Ada Bahan)</option>
-                        <option value="unmapped">Merah (Belum Dipetakan)</option>
-                    </select>
+                        inputStyle={{ height: 32 }}
+                    />
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
                         <span className="muted" style={{ fontSize: 13 }}>

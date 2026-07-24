@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 
 type OutletStockRow = {
   item_id: number;
@@ -109,36 +110,56 @@ export default function OutletInventoryStockPage() {
             <h3>Stok Inventaris Saat Ini</h3>
             <p className="hint">Stok fisik bahan baku dan perlengkapan operasional saat ini di outlet.</p>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', width: 220 }}>
-              <Search style={{ position: 'absolute', left: 10, top: 8, width: 14, height: 14, color: 'var(--muted)' }} />
-              <input
-                type="text"
-                className="input"
-                style={{ paddingLeft: 30, height: 32, fontSize: 13, width: '100%' }}
-                placeholder="Cari barang/barcode..."
-                value={search}
-                onChange={e => { setSearch(e.target.value); setPage(1); }}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', width: 220 }}>
+                <Search style={{ position: 'absolute', left: 10, top: 8, width: 14, height: 14, color: 'var(--muted)' }} />
+                <input
+                  type="text"
+                  className="input"
+                  style={{ paddingLeft: 30, height: 32, fontSize: 13, width: '100%' }}
+                  placeholder="Search items/barcode..."
+                  value={search}
+                  onChange={e => { setSearch(e.target.value); setPage(1); }}
+                />
+              </div>
+              <Select
+                value={categoryFilter}
+                onChange={val => { setCategoryFilter(val); setPage(1); }}
+                options={[
+                  { value: '', label: 'All Categories' },
+                  ...categories.map(c => ({ value: c, label: c }))
+                ]}
+                style={{ width: 160 }}
+                inputStyle={{ height: 32, fontSize: 13 }}
+              />
+              <Select
+                value={statusFilter}
+                onChange={val => { setStatusFilter(val); setPage(1); }}
+                options={[
+                  { value: '', label: 'All Statuses' },
+                  { value: 'AVAILABLE', label: 'Available' },
+                  { value: 'LOW_STOCK', label: 'Low Stock' },
+                  { value: 'OUT_OF_STOCK', label: 'Out of Stock' }
+                ]}
+                style={{ width: 140 }}
+                inputStyle={{ height: 32, fontSize: 13 }}
+              />
+              <Select
+                value={limit.toString()}
+                onChange={val => { setLimit(Number(val)); setPage(1); }}
+                options={[
+                  { value: '15', label: '15' },
+                  { value: '32', label: '32' },
+                  { value: '50', label: '50' },
+                  { value: '100', label: '100' }
+                ]}
+                style={{ width: 70 }}
+                inputStyle={{ height: 32, fontSize: 13 }}
               />
             </div>
-            <select className="input" style={{ height: 32, fontSize: 13, width: 160 }} value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setPage(1); }}>
-              <option value="">Semua Kategori</option>
-              {categories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select className="input" style={{ height: 32, fontSize: 13, width: 140 }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-              <option value="">Semua Status</option>
-              <option value="AVAILABLE">Tersedia (Aman)</option>
-              <option value="LOW_STOCK">Stok Menipis</option>
-              <option value="OUT_OF_STOCK">Stok Habis (0)</option>
-            </select>
-            <select className="input" style={{ height: 32, fontSize: 13, width: 70 }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
-              <option value="15">15</option>
-              <option value="32">32</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, alignSelf: 'flex-end' }}>
               {totalPages > 1 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>
@@ -157,7 +178,7 @@ export default function OutletInventoryStockPage() {
                   <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}><ChevronRight size={13} /></button>
                 </div>
               )}
-              <span className="muted" style={{ fontSize: 12 }}>{filteredData.length} barang ditemukan</span>
+              <span className="muted" style={{ fontSize: 12 }}>{filteredData.length} items</span>
             </div>
           </div>
         </div>

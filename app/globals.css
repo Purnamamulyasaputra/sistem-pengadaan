@@ -59,6 +59,7 @@ body {
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   font-size: 12px;
+  accent-color: var(--primary);
 }
 
 h1,

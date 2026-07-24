@@ -113,16 +113,26 @@ export default function StockCardPage() {
               onChange={e => setSearch(e.target.value)} 
               style={{ width: 200 }} 
             />
-            <select className="input" style={{ width: 150 }} value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-              <option value="">Semua Kategori</option>
-              {categories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-            </select>
-            <select className="input" style={{ width: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="">Semua Status</option>
-              <option value="SAFE">Aman</option>
-              <option value="LOW">Stok Rendah</option>
-              <option value="OUT">Habis</option>
-            </select>
+            <Select 
+              value={catFilter} 
+              onChange={(val: string) => setCatFilter(val)}
+              options={[
+                { value: '', label: 'Semua Kategori' },
+                ...categories.map(c => ({ value: String(c.id), label: c.name }))
+              ]}
+              style={{ width: 150 }}
+            />
+            <Select 
+              value={statusFilter} 
+              onChange={(val: string) => setStatusFilter(val)}
+              options={[
+                { value: '', label: 'Semua Status' },
+                { value: 'SAFE', label: 'Aman' },
+                { value: 'LOW', label: 'Stok Rendah' },
+                { value: 'OUT', label: 'Habis' }
+              ]}
+              style={{ width: 140 }}
+            />
           </div>
         </div>
 

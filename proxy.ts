@@ -19,7 +19,9 @@ export function proxy(request: NextRequest) {
 
   const token = request.cookies.get('sd_token')?.value;
   if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('callbackUrl', request.url);
+    return NextResponse.redirect(loginUrl);
   }
 
   interface ProxyJwtPayload {
@@ -35,13 +37,17 @@ export function proxy(request: NextRequest) {
     }).join(''));
     payload = JSON.parse(jsonPayload);
   } catch (e) {
-    const response = NextResponse.redirect(new URL('/login', request.url));
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('callbackUrl', request.url);
+    const response = NextResponse.redirect(loginUrl);
     response.cookies.delete('sd_token');
     return response;
   }
 
   if (!payload) {
-    const response = NextResponse.redirect(new URL('/login', request.url));
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('callbackUrl', request.url);
+    const response = NextResponse.redirect(loginUrl);
     response.cookies.delete('sd_token');
     return response;
   }

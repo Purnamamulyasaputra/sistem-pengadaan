@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -22,6 +23,11 @@ function getDisplayFormat(qty: number, unit: string) {
 }
 
 export default function ReceiveGoodsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const scanParam = searchParams.get('scan');
+  const [initialScanHandled, setInitialScanHandled] = useState(false);
+
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanModal, setScanModal] = useState<DeliveryNote | null>(null);
@@ -64,6 +70,20 @@ export default function ReceiveGoodsPage() {
   }, []);
 
   useEffect(() => { fetchNotes(); }, [fetchNotes]);
+
+  useEffect(() => {
+    if (deliveryNotes.length > 0 && scanParam && !initialScanHandled) {
+      const dn = deliveryNotes.find(d => d.delivery_note_number === scanParam);
+      if (dn) {
+        openScan(dn);
+      } else {
+        setToast({ isOpen: true, message: `Surat Jalan ${scanParam} tidak ditemukan atau bukan berstatus DIKIRIM.`, type: 'error' });
+      }
+      setInitialScanHandled(true);
+      // Remove query param from url
+      router.replace('/outlet/receive-goods');
+    }
+  }, [deliveryNotes, scanParam, initialScanHandled, router]);
 
   async function openScan(dn: DeliveryNote) {
     setScanModal(dn);

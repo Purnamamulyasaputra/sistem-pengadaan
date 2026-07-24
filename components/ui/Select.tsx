@@ -4,6 +4,8 @@ import { ChevronDown, Search } from 'lucide-react';
 interface SelectOption {
   value: string | number;
   label: string;
+  isGroup?: boolean;
+  disabled?: boolean;
 }
 
 interface SelectProps {
@@ -15,9 +17,11 @@ interface SelectProps {
   placeholder?: string;
   searchable?: boolean;
   inputStyle?: React.CSSProperties;
+  optionStyle?: React.CSSProperties;
+  disabled?: boolean;
 }
 
-export function Select({ value, onChange, options, style, className = '', placeholder, searchable = false, inputStyle }: SelectProps) {
+export function Select({ value, onChange, options, style, className = '', placeholder, searchable = false, inputStyle, optionStyle, disabled = false }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -49,13 +53,15 @@ export function Select({ value, onChange, options, style, className = '', placeh
           justifyContent: 'space-between',
           cursor: 'pointer',
           userSelect: 'none',
-          background: '#fff',
+          background: disabled ? '#f8fafc' : '#fff',
           width: '100%',
+          opacity: disabled ? 0.7 : 1,
           ...inputStyle
         }}
         onClick={() => {
+          if (disabled) return;
           setIsOpen(!isOpen);
-          if (isOpen) setSearchTerm('');
+          if (!isOpen && searchable) setSearchTerm('');
         }}
       >
         <span style={{ color: selectedOption ? 'inherit' : '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -95,35 +101,43 @@ export function Select({ value, onChange, options, style, className = '', placeh
           )}
           
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            {filteredOptions.map((opt) => (
-              <div
-                key={opt.value}
-                onClick={() => {
-                  onChange(opt.value);
-                  setIsOpen(false);
-                  setSearchTerm('');
-                }}
-                style={{
-                  padding: '8px 12px',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  background: String(opt.value) === String(value) ? '#016e3f' : '#fff',
-                  color: String(opt.value) === String(value) ? '#fff' : '#334155',
-                  transition: 'background 0.1s'
-                }}
-                onMouseEnter={(e) => {
-                  if (String(opt.value) !== String(value)) {
-                    e.currentTarget.style.background = '#e6f3ec';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (String(opt.value) !== String(value)) {
-                    e.currentTarget.style.background = '#fff';
-                  }
-                }}
-              >
-                {opt.label}
-              </div>
+            {filteredOptions.map((opt, i) => (
+              opt.isGroup ? (
+                <div key={`group-${i}`} style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#94a3b8', background: '#f8fafc', textTransform: 'uppercase' }}>
+                  {opt.label}
+                </div>
+              ) : (
+                <div
+                  key={opt.value}
+                  onClick={() => {
+                    if (opt.disabled) return;
+                    onChange(opt.value);
+                    setIsOpen(false);
+                    setSearchTerm('');
+                  }}
+                  style={{
+                    padding: '6px 10px',
+                    cursor: opt.disabled ? 'not-allowed' : 'pointer',
+                    fontSize: 12,
+                    background: String(opt.value) === String(value) ? '#f1f5f9' : '#fff',
+                    color: opt.disabled ? '#94a3b8' : '#334155',
+                    transition: 'background 0.1s',
+                    ...optionStyle
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!opt.disabled && String(opt.value) !== String(value)) {
+                      e.currentTarget.style.background = '#f8fafc';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!opt.disabled && String(opt.value) !== String(value)) {
+                      e.currentTarget.style.background = '#fff';
+                    }
+                  }}
+                >
+                  {opt.label}
+                </div>
+              )
             ))}
             {filteredOptions.length === 0 && (
               <div style={{ padding: '12px', fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>Tidak ada pilihan</div>
