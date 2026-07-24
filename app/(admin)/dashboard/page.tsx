@@ -103,42 +103,42 @@ export default async function DashboardPage() {
     <section className="screen">
       <div className="kpi-row">
         <div className="kpi-card">
-          <div className="kpi-label">Orders This Week</div>
+          <div className="kpi-label">Order Minggu Ini</div>
           <div className="kpi-value">{fmt(stats.ordersPending + stats.ordersProcessing + stats.ordersShipped + stats.ordersCompleted)}</div>
-          <div className="kpi-note">from outlets</div>
+          <div className="kpi-note">dari outlet</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">Needs Confirmation</div>
+          <div className="kpi-label">Perlu Konfirmasi</div>
           <div className="kpi-value">{fmt(stats.ordersPending)}</div>
-          <div className="kpi-note">{stats.ordersPending > 0 ? 'pending items' : '✓ None'}</div>
+          <div className="kpi-note">{stats.ordersPending > 0 ? 'menunggu' : '✓ Tidak ada'}</div>
         </div>
         {isCentral ? (
           <>
             <div className="kpi-card">
-              <div className="kpi-label">Purchasing Process</div>
+              <div className="kpi-label">Proses Pembelian</div>
               <div className="kpi-value">{fmt(stats.ordersProcessing + stats.ordersShipped)}</div>
-              <div className="kpi-note">wait vendor / ship</div>
+              <div className="kpi-note">tunggu vendor / krm</div>
             </div>
             <Link href="/alerts" style={{ textDecoration: 'none' }} className={`kpi-card ${stats.unresolvedAlerts > 0 ? 'alert' : ''}`}>
               <div className="kpi-label">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginRight:4}}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                Reorder Point
+                Titik Pemesanan
               </div>
               <div className="kpi-value">{fmt(stats.unresolvedAlerts)}</div>
-              <div className="kpi-note">items &le; min stock</div>
+              <div className="kpi-note">brg &le; min stok</div>
             </Link>
           </>
         ) : (
           <>
             <div className="kpi-card">
-              <div className="kpi-label">Shipping Process</div>
+              <div className="kpi-label">Proses Pengiriman</div>
               <div className="kpi-value">{fmt(stats.ordersShipped)}</div>
-              <div className="kpi-note">on the way</div>
+              <div className="kpi-note">sedang dikirim</div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">Total Completed Requests</div>
+              <div className="kpi-label">Total Order Selesai</div>
               <div className="kpi-value">{fmt(stats.ordersCompleted)}</div>
-              <div className="kpi-note">✓ Total completed</div>
+              <div className="kpi-note">✓ Selesai</div>
             </div>
           </>
         )}
@@ -148,7 +148,7 @@ export default async function DashboardPage() {
         <div className="card">
           <div className="card-head">
             <div>
-              <h3>Inventory Value Trend</h3>
+              <h3>Tren Nilai Inventaris</h3>
             </div>
           </div>
           <div className="card-body">
@@ -165,15 +165,15 @@ export default async function DashboardPage() {
                   <circle className="chart-dot d2" cx="640" cy="82" r="3.5" fill="#c0392b" />
                 </svg>
                 <div className="chart-legend" style={{ display: 'flex', gap: 16, marginTop: 12 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><i style={{background:'#016e3f', width: 12, height: 12, borderRadius: 2}}></i>Normal Distribution</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><i style={{background:'#c0392b', width: 12, height: 12, borderRadius: 2}}></i>Central Adjustment</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><i style={{background:'#016e3f', width: 12, height: 12, borderRadius: 2}}></i>Distribusi Normal</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><i style={{background:'#c0392b', width: 12, height: 12, borderRadius: 2}}></i>Penyesuaian Pusat</span>
                 </div>
               </>
             ) : (
               <div className="empty-state" style={{ padding: '32px 0' }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3v18h18M18 17l-5-5-4 4-5-5"/></svg>
-                <h4>No data available</h4>
-                <p>Not enough inventory data to display trend</p>
+                <h4>Data tidak tersedia</h4>
+                <p>Data inventaris tidak cukup untuk menampilkan tren</p>
               </div>
             )}
           </div>
@@ -183,29 +183,29 @@ export default async function DashboardPage() {
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>{isCentral ? 'Order Status Recap per Outlet' : 'My Request History'}</h3>
+            <h3>{isCentral ? 'Rekap Status Order per Outlet' : 'Riwayat Permintaan Saya'}</h3>
           </div>
           <Link href="/requests" style={{ textDecoration: 'none' }}>
-            <Button variant="primary" size="sm">Open Detailed Recap</Button>
+            <Button variant="primary" size="sm">Buka Rekap Detail</Button>
           </Link>
         </div>
         <div className="card-body flush">
           {recentOrders.length === 0 ? (
             <div className="empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
-              <h4>No requests yet</h4>
-              <p>Data not found</p>
+              <h4>Belum ada permintaan</h4>
+              <p>Data tidak ditemukan</p>
             </div>
           ) : (
             <Table>
               <thead>
                 <tr>
-                  <th>Order No.</th>
+                  <th>No. Order</th>
                   {isCentral && <th>Outlet</th>}
-                  <th>Order Date</th>
-                  <th>Delivery Date</th>
+                  <th>Tanggal Order</th>
+                  <th>Tanggal Kirim</th>
                   <th className="center">Status</th>
-                  <th className="right">Actions</th>
+                  <th className="right">Aksi</th>
                 </tr>
               </thead>
               <tbody>

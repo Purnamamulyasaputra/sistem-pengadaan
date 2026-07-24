@@ -42,51 +42,57 @@ function Icon({ name, ...props }: { name: string } & React.SVGProps<SVGSVGElemen
 }
 
 const CENTRAL_MENU: NavItem[] = [
-  { section: 'OVERVIEW' },
+  { section: 'RINGKASAN UTAMA' },
   { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
-  { href: '/alerts', label: 'Reorder Alerts', icon: <Icon name="bell" />, badge: 0 },
-  
-  { section: 'MASTER DATA & INVENTORY' },
-  { href: '/master-data/items', label: 'Master Items', icon: <Icon name="db" /> },
-  { href: '/hpp', label: 'Menus & COGS', icon: <Icon name="hpp" /> },
-  { href: '/stock-card', label: 'Central Stock', icon: <Icon name="clipboard" /> },
+  { href: '/alerts', label: 'Peringatan Stok', icon: <Icon name="bell" />, badge: 0 },
+
+  { section: 'TRANSAKSI OUTLET' },
+  { href: '/requests', label: 'Permintaan Outlet', icon: <Icon name="list" /> },
+  { href: '/delivery-orders', label: 'Pengiriman (Surat Jalan)', icon: <Icon name="truck" /> },
+
+  { section: 'TRANSAKSI SUPPLIER' },
+  { href: '/purchase-orders', label: 'Pembelian (PO)', icon: <Icon name="cart" /> },
+  { href: '/warehouse', label: 'Penerimaan Barang', icon: <Icon name="box" /> },
+
+  { section: 'MANAJEMEN STOK' },
+  { href: '/stock-card', label: 'Stok Pusat', icon: <Icon name="clipboard" /> },
   { href: '/opname/central', label: 'Stock Opname', icon: <Icon name="package" /> },
-  
-  { section: 'PURCHASING & DISTRIBUTION' },
-  { href: '/purchase-orders', label: 'Purchase Orders', icon: <Icon name="cart" /> },
-  { href: '/warehouse', label: 'Receive Goods', icon: <Icon name="box" /> },
-  { href: '/requests', label: 'Outlet Requests', icon: <Icon name="list" /> },
-  { href: '/delivery-orders', label: 'Delivery Orders', icon: <Icon name="truck" /> },
 
-  { section: 'MOKA POS INTEGRATION' },
-  { href: '/master-data/moka-catalog', label: 'Moka POS Catalog', icon: <Icon name="package" /> },
-  { href: '/sales-report', label: 'Sales Summary', icon: <Icon name="trend" /> },
-  { href: '/sales-report/transactions', label: 'Transaction Data', icon: <Icon name="list" /> },
-  { href: '/sales-report/customers', label: 'Customer Data', icon: <Icon name="user" /> },
-  { href: '/settings/moka', label: 'Moka Settings', icon: <Icon name="settings" /> },
+  { section: 'DATA MASTER' },
+  { href: '/master-data/items', label: 'Master Barang', icon: <Icon name="db" /> },
+  { href: '/hpp', label: 'Master Menu & HPP', icon: <Icon name="hpp" /> },
 
-  { section: 'REPORTS & SETTINGS' },
-  { href: '/reports/sales-analytics', label: 'Sales Analytics', icon: <Icon name="trend" /> },
-  { href: '/reports', label: 'System Reports', icon: <Icon name="report" /> },
-  { href: '/settings', label: 'System Settings', icon: <Icon name="settings" /> },
+  { section: 'INTEGRASI MOKA POS' },
+  { href: '/master-data/moka-catalog', label: 'Katalog Moka', icon: <Icon name="package" /> },
+  { href: '/sales-report', label: 'Ringkasan Penjualan', icon: <Icon name="trend" /> },
+  { href: '/sales-report/transactions', label: 'Data Transaksi', icon: <Icon name="list" /> },
+  { href: '/sales-report/customers', label: 'Data Pelanggan', icon: <Icon name="user" /> },
+  { href: '/settings/moka', label: 'Pengaturan Moka', icon: <Icon name="settings" /> },
+
+  { section: 'LAPORAN & PENGATURAN' },
+  { href: '/reports/sales-analytics', label: 'Analitik Penjualan', icon: <Icon name="trend" /> },
+  { href: '/reports', label: 'Laporan Sistem', icon: <Icon name="report" /> },
+  { href: '/settings', label: 'Pengaturan Sistem', icon: <Icon name="settings" /> },
 ];
 
 const OUTLET_MENU: NavItem[] = [
-  { section: 'OVERVIEW' },
+  { section: 'RINGKASAN UTAMA' },
   { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
-  
-  { section: 'CATALOG & INVENTORY' },
-  { href: '/outlet/menus', label: 'Menus & COGS', icon: <Icon name="hpp" /> },
-  { href: '/outlet/inventory/stock', label: 'Live Stock', icon: <Icon name="db" /> },
-  { href: '/outlet/opname', label: 'Stock Opname', icon: <Icon name="clipboard" /> },
-  
-  { section: 'PROCUREMENT' },
-  { href: '/outlet/requests', label: 'Order Requests', icon: <Icon name="cart" /> },
-  { href: '/outlet/receive-goods', label: 'Receive Goods', icon: <Icon name="truck" /> },
 
-  { section: 'REPORTS & SETTINGS' },
-  { href: '/outlet/sales', label: 'Sales Analytics', icon: <Icon name="trend" /> },
-  { href: '/settings/profile', label: 'Account Profile', icon: <Icon name="user" /> },
+  { section: 'PENGADAAN BARANG' },
+  { href: '/outlet/requests', label: 'Order ke Pusat', icon: <Icon name="cart" /> },
+  { href: '/outlet/receive-goods', label: 'Penerimaan Barang', icon: <Icon name="truck" /> },
+
+  { section: 'MANAJEMEN STOK' },
+  { href: '/outlet/inventory/stock', label: 'Stok Outlet (Live)', icon: <Icon name="db" /> },
+  { href: '/outlet/opname', label: 'Stock Opname', icon: <Icon name="clipboard" /> },
+
+  { section: 'KATALOG' },
+  { href: '/outlet/menus', label: 'Menu & HPP', icon: <Icon name="hpp" /> },
+
+  { section: 'LAPORAN & PENGATURAN' },
+  { href: '/outlet/sales', label: 'Analitik Penjualan', icon: <Icon name="trend" /> },
+  { href: '/settings/profile', label: 'Profil Akun', icon: <Icon name="user" /> },
 ];
 
 export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
@@ -107,7 +113,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
     try {
       const stored = localStorage.getItem('sidebar_snooze');
       if (stored) setSnoozeMap(JSON.parse(stored));
-    } catch(e) {}
+    } catch (e) { }
   }, []);
 
   useEffect(() => {
@@ -217,7 +223,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
 
   const menuWithBadge = menu.map(item => {
     if (item.href === '/alerts' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveAlertCount) };
-    if (item.href === '/requests' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) }; 
+    if (item.href === '/requests' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) };
     if (item.href === '/outlet/inventory/stock' && role === 'ADMIN_OUTLET') return { ...item, badge: getEffectiveBadge(item.href, liveAlertCount) };
     if (item.href === '/outlet/receive-goods' && role === 'ADMIN_OUTLET') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) };
     return item;
@@ -234,7 +240,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
         />
       )}
 
-      <aside 
+      <aside
         className={`sidebar no-print ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
         style={mobileOpen ? { transform: 'translateX(0)', position: 'fixed', left: 0, top: 0, bottom: 0, width: '220px', zIndex: 100 } : undefined}
       >
@@ -262,7 +268,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
               return <div key={i} className="nav-section-title">{item.section}</div>;
             }
             let isActive = item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href!);
-            
+
             // Fix overlapping active states for Moka POS Integration
             if (item.href === '/sales-report') {
               isActive = pathname === '/sales-report';
@@ -270,7 +276,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             if (item.href === '/settings') {
               isActive = pathname === '/settings' || pathname.startsWith('/settings/profile');
             }
-            
+
             if (item.href === '/purchase-orders' && pathname.startsWith('/goods-receipt')) isActive = true;
             if (item.href === '/reports') {
               isActive = pathname === '/reports' || pathname.startsWith('/reports/profit-projection') || pathname.startsWith('/price-history');
@@ -280,6 +286,9 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             }
             if (item.href === '/master-data/items' && pathname.startsWith('/master-data/items')) isActive = true;
             if (item.href === '/hpp' && pathname.startsWith('/hpp')) isActive = true;
+            if (item.href === '/outlet/sales') {
+              isActive = pathname === '/outlet/sales';
+            }
 
             return (
               <Link
@@ -305,16 +314,16 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             className="logout-btn"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-            <span className="label">{loggingOut ? 'Logging out...' : 'Logout'}</span>
+            <span className="label">{loggingOut ? 'Keluar...' : 'Keluar'}</span>
           </button>
         </div>
       </aside>
 
       <ConfirmDialog
         open={confirmLogout}
-        title="Log out?"
-        message="You will need to log in again to access the system."
-        confirmText="Yes, Log out"
+        title="Keluar?"
+        message="Anda harus masuk kembali untuk mengakses sistem."
+        confirmText="Ya, Keluar"
         onCancel={() => !loggingOut && setConfirmLogout(false)}
         onConfirm={() => handleLogout()}
         loading={loggingOut}

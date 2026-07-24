@@ -122,9 +122,9 @@ export default function SalesAnalyticsPage() {
         <div className="card-head">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: 18 }}>Sales Analytics (Product Matrix)</h3>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Analitik Penjualan (Matriks Produk)</h3>
               <p className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
-                Comparison of total products sold across all outlets.
+                Perbandingan total produk terjual di seluruh outlet.
               </p>
             </div>
             <button className="btn btn-outline btn-sm" onClick={handleExport} disabled={loading || matrix.length === 0} style={{ fontWeight: 600 }}>
@@ -133,23 +133,23 @@ export default function SalesAnalyticsPage() {
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
-              Export CSV
+              Ekspor CSV
             </button>
           </div>
         </div>
 
         {/* Filters & Top Pagination */}
         <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="date" className="input" style={{ width: 140 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="Start Date" />
-          <input type="date" className="input" style={{ width: 140 }} value={dateTo} onChange={e => setDateTo(e.target.value)} title="End Date" />
+          <input type="date" className="input" style={{ width: 140 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="Tanggal Mulai" />
+          <input type="date" className="input" style={{ width: 140 }} value={dateTo} onChange={e => setDateTo(e.target.value)} title="Tanggal Selesai" />
           <select className="input" style={{ width: 180 }} value={categoryId} onChange={e => setCategoryId(e.target.value)}>
-            <option value="">All Categories</option>
+            <option value="">Semua Kategori</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <input
             type="text"
             className="input"
-            placeholder="Search menu name..."
+            placeholder="Cari nama menu..."
             style={{ width: 220 }}
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -165,7 +165,7 @@ export default function SalesAnalyticsPage() {
               </div>
             )}
             <span className="muted" style={{ fontSize: 13 }}>
-              {matrix.length} items
+              {matrix.length} data
             </span>
           </div>
         </div>
@@ -175,15 +175,15 @@ export default function SalesAnalyticsPage() {
 
           <div className="table-responsive">
             {loading ? (
-              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading matrix data...</div>
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Memuat data matriks...</div>
             ) : matrix.length === 0 ? (
-              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No sales data found for these criteria.</div>
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Tidak ada data penjualan yang sesuai dengan kriteria ini.</div>
             ) : (
               <table className="table" style={{ minWidth: 800, fontSize: 12, whiteSpace: 'nowrap' }}>
                 <thead>
                   <tr style={{ color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase' }}>
-                    <th style={{ width: 250, minWidth: 250, maxWidth: 250, position: 'sticky', left: 0, background: '#fff', zIndex: 10, boxShadow: '4px 0 8px -2px rgba(0,0,0,0.05)', whiteSpace: 'normal' }}>ITEM</th>
-                    <th style={{ width: 100, textAlign: 'right' }}>PRICE</th>
+                    <th style={{ width: 250, minWidth: 250, maxWidth: 250, position: 'sticky', left: 0, background: '#fff', zIndex: 10, boxShadow: '4px 0 8px -2px rgba(0,0,0,0.05)', whiteSpace: 'normal' }}>PRODUK</th>
+                    <th style={{ width: 100, textAlign: 'right' }}>HARGA</th>
                     {outletColumns.map(o => (
                       <th key={o.id} style={{ textAlign: 'center', whiteSpace: 'nowrap', padding: '0 24px', borderLeft: '1px solid var(--border)' }}>{o.name}</th>
                     ))}
@@ -221,7 +221,7 @@ export default function SalesAnalyticsPage() {
                 <tfoot>
                   <tr style={{ background: '#fff', fontWeight: 700 }}>
                     <td colSpan={2} style={{ position: 'sticky', left: 0, background: '#fff', zIndex: 10, boxShadow: '4px 0 8px -2px rgba(0,0,0,0.05)', textAlign: 'right', padding: '16px 20px', color: 'var(--text-strong)', letterSpacing: '0.5px', borderTop: '2px solid var(--border)' }}>
-                      GRAND TOTAL QTY
+                      TOTAL KESELURUHAN QTY
                     </td>
                     {outletColumns.map(o => {
                       const colTotal = matrix.reduce((sum, r) => sum + (r.outlets[o.id] || 0), 0);

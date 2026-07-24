@@ -41,7 +41,7 @@ export async function receiveGoods(input: {
   return withTransaction(async (client) => {
     // 1. Get current average price & stock (row lock to secure against race conditions)
     const current = await client.query(
-      `SELECT current_average_price,
+      `SELECT current_average_price, conversion_ratio,
               (SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1) AS last_balance
        FROM items WHERE id = $1 FOR UPDATE`,
       [item_id]
@@ -49,11 +49,15 @@ export async function receiveGoods(input: {
 
     const oldAvg = parseFloat(current.rows[0]?.current_average_price ?? '0');
     const oldBalance = parseFloat(current.rows[0]?.last_balance ?? '0');
+    const ratio = parseFloat(current.rows[0]?.conversion_ratio || 1);
+
+    const actualQty = qty * ratio;
+    const actualUnitPrice = unit_purchase_price / ratio;
 
     // 2. Calculate Moving Average
     const oldValue = oldAvg * oldBalance;
-    const newValue = unit_purchase_price * qty;
-    const newBalance = oldBalance + qty;
+    const newValue = actualUnitPrice * actualQty;
+    const newBalance = oldBalance + actualQty;
     const newAvgPrice = newBalance > 0 ? (oldValue + newValue) / newBalance : 0;
 
     // 3. Update price cache in items
@@ -66,7 +70,7 @@ export async function receiveGoods(input: {
     await client.query(
       `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
        VALUES ($1, 'IN', $2, $3, 'RECEIPT', $4)`,
-      [item_id, qty, newBalance, null]
+      [item_id, actualQty, newBalance, null]
     );
 
     // Auto fulfill pending outlet requests if stock arrived
@@ -76,7 +80,7 @@ export async function receiveGoods(input: {
     await client.query(
       `INSERT INTO price_history (item_id, vendor_id, purchase_date, purchase_qty, unit_purchase_price, new_average_price, purchase_order_item_id)
        VALUES ($1, $2, CURRENT_DATE, $3, $4, $5, $6)`,
-      [item_id, vendor_id, qty, unit_purchase_price, newAvgPrice, purchase_order_item_id ?? null]
+      [item_id, vendor_id, actualQty, actualUnitPrice, newAvgPrice, purchase_order_item_id ?? null]
     );
 
     return { newAvgPrice, newBalance };

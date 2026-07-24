@@ -87,9 +87,9 @@ export default function ReceiveGoodsPage() {
     const barcode = globalBarcode.trim();
 
     if (barcode !== scanModal.delivery_note_number) {
-       setToast({ isOpen: true, message: `Please scan the Tracking Code from the Surat Jalan (${scanModal.delivery_note_number}) to validate the entire delivery.`, type: 'error' });
-       setGlobalBarcode('');
-       return;
+      setToast({ isOpen: true, message: `Harap scan Kode Tracking dari Surat Jalan (${scanModal.delivery_note_number}) untuk memvalidasi seluruh pengiriman.`, type: 'error' });
+      setGlobalBarcode('');
+      return;
     }
 
     // Validate inputs
@@ -98,7 +98,7 @@ export default function ReceiveGoodsPage() {
 
       const inputQty = qtys[item.id];
       if (inputQty === undefined || inputQty === '' || inputQty < 0) {
-        setToast({ isOpen: true, message: `Please input Actual Quantity for ${item.item_name}.`, type: 'error' });
+        setToast({ isOpen: true, message: `Harap masukkan Kuantitas Aktual untuk ${item.item_name}.`, type: 'error' });
         return;
       }
 
@@ -108,7 +108,7 @@ export default function ReceiveGoodsPage() {
       const notesStr = discNotes[item.id] || '';
 
       if (isDiscrepancy && !notesStr.trim()) {
-        setToast({ isOpen: true, message: `Discrepancy reason is required for ${item.item_name}.`, type: 'error' });
+        setToast({ isOpen: true, message: `Alasan selisih wajib diisi untuk ${item.item_name}.`, type: 'error' });
         return;
       }
     }
@@ -145,7 +145,7 @@ export default function ReceiveGoodsPage() {
         }
       }
 
-      setToast({ isOpen: true, message: `All items verified! Finalizing Receipt...`, type: 'info' });
+      setToast({ isOpen: true, message: `Semua barang terverifikasi! Menyelesaikan Penerimaan...`, type: 'info' });
       setGlobalBarcode('');
 
       await doFinalize(scanModal.id, proofImage);
@@ -158,7 +158,7 @@ export default function ReceiveGoodsPage() {
 
   async function doFinalize(dnId: number, photo: File | null) {
     if (!photo) {
-      setToast({ isOpen: true, message: 'Proof of delivery photo is required.', type: 'error' });
+      setToast({ isOpen: true, message: 'Foto bukti pengiriman wajib diunggah.', type: 'error' });
       return;
     }
     setUploading(true);
@@ -168,7 +168,7 @@ export default function ReceiveGoodsPage() {
       const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
       const uploadData = await uploadRes.json();
       if (!uploadData.success) {
-        setToast({ isOpen: true, message: `Error uploading photo: ${uploadData.message}`, type: 'error' });
+        setToast({ isOpen: true, message: `Error mengunggah foto: ${uploadData.message}`, type: 'error' });
         return;
       }
       const confirmRes = await fetch(`/api/delivery-notes/${dnId}/confirm`, {
@@ -178,11 +178,11 @@ export default function ReceiveGoodsPage() {
       });
       const confirmData = await confirmRes.json();
       if (!confirmData.success) {
-        setToast({ isOpen: true, message: `Error finalizing: ${confirmData.message}`, type: 'error' });
+        setToast({ isOpen: true, message: `Error menyelesaikan: ${confirmData.message}`, type: 'error' });
         return;
       }
       setScanModal(null);
-      setToast({ isOpen: true, message: 'Delivery Order received and finalized!', type: 'success' });
+      setToast({ isOpen: true, message: 'Surat Jalan diterima dan diselesaikan!', type: 'success' });
       fetchNotes();
     } catch (e: any) {
       setToast({ isOpen: true, message: e.message, type: 'error' });
@@ -198,27 +198,27 @@ export default function ReceiveGoodsPage() {
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Receive Goods (Scan IN)</h3>
+            <h3>Terima Barang (Scan IN)</h3>
           </div>
         </div>
 
         <div className="card-body flush">
-          {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Loading Delivery Orders...</div> : deliveryNotes.length === 0 ? (
+          {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Memuat Surat Jalan...</div> : deliveryNotes.length === 0 ? (
             <div className="empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1 3h15v13H1z M16 8h4l3 3v5h-7V8z" /></svg>
-              <h4>No deliveries</h4>
-              <p>No Delivery Orders in SHIPPED status for your outlet yet</p>
+              <h4>Belum ada pengiriman</h4>
+              <p>Belum ada Surat Jalan dengan status DIKIRIM untuk outlet Anda</p>
             </div>
           ) : (
             <Table>
               <thead>
                 <tr>
-                  <th>DO No.</th>
-                  <th>Ref PO No.</th>
-                  <th>Delivery Date</th>
-                  <th>Driver</th>
+                  <th>No. Surat Jalan</th>
+                  <th>No. Ref PO</th>
+                  <th>Tanggal Kirim</th>
+                  <th>Sopir</th>
                   <th className="center">Status</th>
-                  <th className="right">Actions</th>
+                  <th className="right">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -232,12 +232,12 @@ export default function ReceiveGoodsPage() {
                     <td className="muted">{dn.driver_name || '-'}</td>
                     <td className="center">
                       <Badge variant={dn.status === 'DITERIMA' ? 'green' : 'amber'}>
-                        {dn.status === 'DITERIMA' ? 'Received' : dn.status === 'DIKIRIM' ? 'Shipped' : dn.status}
+                        {dn.status === 'DITERIMA' ? 'Diterima' : dn.status === 'DIKIRIM' ? 'Dikirim' : dn.status}
                       </Badge>
                     </td>
                     <td className="right">
                       <Button variant={dn.status === 'DITERIMA' ? 'outline' : 'primary'} size="sm" onClick={() => openScan(dn)}>
-                        {dn.status === 'DITERIMA' ? 'View Receipt' : 'Verify Item'}
+                        {dn.status === 'DITERIMA' ? 'Lihat Bukti' : 'Verifikasi Barang'}
                       </Button>
                     </td>
                   </tr>
@@ -248,18 +248,18 @@ export default function ReceiveGoodsPage() {
         </div>
       </div>
 
-      <Modal isOpen={!!scanModal} onClose={() => setScanModal(null)} title={`Receive Goods - ${scanModal?.delivery_note_number}`} maxWidth={900}>
+      <Modal isOpen={!!scanModal} onClose={() => setScanModal(null)} title={`Terima Barang - ${scanModal?.delivery_note_number}`} maxWidth={900}>
         <div className="modal-body" style={{ padding: '16px 20px' }}>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h5 style={{ margin: 0, color: 'var(--primary)', fontSize: 16 }}>Items Verification</h5>
+            <h5 style={{ margin: 0, color: 'var(--primary)', fontSize: 16 }}>Verifikasi Barang</h5>
             <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 8 }}>
             </div>
           </div>
 
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 24, overflowX: 'auto' }}>
             <Table>
-              <thead><tr><th>Item Data</th><th className="center">Qty Shipped</th><th>Actual Qty Received</th><th>Discrepancy (If Any)</th><th className="center">Status</th></tr></thead>
+              <thead><tr><th>Data Barang</th><th className="center">Jml Dikirim</th><th>Jml Aktual Diterima</th><th>Selisih (Jika Ada)</th><th className="center">Status</th></tr></thead>
               <tbody>
                 {itemsList.map(item => {
                   const shippedFmt = getDisplayFormat(Number(item.qty_shipped), item.smallest_unit);
@@ -286,7 +286,7 @@ export default function ReceiveGoodsPage() {
                           )}
                         </td>
                         <td className="center">
-                          <Badge variant="green">✓ Received</Badge>
+                          <Badge variant="green">✓ Diterima</Badge>
                         </td>
                       </tr>
                     );
@@ -309,7 +309,7 @@ export default function ReceiveGoodsPage() {
                             type="number"
                             step="any"
                             min={0}
-                            placeholder="Qty"
+                            placeholder="Jml"
                             value={inputQty}
                             onChange={e => setQtys({ ...qtys, [item.id]: e.target.value === '' ? '' : Number(e.target.value) })}
                             style={{ width: 100, fontSize: 13, padding: '6px 10px' }}
@@ -323,7 +323,7 @@ export default function ReceiveGoodsPage() {
                             <Input
                               value={discNotes[item.id] || ''}
                               onChange={e => setDiscNotes({ ...discNotes, [item.id]: e.target.value })}
-                              placeholder="Write reason..."
+                              placeholder="Tulis alasan..."
                               style={{ fontSize: 12, padding: '4px 8px', marginTop: 4, width: '100%' }}
                             />
                           </div>
@@ -332,7 +332,7 @@ export default function ReceiveGoodsPage() {
                         )}
                       </td>
                       <td className="center" style={{ verticalAlign: 'top', paddingTop: 16 }}>
-                        <Badge variant="gray">Waiting Scan</Badge>
+                        <Badge variant="gray">Menunggu Scan</Badge>
                       </td>
                     </tr>
                   );
@@ -346,7 +346,7 @@ export default function ReceiveGoodsPage() {
               {scanModal?.status !== 'DITERIMA' && (
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()} style={{ whiteSpace: 'nowrap' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                  {proofImage || previewUrl ? 'Change Photo' : 'Upload Photo'}
+                  {proofImage || previewUrl ? 'Ubah Foto' : 'Unggah Foto'}
                 </Button>
               )}
               {scanModal?.status !== 'DITERIMA' && (
@@ -361,21 +361,21 @@ export default function ReceiveGoodsPage() {
                 />
               )}
               {scanModal?.status === 'DITERIMA' && previewUrl && (
-                <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>Proof of Delivery</span>
+                <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>Bukti Pengiriman</span>
               )}
             </div>
 
             {allScannedIn ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {scanModal?.status !== 'DITERIMA' && (
-                  <Button 
-                    variant="primary" 
-                    type="button" 
+                  <Button
+                    variant="primary"
+                    type="button"
                     onClick={() => { if (scanModal) doFinalize(scanModal.id, proofImage); }}
                     disabled={uploading || !proofImage}
                     style={{ flex: 1 }}
                   >
-                    {uploading ? 'Finalizing...' : 'Finalize Receipt'}
+                    {uploading ? 'Menyelesaikan...' : 'Selesaikan Penerimaan'}
                   </Button>
                 )}
               </div>
@@ -385,13 +385,13 @@ export default function ReceiveGoodsPage() {
                   ref={barcodeInputRef}
                   value={globalBarcode}
                   onChange={e => setGlobalBarcode(e.target.value)}
-                  placeholder={!proofImage ? 'Upload photo first...' : 'Scan barcode...'}
+                  placeholder={!proofImage ? 'Unggah foto dulu...' : 'Scan barcode...'}
                   disabled={scanning || !proofImage || uploading}
                   autoFocus
                   style={{ flex: 1 }}
                 />
                 <Button variant="primary" type="submit" disabled={scanning || !globalBarcode.trim() || !proofImage || uploading}>
-                  {uploading ? 'Finalizing...' : scanning ? 'Verifying...' : 'Submit Scan'}
+                  {uploading ? 'Menyelesaikan...' : scanning ? 'Memverifikasi...' : 'Kirim Scan'}
                 </Button>
               </form>
             )}
@@ -400,7 +400,7 @@ export default function ReceiveGoodsPage() {
         </div>
 
         <div className="modal-actions" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button variant="outline" onClick={() => setScanModal(null)}>Close</Button>
+          <Button variant="outline" onClick={() => setScanModal(null)}>Tutup</Button>
         </div>
       </Modal>
 
@@ -422,8 +422,8 @@ export default function ReceiveGoodsPage() {
               fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-            Back
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
+            Kembali
           </button>
           <img
             src={previewUrl}

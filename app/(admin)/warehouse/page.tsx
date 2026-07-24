@@ -19,7 +19,7 @@ export default async function WarehousePage() {
 
         <div className="card-head">
           <div>
-            <h3>Warehouse / Goods Receipts</h3>
+            <h3>Penerimaan Gudang</h3>
             <p className="muted" style={{ margin: 0, marginTop: 4 }}>Kelola penerimaan barang dari vendor (Surat Jalan Masuk)</p>
           </div>
         </div>

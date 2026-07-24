@@ -14,9 +14,10 @@ interface SelectProps {
   className?: string;
   placeholder?: string;
   searchable?: boolean;
+  inputStyle?: React.CSSProperties;
 }
 
-export function Select({ value, onChange, options, style, className = '', placeholder, searchable = false }: SelectProps) {
+export function Select({ value, onChange, options, style, className = '', placeholder, searchable = false, inputStyle }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -49,7 +50,8 @@ export function Select({ value, onChange, options, style, className = '', placeh
           cursor: 'pointer',
           userSelect: 'none',
           background: '#fff',
-          width: '100%'
+          width: '100%',
+          ...inputStyle
         }}
         onClick={() => {
           setIsOpen(!isOpen);

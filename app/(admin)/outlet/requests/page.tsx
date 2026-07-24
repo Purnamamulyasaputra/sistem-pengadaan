@@ -18,8 +18,8 @@ interface OrderItem {
 }
 
 const ITEM_STATUS_LABELS: Record<string, string> = {
-  DITERIMA_DARI_OUTLET: 'Submitted', PROSES_BELANJA: 'Purchasing',
-  READY_DI_GUDANG: 'Ready in WH', DIKIRIM: 'Shipped', SELESAI: 'Completed',
+  DITERIMA_DARI_OUTLET: 'Diterima dari Outlet', PROSES_BELANJA: 'Proses Belanja',
+  READY_DI_GUDANG: 'Siap di Gudang', DIKIRIM: 'Dikirim', SELESAI: 'Selesai',
 };
 
 export default function OutletRequestsPage() {
@@ -55,7 +55,7 @@ export default function OutletRequestsPage() {
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Purchase Request Outlet</h3>
+            <h3>Permintaan Pembelian Outlet</h3>
           </div>
         </div>
         <div style={{ background: '#f0fdf4', borderBottom: '1px solid #bbf7d0', padding: '16px 20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -65,7 +65,7 @@ export default function OutletRequestsPage() {
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              Request PO
+              Buat Permintaan PO
             </Button>
           </Link>
 
@@ -73,14 +73,14 @@ export default function OutletRequestsPage() {
 
         <div className="card-body flush">
           {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
           ) : orders.length === 0 ? (
             <div className="empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
-              <h4>No requests yet</h4>
-              <p>You haven't created any item requests yet.</p>
+              <h4>Belum ada permintaan</h4>
+              <p>Anda belum membuat permintaan barang apapun.</p>
               <Link href="/outlet/requests/create" style={{ textDecoration: 'none', display: 'inline-block', marginTop: 12 }}>
-                <Button variant="primary" size="sm">Create Now</Button>
+                <Button variant="primary" size="sm">Buat Sekarang</Button>
               </Link>
             </div>
           ) : (
@@ -88,25 +88,20 @@ export default function OutletRequestsPage() {
               <Table>
                 <thead>
                   <tr>
-                    <th>PO No.</th><th>Created By</th>
-                    <th>Order Date</th><th>Expected Delivery</th>
-                    <th className="center">Total Items</th><th className="center">Status</th><th className="right">ACTIONS</th>
+                    <th>No. PO</th><th>Dibuat Oleh</th>
+                    <th>Tanggal Order</th><th>Estimasi Kirim</th>
+                    <th className="center">Total Barang</th><th className="center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => (
-                    <tr key={o.id}>
+                    <tr key={o.id} onClick={() => handleViewOrder(o)} style={{ cursor: 'pointer' }} className="hover-row">
                       <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
                       <td className="muted">{o.created_by_name}</td>
                       <td>{new Date(o.order_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td>{new Date(o.delivery_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td className="center num font-bold">{o.item_count}</td>
                       <td className="center"><OrderStatusBadge status={o.status} /></td>
-                      <td className="right">
-                        <Button size="sm" onClick={() => handleViewOrder(o)} title="Detail" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                        </Button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -114,14 +109,14 @@ export default function OutletRequestsPage() {
               {orders.length > ITEMS_PER_PAGE && (
                 <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)' }}>
                   <div className="muted" style={{ fontSize: 13 }}>
-                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, orders.length)} of {orders.length}
+                    Menampilkan {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, orders.length)} dari {orders.length}
                   </div>
                   <div style={{ display: 'flex', gap: 4 }}>
-                    <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</Button>
+                    <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Seb</Button>
                     <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', fontSize: 13, fontWeight: 600 }}>
-                      Page {currentPage} of {Math.ceil(orders.length / ITEMS_PER_PAGE)}
+                      Halaman {currentPage} dari {Math.ceil(orders.length / ITEMS_PER_PAGE)}
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ITEMS_PER_PAGE), p + 1))} disabled={currentPage === Math.ceil(orders.length / ITEMS_PER_PAGE)}>Next</Button>
+                    <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ITEMS_PER_PAGE), p + 1))} disabled={currentPage === Math.ceil(orders.length / ITEMS_PER_PAGE)}>Lanjut</Button>
                   </div>
                 </div>
               )}
@@ -130,21 +125,21 @@ export default function OutletRequestsPage() {
         </div>
       </div>
 
-      <Modal isOpen={!!selectedOrder} onClose={() => setSelectedOrder(null)} title={`Request Detail PO-${selectedOrder ? new Date(selectedOrder.order.order_date).getFullYear() + '-' + String(selectedOrder.order.id).padStart(5, '0') : ''}`} maxWidth={900}>
+      <Modal isOpen={!!selectedOrder} onClose={() => setSelectedOrder(null)} title={`Detail Permintaan PO-${selectedOrder ? new Date(selectedOrder.order.order_date).getFullYear() + '-' + String(selectedOrder.order.id).padStart(5, '0') : ''}`} maxWidth={900}>
         <div className="modal-body" style={{ padding: '16px 20px' }}>
-          <p className="muted" style={{ marginBottom: 20 }}>Created on {selectedOrder ? new Date(selectedOrder.order.order_date).toLocaleDateString('id-ID') : ''}</p>
+          <p className="muted" style={{ marginBottom: 20 }}>Dibuat pada {selectedOrder ? new Date(selectedOrder.order.order_date).toLocaleDateString('id-ID') : ''}</p>
 
           <div style={{ border: '1px solid var(--border)', borderRadius: 8 }}>
             {selectedOrder?.items?.length === 0 ? (
               <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>
-                Item data is empty or not found.
+                Data barang kosong atau tidak ditemukan.
               </div>
             ) : (
               <Table>
                 <thead>
                   <tr>
-                    <th>Item</th><th>Category</th><th className="right">Qty Requested</th>
-                    <th className="center">Fulfillment</th><th className="center">Status</th>
+                    <th>Barang</th><th>Kategori</th><th className="right">Jml Diminta</th>
+                    <th className="center">Pemenuhan</th><th className="center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -157,7 +152,7 @@ export default function OutletRequestsPage() {
                       </td>
                       <td className="center">
                         <Badge variant={item.fulfillment_status === 'SANGGUP' ? 'green' : item.fulfillment_status === 'TIDAK' ? 'red' : 'amber'}>
-                          {item.fulfillment_status === 'SANGGUP' ? 'Available' : item.fulfillment_status === 'TIDAK' ? 'Unavailable' : 'Pending'}
+                          {item.fulfillment_status === 'SANGGUP' ? 'Sanggup' : item.fulfillment_status === 'TIDAK' ? 'Tidak' : 'Menunggu'}
                         </Badge>
                       </td>
                       <td className="center">
@@ -171,7 +166,7 @@ export default function OutletRequestsPage() {
           </div>
         </div>
         <div className="modal-actions" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button variant="primary" onClick={() => setSelectedOrder(null)}>Close</Button>
+          <Button variant="primary" onClick={() => setSelectedOrder(null)}>Tutup</Button>
         </div>
       </Modal>
     </section>

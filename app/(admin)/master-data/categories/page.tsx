@@ -96,16 +96,16 @@ export default function CategoriesPage() {
         <MasterDataTabs activeTab="categories" />
         <div className="card-head">
           <div>
-            <h3>Item Categories</h3>
+            <h3>Kategori Barang</h3>
           </div>
-          <Button variant="primary" size="sm" onClick={openAdd}>+ Add Category</Button>
+          <Button variant="primary" size="sm" onClick={openAdd}>+ Tambah Kategori</Button>
         </div>
         <div className="card-body flush">
-          {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Loading...</div> : (
+          {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Memuat...</div> : (
             <>
               <div className="table-responsive">
                 <Table>
-                  <thead><tr><th>No.</th><th>Category Name</th><th className="center">Actions</th></tr></thead>
+                  <thead><tr><th>No.</th><th>Nama Kategori</th><th className="center">Aksi</th></tr></thead>
                   <tbody>
                     {paginatedCats.map((c, idx) => {
                       const isEditing = editingId === c.id;
@@ -137,10 +137,10 @@ export default function CategoriesPage() {
                             {isEditing ? (
                               <>
                                 <Button size="sm" variant="primary" onClick={() => handleEditSave(c.id)} disabled={saving} style={{ padding: '4px 12px' }}>
-                                   Save
+                                   Simpan
                                 </Button>
                                 <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving} style={{ padding: '4px 12px' }}>
-                                   Cancel
+                                   Batal
                                 </Button>
                               </>
                             ) : (
@@ -159,7 +159,7 @@ export default function CategoriesPage() {
                       );
                     })}
                     {paginatedCats.length === 0 && (
-                      <tr><td colSpan={3} className="center muted" style={{ padding: 32 }}>No categories found</td></tr>
+                      <tr><td colSpan={3} className="center muted" style={{ padding: 32 }}>Kategori tidak ditemukan</td></tr>
                     )}
                   </tbody>
                 </Table>
@@ -177,30 +177,30 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Category" maxWidth={500}>
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Tambah Kategori" maxWidth={500}>
         <div className="modal-body" style={{ padding: '24px' }}>
           {error && !editingId && <div className="alert-banner alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
           <Input 
-            label="Category Name" 
+            label="Nama Kategori" 
             value={addName} 
             onChange={e => setAddName(e.target.value)} 
-            placeholder="e.g. Syrup, Beverages & Milk" 
+            placeholder="misal: Sirup, Minuman & Susu" 
             autoFocus 
           />
         </div>
         <div className="modal-actions" style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: '#f8fafc', display: 'flex', gap: 8, justifyContent: 'flex-end', borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
-          <Button variant="outline" onClick={() => setShowAddModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleAddSave} disabled={saving}>{saving ? 'Saving...' : 'Save Category'}</Button>
+          <Button variant="outline" onClick={() => setShowAddModal(false)}>Batal</Button>
+          <Button variant="primary" onClick={handleAddSave} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan Kategori'}</Button>
         </div>
       </Modal>
 
       <ConfirmDialog
         open={!!confirmDelete}
-        title="Delete Confirmation"
-        message={`Delete category ${confirmDelete?.name}?`}
+        title="Konfirmasi Hapus"
+        message={`Hapus kategori ${confirmDelete?.name}?`}
         onCancel={() => setConfirmDelete(null)}
         onConfirm={executeDelete}
-        confirmText="Delete"
+        confirmText="Hapus"
         danger={true}
       />
     </section>

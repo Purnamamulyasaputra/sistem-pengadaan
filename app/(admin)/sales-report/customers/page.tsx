@@ -8,10 +8,9 @@ export const metadata = {
 
 async function getOutletsWithBusiness() {
     const res = await query(`
-        SELECT o.id, o.name as outlet_name, t.account_name as business_name
-        FROM moka_outlets o
-        LEFT JOIN moka_tokens t ON o.business_id = t.business_id
-        ORDER BY t.account_name, o.name
+        SELECT o.id, o.name as outlet_name, 'Sunrise Daily' as business_name
+        FROM outlets o
+        ORDER BY o.name
     `);
     
     // Group outlets by business

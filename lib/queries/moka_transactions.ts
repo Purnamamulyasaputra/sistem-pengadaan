@@ -7,10 +7,10 @@ export async function syncTransactions(token: any, sinceEpoch: number, untilEpoc
 
         let outlets: { id: string | number }[] = [];
         if (outletId) {
-            const outRes = await query('SELECT id FROM moka_outlets WHERE id = $1 AND business_id = $2', [outletId, token.business_id]);
+            const outRes = await query('SELECT id FROM outlets WHERE id = $1', [outletId]);
             outlets = outRes.rows as { id: string | number }[];
         } else {
-            const outRes = await query('SELECT id FROM moka_outlets WHERE business_id = $1', [token.business_id]);
+            const outRes = await query('SELECT id FROM outlets WHERE moka_business_id = $1', [token.business_id]);
             outlets = outRes.rows as { id: string | number }[];
         }
 

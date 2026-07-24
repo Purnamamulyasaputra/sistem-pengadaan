@@ -1,11 +1,25 @@
 import { query, withTransaction } from '@/lib/db';
 
+
+
 export type SalesSummaryRow = {
   menu_id: bigint;
   display_name: string;
   category_name: string;
   sale_price: number;
   total_qty: number;
+  total_revenue: number;
+};
+
+export type SalesHistoryRow = {
+  transaction_id: string;
+  created_at: Date;
+  receipt_number: string | null;
+  payment_type: string | null;
+  payment_type_label: string | null;
+  collected_by: string | null;
+  served_by: string | null;
+  total_items: number;
   total_revenue: number;
 };
 
@@ -88,23 +102,118 @@ export async function getSalesSummary(outletId: number, dateFrom: string, dateTo
   const res = await query<SalesSummaryRow>(`
     SELECT 
       m.id AS menu_id,
-      COALESCE(m.display_name, m.name) AS display_name,
-      c.name AS category_name,
-      m.sale_price,
-      SUM(sti.qty)::numeric AS total_qty,
-      SUM(sti.subtotal)::numeric AS total_revenue
-    FROM sales_transaction_items sti
-    JOIN sales_transactions st ON st.id = sti.sales_transaction_id
-    JOIN menus m ON m.id = sti.menu_id
-    JOIN menu_categories c ON c.id = m.category_id
-    WHERE st.outlet_id = $1
-      AND st.transaction_date >= $2 
-      AND st.transaction_date <= $3
-    GROUP BY m.id, m.display_name, m.name, c.name, m.sale_price
-    ORDER BY total_qty DESC
+      COALESCE(m.display_name, m.name, mti.item_name) AS display_name,
+      COALESCE(c.name, mti.category_name) AS category_name,
+      mti.price AS sale_price,
+      SUM(mti.quantity)::numeric AS total_qty,
+      SUM(mti.gross_sales)::numeric AS total_revenue
+    FROM moka_transaction_items mti
+    JOIN moka_transactions mt ON mt.id = mti.transaction_id
+    LEFT JOIN menus m ON m.name = mti.item_name
+    LEFT JOIN menu_categories c ON c.id = m.category_id
+    WHERE mt.outlet_id = $1
+      AND mt.created_at AT TIME ZONE 'Asia/Jakarta' >= $2::DATE 
+      AND mt.created_at AT TIME ZONE 'Asia/Jakarta' < ($3::DATE + INTERVAL '1 day')
+    GROUP BY m.id, mti.category_name, c.name, m.display_name, m.name, mti.item_name, mti.price
+    ORDER BY total_revenue DESC
   `, [outletId, dateFrom, dateTo]);
-
   return res.rows;
+}
+
+/**
+ * Mendapatkan riwayat detail per item transaksi di outlet dalam rentang tanggal.
+ */
+export async function getSalesHistory(outletId: number, dateFrom: string, dateTo: string): Promise<SalesHistoryRow[]> {
+  const queryStr = `
+    SELECT 
+      MAX(mt.id) AS transaction_id,
+      MAX(mt.created_at) AS created_at,
+      mt.payment_no AS receipt_number,
+      MAX(mt.payment_type) AS payment_type,
+      MAX(mt.payment_type_label) AS payment_type_label,
+      MAX(mt.collected_by) AS collected_by,
+      MAX(mt.served_by) AS served_by,
+      SUM(mti.quantity)::numeric AS total_items,
+      MAX(mt.total_collected)::numeric AS total_revenue
+    FROM moka_transactions mt
+    LEFT JOIN moka_transaction_items mti ON mti.transaction_id = mt.id
+    WHERE mt.outlet_id = $1
+      AND mt.created_at AT TIME ZONE 'Asia/Jakarta' >= $2::DATE
+      AND mt.created_at AT TIME ZONE 'Asia/Jakarta' < ($3::DATE + INTERVAL '1 day')
+    GROUP BY mt.payment_no
+    ORDER BY MAX(mt.created_at) DESC
+  `;
+  const res = await query<SalesHistoryRow>(queryStr, [outletId, dateFrom, dateTo]);
+  return res.rows;
+}
+
+export type TransactionDetailHeader = {
+  id: string;
+  payment_no: string | null;
+  payment_type: string | null;
+  payment_type_label: string | null;
+  total_collected: number;
+  subtotal: number;
+  discounts: number;
+  gratuities: number;
+  taxes: number;
+  tendered: number;
+  change_amount: number;
+  transaction_date: string | null;
+  transaction_time: string | null;
+  collected_by: string | null;
+  served_by: string | null;
+  outlet_name: string | null;
+  is_refunded: boolean;
+  created_at: Date;
+};
+
+export type TransactionDetailItem = {
+  uuid: string;
+  item_name: string;
+  item_variant_name: string | null;
+  category_name: string | null;
+  quantity: number;
+  price: number;
+  gross_sales: number;
+  net_sales: number;
+};
+
+export async function getTransactionDetail(transactionId: string) {
+  const headerRes = await query<TransactionDetailHeader>(`
+    SELECT 
+      t.id, t.payment_no, t.payment_type, t.payment_type_label,
+      t.total_collected::numeric AS total_collected,
+      t.subtotal::numeric AS subtotal,
+      t.discounts::numeric AS discounts,
+      t.gratuities::numeric AS gratuities,
+      t.taxes::numeric AS taxes,
+      t.tendered::numeric AS tendered,
+      t.change_amount::numeric AS change_amount,
+      t.transaction_date, t.transaction_time,
+      t.collected_by, t.served_by, COALESCE(o.name, t.outlet_name) AS outlet_name,
+      t.is_refunded, t.created_at
+    FROM moka_transactions t
+    LEFT JOIN outlets o ON o.id = t.outlet_id
+    WHERE t.id = $1
+  `, [transactionId]);
+
+  if (headerRes.rows.length === 0) return null;
+
+  const itemsRes = await query<TransactionDetailItem>(`
+    SELECT 
+      uuid, item_name, item_variant_name, category_name,
+      quantity::numeric AS quantity, price::numeric AS price,
+      gross_sales::numeric AS gross_sales, net_sales::numeric AS net_sales
+    FROM moka_transaction_items
+    WHERE transaction_id = $1
+    ORDER BY uuid ASC
+  `, [transactionId]);
+
+  return {
+    header: headerRes.rows[0],
+    items: itemsRes.rows
+  };
 }
 
 /**

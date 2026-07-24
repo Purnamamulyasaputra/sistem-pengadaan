@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Search, CheckCircle } from 'lucide-react';
+import { X, Search, CheckCircle2, Circle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/ui/Toast';
 
@@ -57,7 +57,7 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
 
     const handleSave = async () => {
         if (!selectedRecipeId) {
-            showToast("Silakan pilih resep terlebih dahulu.", "error");
+            showToast("Please select a recipe first.", "error");
             return;
         }
 
@@ -67,17 +67,17 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    moka_item_id: mokaItem.id,
+                    moka_variant_id: mokaItem.id,
                     internal_recipe_id: selectedRecipeId
                 })
             });
 
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.message || 'Gagal menyimpan penautan.');
+                throw new Error(data.message || 'Failed to save mapping.');
             }
 
-            showToast("Berhasil menautkan item ke resep!", "success");
+            showToast("Item mapped successfully!", "success");
 
             setTimeout(() => {
                 onClose();
@@ -91,7 +91,7 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
     };
 
     const handleRemoveMapping = async () => {
-        if (!confirm("Apakah Anda yakin ingin menghapus tautan item ini?")) return;
+        if (!confirm("Are you sure you want to remove this mapping?")) return;
 
         setIsSaving(true);
         try {
@@ -99,14 +99,14 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    moka_item_id: mokaItem.id,
+                    moka_variant_id: mokaItem.id,
                     internal_recipe_id: null // Set to null to remove
                 })
             });
 
-            if (!res.ok) throw new Error('Gagal menghapus penautan.');
+            if (!res.ok) throw new Error('Failed to remove mapping.');
 
-            showToast("Berhasil menghapus tautan.", "success");
+            showToast("Mapping removed successfully.", "success");
             setTimeout(() => {
                 onClose();
                 router.refresh();
@@ -118,102 +118,168 @@ export default function MapRecipeModal({ isOpen, onClose, mokaItem, recipes }: M
     };
 
     return (
-        <div className="modal-overlay">
-            <div className="modal-box w-full max-w-lg flex flex-col max-h-[90vh]">
-                <div className="modal-header px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white shrink-0">
+        <div style={{
+            position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', padding: '20px'
+        }}>
+            <div style={{
+                background: '#ffffff', width: '100%', maxWidth: '650px', borderRadius: '12px',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                display: 'flex', flexDirection: 'column', maxHeight: '85vh', overflow: 'hidden'
+            }}>
+                {/* Header */}
+                <div style={{
+                    padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex',
+                    alignItems: 'flex-start', justifyContent: 'space-between', flexShrink: 0
+                }}>
                     <div>
-                        <h4 className="text-lg font-bold text-gray-900 font-['Cabin']">Tautkan ke Master Resep</h4>
-                        <p className="text-xs text-gray-500 mt-1">Pilih resep Sunrise Daily yang sesuai dengan item Moka ini.</p>
+                        <h3 style={{ margin: 0, fontFamily: 'var(--font-cabin)', fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+                            Map to Master Recipe
+                        </h3>
+                        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>
+                            Select the Sunrise Daily recipe that matches this Moka item.
+                        </p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-gray-500" />
+                    <button 
+                        onClick={onClose} 
+                        style={{
+                            background: 'transparent', border: 'none', padding: '6px', cursor: 'pointer',
+                            borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#64748b', transition: 'background 0.2s'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                        onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                        <X size={20} />
                     </button>
                 </div>
 
-                <div className="modal-body p-6 overflow-y-auto flex-1 bg-gray-50">
-                    {/* Info Item Moka */}
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6">
-                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Item Moka POS</div>
-                        <div className="text-base font-semibold text-gray-900">{mokaItem.name}</div>
-                        <div className="text-xs text-gray-500">{mokaItem.category || 'Uncategorized'}</div>
+                {/* Body */}
+                <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1, background: '#f8fafc' }}>
+                    
+                    {/* Selected Item Info Card */}
+                    <div style={{
+                        background: '#ffffff', border: '1px solid var(--border)', borderRadius: '10px',
+                        padding: '10px 14px', marginBottom: '16px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                    }}>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                            Moka POS Item
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a', marginBottom: '2px' }}>
+                            {mokaItem.name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                            {mokaItem.category || 'Uncategorized'}
+                        </div>
                     </div>
 
-                    {/* Pilih Resep */}
-                    <div className="space-y-3">
-                        <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2">
-                            Pilih Master Resep
+                    {/* Recipe Selection */}
+                    <div>
+                        <label style={{
+                            display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: 700,
+                            color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px'
+                        }}>
+                            Select Master Recipe
                         </label>
-
-                        {/* Search Box */}
-                        <div className="relative">
-                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        
+                        <div style={{ position: 'relative', marginBottom: '12px' }}>
+                            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                             <input
                                 type="text"
-                                placeholder="Cari nama resep..."
+                                placeholder="Search recipe name..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-[#016e3f] focus:ring-1 focus:ring-[#016e3f] transition-shadow"
+                                className="input"
+                                style={{ width: '100%', paddingLeft: '36px', height: '40px' }}
                             />
                         </div>
 
-                        {/* List Resep */}
-                        <div className="bg-white border border-gray-200 rounded-xl max-h-60 overflow-y-auto shadow-sm divide-y divide-gray-100">
+                        <div style={{
+                            background: '#ffffff', border: '1px solid var(--border)', borderRadius: '10px',
+                            maxHeight: '400px', overflowY: 'auto', boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)'
+                        }}>
                             {filteredRecipes.length === 0 ? (
-                                <div className="p-8 text-center text-gray-500 text-sm">
-                                    Resep tidak ditemukan.
+                                <div style={{ padding: '32px 20px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                                    No recipes found matching your search.
                                 </div>
                             ) : (
-                                filteredRecipes.map(recipe => (
-                                    <div
-                                        key={recipe.id}
-                                        onClick={() => setSelectedRecipeId(recipe.id)}
-                                        className={`p-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-gray-50 ${selectedRecipeId === recipe.id ? 'bg-green-50/50' : ''}`}
-                                    >
-                                        <div>
-                                            <div className="text-sm font-medium text-gray-900">{recipe.name}</div>
-                                        </div>
-                                        <div className="flex-shrink-0">
-                                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${selectedRecipeId === recipe.id ? 'border-[#016e3f] bg-[#016e3f]' : 'border-gray-300 bg-white'}`}>
-                                                {selectedRecipeId === recipe.id && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    {filteredRecipes.map((recipe, index) => {
+                                        const isSelected = selectedRecipeId === recipe.id;
+                                        return (
+                                            <div
+                                                key={recipe.id}
+                                                onClick={() => setSelectedRecipeId(recipe.id)}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                    padding: '8px 12px', cursor: 'pointer',
+                                                    borderBottom: index < filteredRecipes.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                                    background: isSelected ? '#f0fdf4' : 'transparent',
+                                                    transition: 'background 0.15s ease'
+                                                }}
+                                                onMouseOver={(e) => !isSelected && (e.currentTarget.style.background = '#f8fafc')}
+                                                onMouseOut={(e) => !isSelected && (e.currentTarget.style.background = 'transparent')}
+                                            >
+                                                <div style={{ fontSize: '13px', fontWeight: isSelected ? 600 : 500, color: isSelected ? '#016e3f' : '#334155' }}>
+                                                    {recipe.name}
+                                                </div>
+                                                <div style={{ color: isSelected ? '#016e3f' : '#cbd5e1', display: 'flex' }}>
+                                                    {isSelected ? (
+                                                        <CheckCircle2 size={18} strokeWidth={2.5} />
+                                                    ) : (
+                                                        <Circle size={18} strokeWidth={1.5} />
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                ))
+                                        );
+                                    })}
+                                </div>
                             )}
                         </div>
                     </div>
+
                 </div>
 
-                <div className="modal-footer px-6 py-4 border-t border-gray-200 bg-white flex justify-between items-center shrink-0">
-                    {mokaItem.internal_recipe_id ? (
-                        <button
-                            type="button"
-                            onClick={handleRemoveMapping}
-                            disabled={isSaving}
-                            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                            Hapus Tautan
-                        </button>
-                    ) : (
-                        <div />
-                    )}
+                {/* Footer */}
+                <div style={{
+                    padding: '12px 20px', borderTop: '1px solid var(--border)', background: '#ffffff',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0
+                }}>
+                    <div>
+                        {mokaItem.internal_recipe_id && (
+                            <button
+                                type="button"
+                                onClick={handleRemoveMapping}
+                                disabled={isSaving}
+                                className="btn"
+                                style={{
+                                    background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca',
+                                    padding: '8px 14px', fontSize: '13px', fontWeight: 600
+                                }}
+                            >
+                                Remove Mapping
+                            </button>
+                        )}
+                    </div>
 
-                    <div className="flex gap-3">
+                    <div style={{ display: 'flex', gap: '10px' }}>
                         <button
                             type="button"
                             onClick={onClose}
                             disabled={isSaving}
-                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                            className="btn btn-outline"
+                            style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600 }}
                         >
-                            Batal
+                            Cancel
                         </button>
                         <button
                             type="button"
                             onClick={handleSave}
                             disabled={isSaving || !selectedRecipeId || selectedRecipeId === mokaItem.internal_recipe_id}
-                            className="px-5 py-2 text-sm font-medium text-white bg-[#016e3f] border border-[#016e3f] rounded-lg hover:bg-[#015933] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="btn btn-primary"
+                            style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600 }}
                         >
-                            {isSaving ? 'Menyimpan...' : 'Simpan Tautan'}
+                            {isSaving ? 'Saving...' : 'Save Mapping'}
                         </button>
                     </div>
                 </div>

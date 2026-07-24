@@ -1,51 +1,125 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Link2, Link2Off, CheckCircle, Search } from 'lucide-react';
+import { 
+    ChevronDown, 
+    ChevronRight, 
+    Link2, 
+    Link2Off, 
+    CheckCircle2, 
+    AlertCircle, 
+    XCircle, 
+    Calculator
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import MapRecipeModal from './MapRecipeModal';
+import { Table } from '@/components/ui/Table';
+import { Pagination } from '@/components/ui/Pagination';
+
+const rp = (v: number | null | undefined) =>
+    v == null || isNaN(Number(v)) || Number(v) === 0 ? '—' : `Rp ${Math.round(Number(v)).toLocaleString('id-ID')}`;
+
+function StatusBadge({ status, ingredientCount, mappedRecipeName }: { status: 'ready' | 'no_ingredients' | 'unmapped'; ingredientCount: number; mappedRecipeName?: string }) {
+    if (status === 'ready') {
+        return (
+            <div className="group" style={{ position: 'relative', display: 'inline-flex' }}>
+                <span style={{
+                    background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+                    padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+                    display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'default'
+                }}>
+                    <CheckCircle2 size={12} strokeWidth={2.5} />
+                    Ready
+                </span>
+                {mappedRecipeName && (
+                    <div className="hidden group-hover:block" style={{
+                        position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6,
+                        background: '#1e293b', color: '#f8fafc', padding: '4px 8px', borderRadius: 6, fontSize: 11, whiteSpace: 'nowrap', zIndex: 10
+                    }}>
+                        {mappedRecipeName} ({ingredientCount} Bahan)
+                    </div>
+                )}
+            </div>
+        );
+    }
+    if (status === 'no_ingredients') {
+        return (
+            <div className="group" style={{ position: 'relative', display: 'inline-flex' }}>
+                <span style={{
+                    background: '#fefce8', color: '#a16207', border: '1px solid #fef08a',
+                    padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+                    display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'default'
+                }}>
+                    <AlertCircle size={12} strokeWidth={2.5} />
+                    Warning
+                </span>
+                {mappedRecipeName && (
+                    <div className="hidden group-hover:block" style={{
+                        position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6,
+                        background: '#1e293b', color: '#f8fafc', padding: '4px 8px', borderRadius: 6, fontSize: 11, whiteSpace: 'nowrap', zIndex: 10
+                    }}>
+                        {mappedRecipeName} (0 Bahan)
+                    </div>
+                )}
+            </div>
+        );
+    }
+    return (
+        <span style={{
+            background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca',
+            padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+            display: 'inline-flex', alignItems: 'center', gap: 4
+        }}>
+            <Link2Off size={12} strokeWidth={2.5} />
+            Belum Dipetakan
+        </span>
+    );
+}
 
 export default function MokaCatalogTableClient({ 
     items, 
     recipes, 
+    stats,
+    totalCount = 0,
     outletsGrouped, 
     activeOutletId,
     activeSearch,
-    activeStatus
+    activeStatus,
+    currentPage,
+    totalPages,
+    syncButton
 }: { 
     items: any[], 
     recipes: any[],
+    stats?: {
+        total_items: number;
+        ready_items: number;
+        no_ingredient_items: number;
+        unmapped_items: number;
+    },
+    totalCount?: number,
     outletsGrouped?: Record<string, any[]>,
     activeOutletId?: string,
     activeSearch?: string,
-    activeStatus?: string
+    activeStatus?: string,
+    currentPage: number,
+    totalPages: number,
+    syncButton?: React.ReactNode
 }) {
-    const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<any | null>(null);
-    
+    const [selectedItem, setSelectedItem] = useState<any>(null);
     const [searchInput, setSearchInput] = useState(activeSearch || '');
     
     const router = useRouter();
 
-    const toggleRow = (id: string) => {
-        setExpandedRows(prev => ({
-            ...prev,
-            [id]: !prev[id]
-        }));
-    };
-
-    const updateFilters = (outletId: string, search: string, status: string) => {
+    const updateFilters = (outletId: string, search: string, status: string, page: number = 1) => {
         const params = new URLSearchParams();
+        if (page > 1) params.set('page', page.toString());
         if (outletId) params.set('outlet_id', outletId);
         if (search) params.set('search', search);
         if (status && status !== 'all') params.set('status', status);
         const qs = params.toString();
         router.push(qs ? `?${qs}` : '?');
-    };
-
-    const handleOutletChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        updateFilters(e.target.value, activeSearch || '', activeStatus || 'all');
     };
 
     const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -58,34 +132,108 @@ export default function MokaCatalogTableClient({
     };
 
     return (
-        <div className="flex flex-col">
-            {/* Filter Toolbar */}
-            <div className="bg-white px-4 py-3 border-b border-gray-200 flex flex-col sm:flex-row gap-3 justify-between items-center">
-                <div className="flex flex-wrap items-center gap-2">
-                    <form onSubmit={handleSearch} className="relative" style={{ width: '220px', minWidth: '220px' }}>
-                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+        <>
+            {/* Header Card with Stats */}
+            <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-head">
+                    <div>
+                        <h3 style={{ margin: 0, fontFamily: 'var(--font-cabin)', fontSize: 18, fontWeight: 700 }}>Katalog & Pemetaan Moka POS</h3>
+                    </div>
+                    {syncButton && (
+                        <div style={{ marginLeft: 'auto' }}>
+                            {syncButton}
+                        </div>
+                    )}
+                </div>
+
+                {/* Top Stat Row */}
+                {stats && (
+                    <div style={{ display: 'flex', gap: 0, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                        <div 
+                            onClick={() => updateFilters(activeOutletId || '', activeSearch || '', 'all')}
+                            style={{
+                                flex: '1 1 150px', padding: '16px 20px', borderRight: '1px solid var(--border)',
+                                cursor: 'pointer', background: (!activeStatus || activeStatus === 'all') ? '#f8fafc' : '#fff'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Calculator size={16} strokeWidth={2.5} style={{ color: '#475569' }} />
+                                <div className="muted" style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Total Barang POS</div>
+                            </div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--foreground)', marginTop: 4 }}>{stats.total_items}</div>
+                        </div>
+
+                        <div 
+                            onClick={() => updateFilters(activeOutletId || '', activeSearch || '', 'ready')}
+                            style={{
+                                flex: '1 1 150px', padding: '16px 20px', borderRight: '1px solid var(--border)',
+                                cursor: 'pointer', background: (activeStatus === 'ready') ? '#f0fdf4' : '#fff'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <CheckCircle2 size={16} strokeWidth={2.5} style={{ color: '#15803d' }} />
+                                <div className="muted" style={{ fontSize: 12, fontWeight: 500, color: '#15803d' }}>Siap Dipotong</div>
+                            </div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: '#15803d', marginTop: 4 }}>{stats.ready_items}</div>
+                        </div>
+
+                        <div 
+                            onClick={() => updateFilters(activeOutletId || '', activeSearch || '', 'no_ingredients')}
+                            style={{
+                                flex: '1 1 150px', padding: '16px 20px', borderRight: '1px solid var(--border)',
+                                cursor: 'pointer', background: (activeStatus === 'no_ingredients') ? '#fefce8' : '#fff'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <AlertCircle size={16} strokeWidth={2.5} style={{ color: '#a16207' }} />
+                                <div className="muted" style={{ fontSize: 12, fontWeight: 500, color: '#a16207' }}>Tidak Ada Bahan</div>
+                            </div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: '#a16207', marginTop: 4 }}>{stats.no_ingredient_items}</div>
+                        </div>
+
+                        <div 
+                            onClick={() => updateFilters(activeOutletId || '', activeSearch || '', 'unmapped')}
+                            style={{
+                                flex: '1 1 150px', padding: '16px 20px',
+                                cursor: 'pointer', background: (activeStatus === 'unmapped') ? '#fef2f2' : '#fff'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <XCircle size={16} strokeWidth={2.5} style={{ color: '#b91c1c' }} />
+                                <div className="muted" style={{ fontSize: 12, fontWeight: 500, color: '#b91c1c' }}>Belum Dipetakan</div>
+                            </div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: '#b91c1c', marginTop: 4 }}>{stats.unmapped_items}</div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Main Table Card */}
+            <div className="card">
+                {/* Filters Row */}
+                <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <form onSubmit={handleSearch} style={{ display: 'flex', alignItems: 'center' }}>
                         <input
-                            type="text"
-                            placeholder="Search item name..."
+                            className="input" 
+                            placeholder="Cari menu Moka..." 
                             value={searchInput}
                             onChange={(e) => {
                                 const val = e.target.value;
                                 setSearchInput(val);
                                 updateFilters(activeOutletId || '', val, activeStatus || 'all');
                             }}
-                            className="w-full text-xs border border-gray-200 rounded-md pl-8 pr-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#016e3f] focus:border-[#016e3f] bg-white shadow-sm"
+                            style={{ width: 240 }}
                         />
-                        <button type="submit" className="hidden">Search</button>
                     </form>
 
                     {outletsGrouped && Object.keys(outletsGrouped).length > 0 && (
                         <select
+                            className="input"
                             value={activeOutletId || ''}
-                            onChange={handleOutletChange}
-                            style={{ width: '145px', minWidth: '145px' }}
-                            className="text-xs border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#016e3f] focus:border-[#016e3f] bg-white text-gray-700 shadow-sm"
+                            onChange={(e) => updateFilters(e.target.value, activeSearch || '', activeStatus || 'all')}
+                            style={{ width: 190 }}
                         >
-                            <option value="">All Outlets</option>
+                            <option value="">Semua Outlet</option>
                             {Object.entries(outletsGrouped).map(([bizName, outlets]) => (
                                 <optgroup key={bizName} label={`--- ${bizName} ---`}>
                                     {outlets.map((o: any) => (
@@ -98,156 +246,153 @@ export default function MokaCatalogTableClient({
                         </select>
                     )}
 
-                    <select
-                        value={activeStatus || 'all'}
-                        onChange={handleStatusChange}
-                        style={{ width: '130px', minWidth: '130px' }}
-                        className="text-xs border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#016e3f] focus:border-[#016e3f] bg-white text-gray-700 shadow-sm"
+                    <select 
+                        className="input" 
+                        value={activeStatus || 'all'} 
+                        onChange={handleStatusChange} 
+                        style={{ width: 210 }}
                     >
-                        <option value="all">All Statuses</option>
-                        <option value="mapped">Mapped</option>
-                        <option value="unmapped">Unmapped</option>
+                        <option value="all">Semua Status Pemetaan</option>
+                        <option value="ready">Hijau (Siap)</option>
+                        <option value="no_ingredients">Kuning (Tidak Ada Bahan)</option>
+                        <option value="unmapped">Merah (Belum Dipetakan)</option>
                     </select>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                        <span className="muted" style={{ fontSize: 13 }}>
+                            {totalCount} Menu ditemukan
+                        </span>
+                        <div 
+                            className="group" 
+                            style={{ position: 'relative', cursor: 'help', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}
+                        >
+                            <AlertCircle size={18} />
+                            <div 
+                                className="hidden group-hover:flex" 
+                                style={{
+                                    position: 'absolute', top: '100%', right: 0, marginTop: 8, zIndex: 50,
+                                    background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: 12, width: 240,
+                                    flexDirection: 'column', gap: 8
+                                }}
+                            >
+                                <span className="font-bold" style={{ fontSize: 13, marginBottom: 4, color: '#12201a' }}>Indikator Status Pemetaan</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e' }}></span>
+                                    <span className="muted"><strong>Hijau</strong> (Resep & Bahan Dipetakan)</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#eab308' }}></span>
+                                    <span className="muted"><strong>Kuning</strong> (Dipetakan ke Resep, tapi 0 Bahan)</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }}></span>
+                                    <span className="muted"><strong>Merah</strong> (Belum dipetakan ke Resep apapun)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-[11px] uppercase tracking-wider">
-                            <th className="px-3 py-2 font-medium w-10 text-center"></th>
-                            <th className="px-3 py-2 font-medium text-left">Item & Category</th>
-                            <th className="px-3 py-2 font-medium text-left">Variant Info</th>
-                            <th className="px-3 py-2 font-medium text-left">Mapping Status</th>
-                            <th className="px-3 py-2 font-medium text-center">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-[12px]">
-                        {items.map((item: any) => {
-                            const isExpanded = !!expandedRows[item.id];
-                            const variantCount = item.variants?.length || 0;
-                            const hasVariants = variantCount > 0;
+                {/* Table Body */}
+                <div className="card-body flush">
+                    {items.length === 0 ? (
+                        <div className="empty-state" style={{ padding: 40, textAlign: 'center' }}>
+                            <p className="muted">Tidak ada data menu Moka yang sesuai filter.</p>
+                        </div>
+                    ) : (
+                        <Table>
+                            <thead>
+                                <tr>
+                                    <th>BARANG & KATEGORI</th>
+                                    <th>HARGA & STOK</th>
+                                    <th>STATUS PEMETAAN</th>
+                                    <th className="center" style={{ width: 110 }}>AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((item: any) => {
+                                    const ingCount = item.ingredient_count || 0;
+                                    const statusKey: 'ready' | 'no_ingredients' | 'unmapped' = 
+                                        !item.internal_recipe_id ? 'unmapped' :
+                                        ingCount === 0 ? 'no_ingredients' : 'ready';
 
-                            return (
-                                <React.Fragment key={item.id}>
-                                    {/* Baris Induk */}
-                                    <tr 
-                                        className={`hover:bg-gray-50/50 transition-colors ${hasVariants ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-gray-50/50' : ''}`}
-                                        onClick={() => hasVariants && toggleRow(item.id)}
-                                    >
-                                        <td className="px-3 py-1.5" style={{ verticalAlign: 'middle' }}>
-                                            <div className="flex justify-center items-center h-full">
-                                                {hasVariants && (
-                                                    <button className="text-gray-400 hover:text-gray-600 transition-colors inline-flex items-center justify-center">
-                                                        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-1.5" style={{ verticalAlign: 'middle' }}>
-                                            <div className="flex flex-col justify-center h-full">
-                                                <div className="font-medium text-gray-900 text-[12px] flex items-center gap-2">
-                                                    {item.name}
-                                                    {!activeOutletId && item.outlet_name && (
-                                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                                                            {item.outlet_name}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-[11px] text-gray-500">{item.category}</div>
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-1.5" style={{ verticalAlign: 'middle' }}>
-                                            <div className="flex justify-start items-center h-full text-[11px] text-gray-600 font-medium">
-                                                {variantCount} {variantCount === 1 ? 'Variant' : 'Variants'}
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-1.5" style={{ verticalAlign: 'middle' }}>
-                                            <div className="flex justify-start items-center h-full">
-                                                {item.internal_recipe_id ? (
-                                                    <div className="inline-flex flex-col items-start">
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800 border border-green-200">
-                                                            <CheckCircle className="w-3 h-3" />
-                                                            Mapped
-                                                        </span>
-                                                        <div className="text-[10px] text-gray-500 mt-0.5">
-                                                            {item.mapped_recipe_name}
-                                                        </div>
+                                    return (
+                                        <tr key={item.id}>
+                                            <td>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <div style={{ fontWeight: 600, color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <span>{item.name}</span>
+                                                        {item.outlet_name && (
+                                                            <span style={{ fontSize: 10, color: '#64748b', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '1px 6px', borderRadius: 4, fontWeight: 500 }}>
+                                                                {item.outlet_name}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-800 border border-red-200">
-                                                        <Link2Off className="w-3 h-3" />
-                                                        Unmapped
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-1.5" style={{ verticalAlign: 'middle' }}>
-                                            <div className="flex justify-center items-center h-full">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedItem(item);
-                                                        setIsModalOpen(true);
-                                                    }}
-                                                    className="px-2 py-1 text-[11px] font-medium text-[#016e3f] bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors inline-flex items-center gap-1 cursor-pointer"
-                                                >
-                                                    <Link2 className="w-3 h-3" />
-                                                    {item.internal_recipe_id ? 'Edit' : 'Map'}
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-
-                                    {/* Baris Varian (Expandable) */}
-                                    {isExpanded && hasVariants && (
-                                        <tr>
-                                            <td colSpan={5} className="p-0 border-0">
-                                                <div className="bg-white border-b border-gray-100 py-2.5 px-4 shadow-inner">
-                                                    <div className="pl-8 pr-4">
-                                                        {/* Header Grid */}
-                                                        <div className="grid grid-cols-12 gap-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider pb-1.5 border-b border-gray-100 mb-1.5">
-                                                            <div className="col-span-5">Variant Name</div>
-                                                            <div className="col-span-3 text-left">Selling Price</div>
-                                                            <div className="col-span-4 text-left">POS Stock</div>
-                                                        </div>
-                                                        {/* Data Grid */}
-                                                        <div className="space-y-1.5">
-                                                            {item.variants.map((v: any) => (
-                                                                <div key={v.id} className="grid grid-cols-12 gap-4 items-center">
-                                                                    <div className="col-span-5 text-[12px] font-medium text-gray-700">
-                                                                        {v.name || 'Regular'}
-                                                                    </div>
-                                                                    <div className="col-span-3 text-[12px] text-gray-900 text-left font-medium">
-                                                                        Rp {Number(v.price).toLocaleString('id-ID')}
-                                                                    </div>
-                                                                    <div className="col-span-4 text-[12px] text-gray-600 text-left">
-                                                                        {v.in_stock}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
+                                                    <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{item.category || 'Tidak Berkategori'}</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                    <div style={{ fontSize: 12, color: '#0f172a', fontWeight: 600 }}>
+                                                        {rp(item.price)}
+                                                    </div>
+                                                    <div className="muted" style={{ fontSize: 11 }}>
+                                                        Stok Moka: {item.in_stock ?? 0}
                                                     </div>
                                                 </div>
                                             </td>
+                                            <td>
+                                                <StatusBadge status={statusKey} ingredientCount={ingCount} mappedRecipeName={item.mapped_recipe_name} />
+                                            </td>
+                                            <td className="center" onClick={e => e.stopPropagation()}>
+                                                <button 
+                                                    onClick={() => {
+                                                        setSelectedItem(item);
+                                                        setIsModalOpen(true);
+                                                    }}
+                                                    className="btn"
+                                                    style={{ 
+                                                        padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                                                        color: '#016e3f', background: '#f0fdf4', border: '1px solid #bbf7d0',
+                                                        borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                                                        whiteSpace: 'nowrap'
+                                                    }}
+                                                >
+                                                    <Link2 size={12} />
+                                                    {item.internal_recipe_id ? 'Edit' : 'Petakan Resep'}
+                                                </button>
+                                            </td>
                                         </tr>
-                                    )}
-                                </React.Fragment>
-                            );
-                        })}
-                    </tbody>
-                </table>
-
-                <MapRecipeModal
-                    isOpen={isModalOpen}
-                    onClose={() => {
-                        setIsModalOpen(false);
-                        setSelectedItem(null);
-                    }}
-                    mokaItem={selectedItem}
-                    recipes={recipes}
-                />
+                                    );
+                                })}
+                            </tbody>
+                        </Table>
+                    )}
+                </div>
+                
+                {totalPages > 1 && (
+                    <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+                        <Pagination 
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={totalCount}
+                            itemsPerPage={20}
+                            onPageChange={(page) => updateFilters(activeOutletId || '', searchInput, activeStatus || 'all', page)}
+                        />
+                    </div>
+                )}
             </div>
-        </div>
+
+            <MapRecipeModal
+                isOpen={isModalOpen}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setSelectedItem(null);
+                }}
+                mokaItem={selectedItem}
+                recipes={recipes}
+            />
+        </>
     );
 }

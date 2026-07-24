@@ -87,83 +87,91 @@ export default function StockCardPage() {
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const paginatedItems = filteredItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+  // Auto-convert smallest unit value to a human-readable central unit
+  function toCentralDisplay(valueInSmallest: number, smallestUnit: string) {
+    const u = (smallestUnit || '').toLowerCase();
+    if (u === 'ml') return { value: valueInSmallest / 1000, unit: 'Liter' };
+    if (u === 'gr' || u === 'g') return { value: valueInSmallest / 1000, unit: 'Kg' };
+    return { value: valueInSmallest, unit: smallestUnit };
+  }
+
   return (
     <section className="screen">
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Central Warehouse Stock</h3>
+            <h3>Stok Gudang Pusat</h3>
             <p className="muted" style={{ margin: 0, marginTop: 4 }}>
-              Real-time physical stock vs minimum threshold
+              Stok fisik real-time vs batas minimum
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <input 
               className="input" 
-              placeholder="Search item name..." 
+              placeholder="Cari nama barang..." 
               value={search} 
               onChange={e => setSearch(e.target.value)} 
               style={{ width: 200 }} 
             />
             <select className="input" style={{ width: 150 }} value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-              <option value="">All Categories</option>
+              <option value="">Semua Kategori</option>
               {categories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
             </select>
             <select className="input" style={{ width: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="">All Statuses</option>
-              <option value="SAFE">Safe</option>
-              <option value="LOW">Low Stock</option>
-              <option value="OUT">Out of Stock</option>
+              <option value="">Semua Status</option>
+              <option value="SAFE">Aman</option>
+              <option value="LOW">Stok Rendah</option>
+              <option value="OUT">Habis</option>
             </select>
           </div>
         </div>
 
         <div className="card-body flush">
           {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading inventory...</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat inventaris...</div>
             ) : filteredItems.length === 0 ? (
-              <div className="muted" style={{ padding: 40, textAlign: 'center' }}>No items found.</div>
+              <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Tidak ada barang ditemukan.</div>
             ) : (
               <>
+                <div className="table-responsive">
                 <Table>
                   <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Item Name</th>
-                    <th className="right">Min. Stock</th>
-                    <th className="right">Physical Stock</th>
+                    <th>Kode</th>
+                    <th>Nama Barang</th>
+                    <th className="right">Stok Min.</th>
+                    <th className="right">Stok Fisik</th>
                     <th className="center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedItems.map(item => {
-                    const ratio = Number(item.conversion_ratio || 1);
                     const currentStockSmallest = Number(item.current_stock ?? 0);
                     const minStockSmallest = Number(item.minimum_threshold ?? 0);
                     
-                    const currentStock = currentStockSmallest / ratio;
-                    const minStock = minStockSmallest / ratio;
+                    const centralStock = toCentralDisplay(currentStockSmallest, item.smallest_unit);
+                    const centralMin = toCentralDisplay(minStockSmallest, item.smallest_unit);
                     
                     const isLow = currentStockSmallest < minStockSmallest;
                     const isOut = currentStockSmallest <= 0;
                     
                     return (
-                      <tr key={item.id} onClick={() => setSelectedItemId(String(item.id))} className="cursor-pointer" title="View Stock Card">
+                      <tr key={item.id} onClick={() => setSelectedItemId(String(item.id))} className="cursor-pointer" title="Lihat Kartu Stok">
                         <td className="font-mono text-muted">ERC{String(item.id).padStart(5, '0')}</td>
                         <td className="font-bold">{item.name}</td>
                         <td className="right">
-                          <div className="num font-bold">{minStock.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>{item.purchase_unit || item.smallest_unit}</span></div>
-                          {ratio > 1 && <div className="muted" style={{ fontSize: 11 }}>({minStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
+                          <div className="num font-bold">{centralMin.value.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>{centralMin.unit}</span></div>
+                          {centralMin.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({minStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
                         </td>
                         <td className="right">
                           <div className="num font-bold" style={{ color: isOut ? '#dc2626' : isLow ? '#d97706' : '#059669', fontSize: 14 }}>
-                            {currentStock.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{item.purchase_unit || item.smallest_unit}</span>
+                            {centralStock.value.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{centralStock.unit}</span>
                           </div>
-                          {ratio > 1 && <div className="muted" style={{ fontSize: 11 }}>({currentStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
+                          {centralStock.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({currentStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
                         </td>
                         <td className="center">
                           <Badge variant={isOut ? 'red' : isLow ? 'amber' : 'green'}>
-                            {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'Safe'}
+                            {isOut ? 'Habis' : isLow ? 'Stok Rendah' : 'Aman'}
                           </Badge>
                         </td>
                       </tr>
@@ -171,6 +179,7 @@ export default function StockCardPage() {
                   })}
                 </tbody>
               </Table>
+              </div>
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -186,13 +195,13 @@ export default function StockCardPage() {
       <Modal 
         isOpen={!!selectedItemId} 
         onClose={() => setSelectedItemId('')} 
-        title={`Stock Card — ${selectedItem?.name}`} 
+        title={`Kartu Stok — ${selectedItem?.name}`} 
         maxWidth={800}
-        footer={<Button variant="outline" onClick={() => setSelectedItemId('')}>Close</Button>}
+        footer={<Button variant="outline" onClick={() => setSelectedItemId('')}>Tutup</Button>}
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
           <div>
-            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Current Balance</p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Saldo Saat Ini</p>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
               {(Number(currentBalance) / Number(selectedItem?.conversion_ratio || 1)).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted" style={{ fontSize: 14 }}>{selectedItem?.purchase_unit || selectedItem?.smallest_unit}</span>
             </div>
@@ -203,13 +212,13 @@ export default function StockCardPage() {
             )}
           </div>
           <div>
-            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Last Receipt (IN)</p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Penerimaan Terakhir (IN)</p>
             <div style={{ fontWeight: 600 }}>
               {lastIn ? new Date(lastIn).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
             </div>
           </div>
           <div>
-            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Last Distribution (OUT)</p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Distribusi Terakhir (OUT)</p>
             <div style={{ fontWeight: 600 }}>
               {lastOut ? new Date(lastOut).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
             </div>
@@ -218,20 +227,21 @@ export default function StockCardPage() {
 
         <div className="card-body flush" style={{ overflowY: 'visible' }}>
           {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading stock card data...</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data kartu stok...</div>
           ) : logs.length === 0 ? (
             <div className="muted" style={{ padding: 40, textAlign: 'center' }}>
-              No inventory movements recorded for this item.
+              Tidak ada pergerakan inventaris yang tercatat untuk barang ini.
             </div>
           ) : (
+            <div className="table-responsive">
             <Table>
               <thead>
                 <tr>
-                  <th>Date & Time</th>
-                  <th>Mutation Type</th>
-                  <th className="right">Change (Qty)</th>
-                  <th className="right">Ending Balance</th>
-                  <th>Reference</th>
+                  <th>Tanggal & Waktu</th>
+                  <th>Jenis Mutasi</th>
+                  <th className="right">Perubahan (Jml)</th>
+                  <th className="right">Saldo Akhir</th>
+                  <th>Referensi</th>
                 </tr>
               </thead>
               <tbody>
@@ -280,6 +290,7 @@ export default function StockCardPage() {
                 })}
               </tbody>
             </Table>
+            </div>
           )}
         </div>
       </Modal>

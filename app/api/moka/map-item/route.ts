@@ -4,19 +4,19 @@ import { query } from "@/lib/db";
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { moka_item_id, internal_recipe_id } = body;
+        const { moka_variant_id, internal_recipe_id } = body;
 
-        if (!moka_item_id) {
-            return NextResponse.json({ message: "moka_item_id is required" }, { status: 400 });
+        if (!moka_variant_id) {
+            return NextResponse.json({ message: "moka_variant_id is required" }, { status: 400 });
         }
 
         // internal_recipe_id can be null to remove the mapping
         
         await query(`
-            UPDATE moka_items 
+            UPDATE moka_item_variants 
             SET internal_recipe_id = $1, updated_at = CURRENT_TIMESTAMP
             WHERE id = $2
-        `, [internal_recipe_id, moka_item_id]);
+        `, [internal_recipe_id, moka_variant_id]);
 
         return NextResponse.json({ 
             success: true, 

@@ -50,12 +50,12 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setToast({ open: true, message: 'Company profile successfully saved!', type: 'success' });
+        setToast({ open: true, message: 'Profil perusahaan berhasil disimpan!', type: 'success' });
       } else {
-        setToast({ open: true, message: data.message || 'Failed to save settings', type: 'error' });
+        setToast({ open: true, message: data.message || 'Gagal menyimpan pengaturan', type: 'error' });
       }
     } catch (e) {
-      setToast({ open: true, message: 'System error occurred', type: 'error' });
+      setToast({ open: true, message: 'Terjadi kesalahan sistem', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -69,21 +69,21 @@ export default function SettingsPage() {
       <div className="card" style={{ maxWidth: 540, margin: '0 auto', boxShadow: '0 2px 12px rgba(0,0,0,0.03)' }}>
         <div className="card-head" style={{ padding: '10px 14px' }}>
           <div>
-            <h3 style={{ fontSize: '13px', margin: 0, fontWeight: 700 }}>Company Profile</h3>
-            <p className="text-muted" style={{ fontSize: '10px', marginTop: '1px', marginBottom: 0 }}>Application profile and identity settings.</p>
+            <h3 style={{ fontSize: '13px', margin: 0, fontWeight: 700 }}>Profil Perusahaan</h3>
+            <p className="text-muted" style={{ fontSize: '10px', marginTop: '1px', marginBottom: 0 }}>Pengaturan profil dan identitas aplikasi.</p>
           </div>
         </div>
         
         <div className="card-body" style={{ padding: '12px 14px' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '16px 0', color: '#64748b', fontSize: 12 }}>
-              Loading settings...
+              Memuat pengaturan...
             </div>
           ) : (
             <form onSubmit={handleSave}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-3">
                 <div className="form-group mb-0 md:col-span-2">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Company Name</label>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Nama Perusahaan</label>
                   <Input 
                     value={settings.company_name} 
                     onChange={e => setSettings({...settings, company_name: e.target.value})} 
@@ -93,7 +93,7 @@ export default function SettingsPage() {
                 </div>
                 
                 <div className="form-group mb-0">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Phone Number</label>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Nomor Telepon</label>
                   <Input 
                     type="text" 
                     value={settings.company_phone} 
@@ -103,7 +103,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="form-group mb-0">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">HQ Notification Email</label>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Email Notifikasi Pusat</label>
                   <Input 
                     type="email" 
                     value={settings.notification_email} 
@@ -113,7 +113,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="form-group mb-0">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Tax ID (NPWP)</label>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">NPWP</label>
                   <Input 
                     type="text" 
                     value={settings.company_tax_id} 
@@ -133,20 +133,20 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="form-group mb-0 md:col-span-2">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Bank Account Information</label>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Informasi Rekening Bank</label>
                   <textarea 
                     className="form-control text-xs" 
                     rows={2}
                     value={settings.bank_account_info} 
                     onChange={e => setSettings({...settings, bank_account_info: e.target.value})} 
-                    placeholder="e.g. Bank BCA - 1234567890 a.n. PT Sunrise Daily"
+                    placeholder="Contoh: Bank BCA - 1234567890 a.n. PT Sunrise Daily"
                     style={{ fontSize: 11, padding: '4px 8px' }}
                   />
-                  <p className="text-muted" style={{ fontSize: '10px', marginTop: '2px', marginBottom: 0 }}>This information may be used for internal transfer references or payment instructions.</p>
+                  <p className="text-muted" style={{ fontSize: '10px', marginTop: '2px', marginBottom: 0 }}>Informasi ini mungkin digunakan untuk referensi transfer internal atau instruksi pembayaran.</p>
                 </div>
 
                 <div className="form-group mb-0 md:col-span-2">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Central Warehouse Full Address</label>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">Alamat Lengkap Gudang Pusat</label>
                   <textarea 
                     className="form-control text-xs" 
                     rows={2}
@@ -154,13 +154,13 @@ export default function SettingsPage() {
                     onChange={e => setSettings({...settings, warehouse_address: e.target.value})} 
                     style={{ fontSize: 11, padding: '4px 8px' }}
                   />
-                  <p className="text-muted" style={{ fontSize: '10px', marginTop: '2px', marginBottom: 0 }}>This address will be printed on the header of Delivery Notes and Purchase Orders (PO).</p>
+                  <p className="text-muted" style={{ fontSize: '10px', marginTop: '2px', marginBottom: 0 }}>Alamat ini akan dicetak pada bagian atas Surat Jalan dan Purchase Orders (PO).</p>
                 </div>
               </div>
 
               <div className="flex justify-start">
                 <Button variant="primary" type="submit" disabled={saving} style={{ padding: '0 16px', height: 28, fontSize: 11 }}>
-                  {saving ? 'Saving...' : 'Save Settings'}
+                  {saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
                 </Button>
               </div>
             </form>

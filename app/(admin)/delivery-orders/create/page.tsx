@@ -59,8 +59,7 @@ export default function CreateDeliveryOrderPage() {
     fetchOutlets();
   }, []);
 
-  const handleSelectOrder = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value;
+  const handleSelectOrder = (id: string) => {
     setSelectedOrderId(id);
     if (!id) {
       setOrderItems([]);
@@ -73,13 +72,27 @@ export default function CreateDeliveryOrderPage() {
       setTargetOutletId(String(selected.outlet_id));
       setOrderItems(selected.items.map((i: any) => ({
         ...i,
-        qty_shipped: parseFloat(Number(i.qty_request).toFixed(3)),
+        qty_shipped: (() => {
+          const u = (i.smallest_unit || '').toLowerCase();
+          const ratio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
+          return parseFloat(Number(i.qty_request / ratio).toFixed(3));
+        })(),
         current_stock: parseFloat(i.current_stock ?? '0'),
         selected: i.item_status === 'READY_DI_GUDANG',
         keterangan: ''
       })));
     }
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && orders.length > 0 && !selectedOrderId) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const qId = urlParams.get('order_id');
+      if (qId && orders.some(o => String(o.order_id) === qId)) {
+        handleSelectOrder(qId);
+      }
+    }
+  }, [orders]);
 
   const handleToggleItem = (orderItemId: number) => {
     setOrderItems(orderItems.map(i => i.order_item_id === orderItemId ? { ...i, selected: !i.selected } : i));
@@ -172,7 +185,7 @@ export default function CreateDeliveryOrderPage() {
           <div className="form-grid" style={{ marginBottom: 32 }}>
             <div className="form-group">
               <label className="req">Source Request (PO)</label>
-              <select className="input" value={selectedOrderId} onChange={handleSelectOrder}>
+              <select className="input" value={selectedOrderId} onChange={e => handleSelectOrder(e.target.value)}>
                 <option value="">-- Select Pending Order --</option>
                 {orders.map(o => (
                   <option key={o.order_id} value={o.order_id}>
@@ -226,7 +239,7 @@ export default function CreateDeliveryOrderPage() {
                       </svg>
                     </th>
                     <th>Item</th>
-                    <th className="center">Requested Qty</th>
+                    <th className="center">Request Qty</th>
                     <th className="center" style={{ width: 160 }}>Qty to Ship</th>
                     <th className="center" style={{ width: 150 }}>Available Stock</th>
                     <th className="center" style={{ width: 180 }}>Keterangan</th>
@@ -235,7 +248,10 @@ export default function CreateDeliveryOrderPage() {
                 </thead>
                 <tbody>
                   {orderItems.map(item => {
-                    const isExceeded = (item.qty_shipped * (Number(item.conversion_ratio) || 1)) > item.current_stock;
+                    const u = (item.smallest_unit || '').toLowerCase();
+                    const centralRatio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
+                    const centralUnit = u === 'ml' ? 'Liter' : (u === 'gr' || u === 'g') ? 'Kg' : item.smallest_unit;
+                    const isExceeded = (item.qty_shipped * centralRatio) > item.current_stock;
                     return (
                     <tr
                       key={item.order_item_id}
@@ -258,7 +274,7 @@ export default function CreateDeliveryOrderPage() {
                         {isExceeded && item.selected && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4 }}>Insufficient Stock</div>}
                       </td>
                       <td className="center num font-bold">
-                        {parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
+                        {parseFloat(Number(item.qty_request / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
                       </td>
                       <td className="center">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
@@ -276,11 +292,11 @@ export default function CreateDeliveryOrderPage() {
                               color: isExceeded ? 'var(--danger)' : 'inherit'
                             }}
                           />
-                          <span className="muted font-bold" style={{ fontSize: 12, width: 35, textAlign: 'left' }}>{item.purchase_unit}</span>
+                          <span className="muted font-bold" style={{ fontSize: 12, width: 35, textAlign: 'left' }}>{centralUnit}</span>
                         </div>
                       </td>
                       <td className="center num font-bold" style={{ color: isExceeded ? 'var(--danger)' : 'var(--muted)' }}>
-                        {parseFloat((item.current_stock / (Number(item.conversion_ratio) || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
+                        {parseFloat((item.current_stock / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
                       </td>
                       <td className="center">
                         <input

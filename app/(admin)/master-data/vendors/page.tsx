@@ -106,7 +106,7 @@ export default function VendorsPage() {
   }
 
   async function performSave() {
-    if (!form.name) { setError('Supplier Name is required'); return false; }
+    if (!form.name) { setError('Nama Supplier wajib diisi'); return false; }
     setSaving(true); setError('');
     try {
       const fullAddress = [form.street, form.street2, form.city, form.state, form.zip, form.country].filter(Boolean).join(', ');
@@ -156,15 +156,15 @@ export default function VendorsPage() {
           <div>
             <h3>Supplier & Vendor</h3>
           </div>
-          <Button variant="primary" size="sm" onClick={openAdd}>+ Add Vendor</Button>
+          <Button variant="primary" size="sm" onClick={openAdd}>+ Tambah Vendor</Button>
         </div>
 
         <div className="card-body flush">
-          {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Loading...</div> : (
+          {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Memuat...</div> : (
             <>
               <div className="table-responsive">
                 <Table>
-                  <thead><tr><th>No.</th><th>Vendor Name</th><th>Phone Number</th><th>Tax ID (NPWP)</th><th>Joined Date</th><th>Status</th><th className="center">Actions</th></tr></thead>
+                  <thead><tr><th>No.</th><th>Nama Vendor</th><th>Nomor Telepon</th><th>NPWP</th><th>Tanggal Bergabung</th><th>Status</th><th className="center">Aksi</th></tr></thead>
                   <tbody>
                     {paginatedVendors.map((v, idx) => (
                       <tr key={v.id} onClick={() => openHistory(v)} style={{ cursor: 'pointer' }} className="hover:bg-slate-50 transition-colors">
@@ -189,7 +189,7 @@ export default function VendorsPage() {
                             background: v.is_active ? '#dcfce7' : '#f1f5f9',
                             color: v.is_active ? '#166534' : '#475569'
                           }}>
-                            {v.is_active ? 'Active' : 'Inactive'}
+                            {v.is_active ? 'Aktif' : 'Nonaktif'}
                           </span>
                         </td>
                         <td className="center" onClick={e => e.stopPropagation()}>
@@ -205,7 +205,7 @@ export default function VendorsPage() {
                       </tr>
                     ))}
                     {paginatedVendors.length === 0 && (
-                      <tr><td colSpan={7} className="center muted" style={{ padding: 32 }}>No vendors found</td></tr>
+                      <tr><td colSpan={7} className="center muted" style={{ padding: 32 }}>Vendor tidak ditemukan</td></tr>
                     )}
                   </tbody>
                 </Table>
@@ -222,7 +222,7 @@ export default function VendorsPage() {
         </div>
       </div>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Supplier' : 'New Supplier'} maxWidth={850}>
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Supplier' : 'Supplier Baru'} maxWidth={850}>
         <div className="modal-body" style={{ padding: '16px 24px' }}>
           {error && <div className="alert-banner alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
           
@@ -230,19 +230,19 @@ export default function VendorsPage() {
             <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>
               <div style={{ display: 'flex', gap: 16 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
-                  <input type="radio" name="vendor_type" checked={form.type === 'Individual'} onChange={() => setForm(f => ({ ...f, type: 'Individual' }))} /> Individual
+                  <input type="radio" name="vendor_type" checked={form.type === 'Individual'} onChange={() => setForm(f => ({ ...f, type: 'Individual' }))} /> Individu
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
-                  <input type="radio" name="vendor_type" checked={form.type === 'Company'} onChange={() => setForm(f => ({ ...f, type: 'Company' }))} /> Company
+                  <input type="radio" name="vendor_type" checked={form.type === 'Company'} onChange={() => setForm(f => ({ ...f, type: 'Company' }))} /> Perusahaan
                 </label>
               </div>
               <div style={{ width: 1, background: '#e2e8f0' }}></div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500 }} title="Toggle Vendor Status">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500 }} title="Ubah Status Vendor">
                 <div style={{ position: 'relative', width: 32, height: 18, background: form.is_active ? '#016e3f' : '#cbd5e1', borderRadius: 9, transition: 'background 0.2s' }}>
                   <div style={{ position: 'absolute', top: 2, left: form.is_active ? 16 : 2, width: 14, height: 14, background: 'white', borderRadius: '50%', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }} />
                 </div>
                 <input type="checkbox" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} style={{ display: 'none' }} />
-                {form.is_active ? 'Active' : 'Inactive'}
+                {form.is_active ? 'Aktif' : 'Nonaktif'}
               </label>
             </div>
             <div style={{ width: 64, height: 64, border: '1px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', cursor: 'pointer', background: '#f8fafc', position: 'relative', overflow: 'hidden' }} title="Upload Photo">
@@ -257,90 +257,88 @@ export default function VendorsPage() {
             {/* Left Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Supplier Name</label>
-                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Olympic Furniture" />
+                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Nama Supplier</label>
+                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="misal: Olympic Furniture" />
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                 <label style={{ width: 100, fontWeight: 700, fontSize: 13, paddingTop: 6 }}>Address</label>
+                 <label style={{ width: 100, fontWeight: 700, fontSize: 13, paddingTop: 6 }}>Alamat</label>
                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                   <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.street} onChange={e => setForm(f => ({ ...f, street: e.target.value }))} placeholder="Street..." />
-                   <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.street2} onChange={e => setForm(f => ({ ...f, street2: e.target.value }))} placeholder="Street 2..." />
+                   <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.street} onChange={e => setForm(f => ({ ...f, street: e.target.value }))} placeholder="Jalan 1..." />
+                   <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.street2} onChange={e => setForm(f => ({ ...f, street2: e.target.value }))} placeholder="Jalan 2..." />
                    <div style={{ display: 'flex', gap: 6 }}>
-                     <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="City" />
-                     <input className="input" style={{ width: 70, padding: '6px 10px', fontSize: 13 }} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="State" />
-                     <input className="input" style={{ width: 70, padding: '6px 10px', fontSize: 13 }} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} placeholder="ZIP" />
+                     <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Kota" />
+                     <input className="input" style={{ width: 70, padding: '6px 10px', fontSize: 13 }} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="Provinsi" />
+                     <input className="input" style={{ width: 70, padding: '6px 10px', fontSize: 13 }} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} placeholder="Kode Pos" />
                    </div>
-                   <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="Country" />
+                   <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="Negara" />
                  </div>
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Tax ID</label>
-                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.tax_id} onChange={e => setForm(f => ({ ...f, tax_id: e.target.value }))} placeholder="e.g. BE0477472701" />
+                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>NPWP</label>
+                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.tax_id} onChange={e => setForm(f => ({ ...f, tax_id: e.target.value }))} placeholder="misal: BE0477472701" />
               </div>
             </div>
 
-            {/* Right Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Phone</label>
+                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Telepon</label>
                  <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="08..." />
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                  <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Email</label>
-                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="example@mail.com" />
+                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="contoh@mail.com" />
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Contact Person</label>
-                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.contact_person} onChange={e => setForm(f => ({ ...f, contact_person: e.target.value }))} placeholder="Name" />
+                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Kontak Person</label>
+                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.contact_person} onChange={e => setForm(f => ({ ...f, contact_person: e.target.value }))} placeholder="Nama" />
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                  <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Website</label>
-                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="e.g. https://..." />
+                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="misal: https://..." />
               </div>
             </div>
           </div>
         </div>
         <div className="modal-actions" style={{ padding: '12px 24px', borderTop: '1px solid var(--border)', background: '#f8fafc', display: 'flex', gap: 8, justifyContent: 'flex-end', borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
-          <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+          <Button variant="outline" onClick={() => setShowModal(false)}>Batal</Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
         </div>
       </Modal>
 
       <ConfirmDialog
         open={!!confirmDelete}
-        title="Delete Confirmation"
-        message={`Delete vendor ${confirmDelete?.name}?`}
+        title="Konfirmasi Hapus"
+        message={`Hapus vendor ${confirmDelete?.name}?`}
         onCancel={() => setConfirmDelete(null)}
         onConfirm={executeDelete}
-        confirmText="Delete"
+        confirmText="Hapus"
         danger={true}
       />
 
-      {/* History Modal */}
-      <Modal isOpen={!!historyVendor} onClose={() => setHistoryVendor(null)} title={`Purchase History: ${historyVendor?.name}`} maxWidth={800}>
+      <Modal isOpen={!!historyVendor} onClose={() => setHistoryVendor(null)} title={`Riwayat Pembelian: ${historyVendor?.name}`} maxWidth={800}>
         <div className="modal-body" style={{ padding: '20px 24px' }}>
           {historyLoading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Loading history...</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Memuat riwayat...</div>
           ) : historyItems.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)', background: '#f8fafc', borderRadius: 8 }}>
-              No purchase orders found for this vendor.
+              Tidak ada pesanan pembelian ditemukan untuk vendor ini.
             </div>
           ) : (
             <div className="table-responsive" style={{ maxHeight: '60vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
               <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead style={{ position: 'sticky', top: 0, background: '#f1f5f9', zIndex: 10 }}>
                   <tr>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>PO Number</th>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Date</th>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Item / Material</th>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569' }}>Qty</th>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569' }}>Unit Price</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>No. PO</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Tanggal</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Barang / Material</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569' }}>Jml</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569' }}>Harga Satuan</th>
                     <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569' }}>Subtotal</th>
                   </tr>
                 </thead>

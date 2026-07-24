@@ -7,10 +7,10 @@ export async function syncSales(token: any, startDateStr: string, endDateStr: st
 
         let outlets = [];
         if (outletId) {
-            const outRes = await query('SELECT id FROM moka_outlets WHERE id = $1 AND business_id = $2', [outletId, token.business_id]);
+            const outRes = await query('SELECT id FROM outlets WHERE id = $1', [outletId]);
             outlets = outRes.rows;
         } else {
-            const outRes = await query('SELECT id FROM moka_outlets WHERE business_id = $1', [token.business_id]);
+            const outRes = await query('SELECT id FROM outlets WHERE moka_business_id = $1', [token.business_id]);
             outlets = outRes.rows;
         }
 

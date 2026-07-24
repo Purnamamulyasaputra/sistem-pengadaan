@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -34,8 +35,8 @@ interface AggregatedProduct {
 
 
 const ITEM_STATUS_LABELS: Record<string, string> = {
-  DITERIMA_DARI_OUTLET: 'Submitted', PROSES_BELANJA: 'Purchasing',
-  READY_DI_GUDANG: 'Ready in WH', DIKIRIM: 'Shipped', SELESAI: 'Completed',
+  DITERIMA_DARI_OUTLET: 'Diterima dari Outlet', PROSES_BELANJA: 'Proses Belanja',
+  READY_DI_GUDANG: 'Siap di Gudang', DIKIRIM: 'Dikirim', SELESAI: 'Selesai',
 };
 
 function formatDate(dateString: string) {
@@ -160,19 +161,19 @@ function RequestsContent() {
       <div className="card">
         <div className="card-head" style={{ alignItems: 'flex-start' }}>
           <div>
-            <h3 style={{ margin: '0 0 12px 0' }}>Request Recap</h3>
+            <h3 style={{ margin: '0 0 12px 0' }}>Rekap Permintaan</h3>
             <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border)' }}>
               <div
                 style={{ paddingBottom: 8, cursor: 'pointer', fontWeight: viewMode === 'by-outlet' ? 600 : 500, color: viewMode === 'by-outlet' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-outlet' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
                 onClick={() => setViewMode('by-outlet')}
               >
-                By Outlet (PO)
+                Per Outlet (PO)
               </div>
               <div
                 style={{ paddingBottom: 8, cursor: 'pointer', fontWeight: viewMode === 'by-product' ? 600 : 500, color: viewMode === 'by-product' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-product' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
                 onClick={() => setViewMode('by-product')}
               >
-                By Product (Aggregate)
+                Per Produk (Agregat)
               </div>
             </div>
           </div>
@@ -181,7 +182,7 @@ function RequestsContent() {
               type="text"
               className="input"
               style={{ width: 200 }}
-              placeholder={viewMode === 'by-outlet' ? 'Search PO or Outlet...' : 'Search item name...'}
+              placeholder={viewMode === 'by-outlet' ? 'Cari PO atau Outlet...' : 'Cari nama barang...'}
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); setAggCurrentPage(1); }}
             />
@@ -204,11 +205,11 @@ function RequestsContent() {
             />
             {viewMode === 'by-outlet' && (
               <select className="input" style={{ width: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                <option value="">All Status</option>
+                <option value="">Semua Status</option>
                 <option value="PENDING">Pending</option>
-                <option value="PROCESSING">Processing</option>
-                <option value="SHIPPED">Shipped</option>
-                <option value="COMPLETED">Completed</option>
+                <option value="PROCESSING">Diproses</option>
+                <option value="SHIPPED">Dikirim</option>
+                <option value="COMPLETED">Selesai</option>
               </select>
             )}
           </div>
@@ -216,13 +217,13 @@ function RequestsContent() {
 
         <div className="card-body flush">
           {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
           ) : viewMode === 'by-product' ? (
             aggregatedProducts.length === 0 ? (
               <div className="empty-state">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
-                <h4>No pending products</h4>
-                <p>There are no active requests from outlets at the moment</p>
+                <h4>Tidak ada produk tertunda</h4>
+                <p>Tidak ada permintaan aktif dari outlet saat ini</p>
               </div>
             ) : (
               <>
@@ -230,9 +231,9 @@ function RequestsContent() {
                   <Table>
                     <thead>
                       <tr>
-                        <th>Item Name</th>
-                        <th className="center">Total Requested</th>
-                        <th className="center">Central Stock</th>
+                        <th>Nama Barang</th>
+                        <th className="center">Total Diminta</th>
+                        <th className="center">Stok Pusat</th>
                         <th className="center">Status</th>
                       </tr>
                     </thead>
@@ -265,9 +266,9 @@ function RequestsContent() {
                               </td>
                               <td className="center" style={{ padding: '4px 16px' }}>
                                 {isShortage ? (
-                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRadius: 4, background: '#fee2e2', color: '#991b1b' }}>Needs Restock</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRadius: 4, background: '#fee2e2', color: '#991b1b' }}>Perlu Restock</span>
                                 ) : (
-                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>In Stock</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>Stok Tersedia</span>
                                 )}
                               </td>
                             </tr>
@@ -297,17 +298,17 @@ function RequestsContent() {
           ) : orders.length === 0 ? (
             <div className="empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
-              <h4>No requests</h4>
-              <p>No incoming requests from outlets yet</p>
+              <h4>Belum ada permintaan</h4>
+              <p>Belum ada permintaan masuk dari outlet</p>
             </div>
           ) : (
             <>
               <Table>
                 <thead>
                   <tr>
-                    <th>PO No.</th><th>Outlet</th><th>Created by</th>
-                    <th>Order Date</th><th>Delivery Date</th>
-                    <th className="center">Items</th><th className="center">Status</th>
+                    <th>No. PO</th><th>Outlet</th><th>Dibuat oleh</th>
+                    <th>Tanggal Order</th><th>Tanggal Kirim</th>
+                    <th className="center">Barang</th><th className="center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -359,26 +360,35 @@ function RequestsContent() {
         </div>
       </div>
 
-      <Modal isOpen={!!selectedOrder} onClose={() => setSelectedOrder(null)} title={`Request Detail PO-${selectedOrder ? new Date(selectedOrder.order.order_date).getFullYear() + '-' + String(selectedOrder.order.id).padStart(5, '0') : ''}`} maxWidth={1100}>
+      <Modal isOpen={!!selectedOrder} onClose={() => setSelectedOrder(null)} title={`Detail Permintaan PO-${selectedOrder ? new Date(selectedOrder.order.order_date).getFullYear() + '-' + String(selectedOrder.order.id).padStart(5, '0') : ''}`} maxWidth={1100}>
         <div className="modal-body" style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <p className="muted" style={{ margin: 0 }}>{selectedOrder?.order?.outlet_name}: {selectedOrder ? formatDate(selectedOrder.order.order_date) : ''}</p>
-            <Button variant="primary" size="sm" onClick={() => setSelectedOrder(null)}>Close</Button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {selectedOrder?.items?.some(i => i.fulfillment_status === 'SANGGUP') && (
+                <Link href={`/delivery-orders/create?order_id=${selectedOrder.order.id}`} style={{ textDecoration: 'none' }}>
+                  <Button variant="outline" size="sm" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>
+                    Kirim ke Outlet
+                  </Button>
+                </Link>
+              )}
+              <Button variant="primary" size="sm" onClick={() => setSelectedOrder(null)}>Tutup</Button>
+            </div>
           </div>
 
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {selectedOrder?.items?.length === 0 ? (
               <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>
-                Item data is empty or not found.
+                Data barang kosong atau tidak ditemukan.
               </div>
             ) : (
               <Table>
                 <thead>
                   <tr>
-                    <th>Item</th><th>Category</th><th className="right">Req Qty</th>
-                    <th className="right">Apprv Qty</th>
-                    <th className="right">Current Stock</th>
-                    <th>Fulfillment</th><th>Status</th>
+                    <th>Barang</th><th>Kategori</th><th className="right">Jml Diminta</th>
+                    <th className="right">Jml Disetujui</th>
+                    <th className="right">Stok Saat Ini</th>
+                    <th>Pemenuhan</th><th>Status</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -422,9 +432,9 @@ function RequestsContent() {
                           value={item.fulfillment_status}
                           onChange={e => handleUpdateItem(item.id, { fulfillment_status: e.target.value })}
                         >
-                          <option value="MENUNGGU">Pending</option>
-                          <option value="SANGGUP">Available</option>
-                          <option value="TIDAK">Unavailable</option>
+                          <option value="MENUNGGU">Menunggu</option>
+                          <option value="SANGGUP">Sanggup</option>
+                          <option value="TIDAK">Tidak</option>
                         </select>
                       </td>
                       <td>
@@ -454,7 +464,7 @@ function RequestsContent() {
 
 export default function RequestsPage() {
   return (
-    <Suspense fallback={<div className="screen" style={{ padding: 40, textAlign: 'center' }}>Loading...</div>}>
+    <Suspense fallback={<div className="screen" style={{ padding: 40, textAlign: 'center' }}>Memuat...</div>}>
       <RequestsContent />
     </Suspense>
   );

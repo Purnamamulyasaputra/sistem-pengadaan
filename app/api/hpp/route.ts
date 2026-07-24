@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHppMenus, getHppVenues, getHppCategories, getHppVsSale } from '@/lib/queries/hpp';
-import { getOutletHppMenus } from '@/lib/queries/outlet-menus';
+import { getOutletHppMenus, getOutletHppCategories, getOutletHppVenues } from '@/lib/queries/outlet-menus';
 import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
 
     const [menusResult, venues, categories] = await Promise.all([
       menusPromise,
-      getHppVenues(),
-      getHppCategories(),
+      isOutlet ? getOutletHppVenues(session.outletId as number) : getHppVenues(),
+      isOutlet ? getOutletHppCategories(session.outletId as number) : getHppCategories(),
     ]);
 
     return NextResponse.json({

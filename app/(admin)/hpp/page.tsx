@@ -145,23 +145,23 @@ function MenusTab({ categories }: { categories: Category[] }) {
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
-          className="input" placeholder="Search menu name..." value={search}
+          className="input" placeholder="Cari nama menu..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
           style={{ width: 220 }}
         />
         <select className="input" value={catId} onChange={e => { setCatId(e.target.value); setPage(1); }} style={{ width: 180 }}>
-          <option value="">All Categories</option>
+          <option value="">Semua Kategori</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select className="input" value={marginFlag} onChange={e => { setMarginFlag(e.target.value); setPage(1); }} style={{ width: 150 }}>
-          <option value="">All Margins</option>
-          <option value="GREEN">Green (&lt;35%)</option>
-          <option value="YELLOW">Yellow (35–50%)</option>
-          <option value="RED">Red (&gt;50%)</option>
+          <option value="">Semua Margin</option>
+          <option value="GREEN">Hijau (&lt;35%)</option>
+          <option value="YELLOW">Kuning (35–50%)</option>
+          <option value="RED">Merah (&gt;50%)</option>
         </select>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
           <span className="muted" style={{ fontSize: 13 }}>
-            {total} Menus found
+            {total} Menu ditemukan
           </span>
           <div 
             className="group" 
@@ -177,43 +177,43 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 flexDirection: 'column', gap: 8
               }}
             >
-              <span className="font-bold" style={{ fontSize: 13, marginBottom: 4, color: '#12201a' }}>COGS % Indicators</span>
+              <span className="font-bold" style={{ fontSize: 13, marginBottom: 4, color: '#12201a' }}>Indikator % HPP</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e' }}></span>
-                <span className="muted"><strong>Green</strong> (&lt; 35% - Healthy)</span>
+                <span className="muted"><strong>Hijau</strong> (&lt; 35% - Sehat)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#eab308' }}></span>
-                <span className="muted"><strong>Yellow</strong> (35–50% - Warning)</span>
+                <span className="muted"><strong>Kuning</strong> (35–50% - Peringatan)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }}></span>
-                <span className="muted"><strong>Red</strong> (&gt; 50% - Critical)</span>
+                <span className="muted"><strong>Merah</strong> (&gt; 50% - Kritis)</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Table */}
       <div className="card-body flush">
         {loading ? (
-          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : data.length === 0 ? (
           <div className="empty-state" style={{ padding: 40 }}>
-            <p className="muted">No data matched the filters.</p>
+            <p className="muted">Tidak ada data yang sesuai filter.</p>
           </div>
         ) : (
+          <div className="table-responsive">
           <Table>
             <thead>
               <tr>
-                <th>Category</th>
-                <th>Menu / Variant</th>
-                <th className="right">Sale Price</th>
-                <th className="right">COGS</th>
-                <th className="right">Gross Profit</th>
-                <th className="right">COGS %</th>
-                <th className="right">Margin %</th>
+                <th>Kategori</th>
+                <th>Menu / Varian</th>
+                <th className="right">Harga Jual</th>
+                <th className="right">HPP</th>
+                <th className="right">Laba Kotor</th>
+                <th className="right">% HPP</th>
+                <th className="right">% Margin</th>
                 <th className="center">Status</th>
               </tr>
             </thead>
@@ -241,6 +241,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
               ))}
             </tbody>
           </Table>
+          </div>
         )}
       </div>
 
@@ -250,17 +251,16 @@ function MenusTab({ categories }: { categories: Category[] }) {
           <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
             <ChevronLeft size={16} />
           </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Page {page} of {totalPages}</span>
+          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Halaman {page} dari {totalPages}</span>
           <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
             <ChevronRight size={16} />
           </button>
         </div>
       )}
 
-      {/* Detail & Price Override Modal */}
-      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Menu & COGS Detail" maxWidth={680}>
+      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Detail Menu & HPP" maxWidth={680}>
         {detailLoading ? (
-          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading detail...</div>
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Memuat detail...</div>
         ) : detailData ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Header Info */}
@@ -270,14 +270,14 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 {detailData.menu.variant && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{detailData.menu.variant}</div>}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Base Cost</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Biaya Dasar</div>
                 <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{rp(detailData.menu.hpp)}</div>
               </div>
             </div>
 
             {/* Price Set Section */}
             <div style={{ background: '#f8fafc', padding: '16px 20px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 10 }}>Set Central Master Price</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 10 }}>Atur Harga Master Pusat</div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <div style={{ flex: 1 }}>
                   <Input
@@ -287,35 +287,34 @@ function MenusTab({ categories }: { categories: Category[] }) {
                       const raw = e.target.value.replace(/\D/g, '');
                       setNewPrice(raw);
                     }}
-                    placeholder="Enter sale price..."
+                    placeholder="Masukkan harga jual..."
                   />
                 </div>
                 <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={handleSavePrice}>
-                  <Save size={15} /> Save Price
+                  <Save size={15} /> Simpan Harga
                 </button>
               </div>
               <div style={{ fontSize: 11, color: '#475569', marginTop: 8 }}>
-                This changes the default price. Local overrides at outlets will not be affected.
+                Ini mengubah harga default. Penyesuaian harga di outlet tidak akan terpengaruh.
               </div>
             </div>
 
-            {/* Ingredients Table */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Raw Material Composition <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(Read-Only)</span></div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Komposisi Bahan Baku <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(Hanya Baca)</span></div>
               {detailData.ingredients?.length === 0 ? (
                 <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                  No recipes linked to this menu.
+                  Tidak ada resep yang tertaut ke menu ini.
                 </div>
               ) : (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                <div className="table-responsive" style={{ border: '1px solid var(--border)', borderRadius: 8 }}>
                   <Table>
                     <thead>
                       <tr>
-                        <th>Ingredient</th>
-                        <th className="right">Qty</th>
-                        <th className="center">Unit</th>
-                        <th className="right">Price/Unit</th>
-                        <th className="right">Extension</th>
+                        <th>Bahan Baku</th>
+                        <th className="right">Jml</th>
+                        <th className="center">Satuan</th>
+                        <th className="right">Harga/Satuan</th>
+                        <th className="right">Total Biaya</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -332,7 +331,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                     <tfoot>
                       <tr style={{ background: '#f8fafc', borderTop: '2px solid var(--border)' }}>
                         <td colSpan={3} style={{ padding: '10px 14px', fontSize: 13 }}></td>
-                        <td className="right" style={{ fontWeight: 600, fontSize: 13, padding: '10px 14px' }}>Total Raw Cost</td>
+                        <td className="right" style={{ fontWeight: 600, fontSize: 13, padding: '10px 14px' }}>Total Biaya Bahan Baku</td>
                         <td className="right" style={{ fontWeight: 700, color: '#0f172a', fontSize: 14, padding: '10px 14px' }}>
                           {Math.round(detailData.ingredients.reduce((sum: number, i: any) => sum + Number(i.cost || 0), 0)).toLocaleString('id-ID')}
                         </td>
@@ -344,7 +343,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
             </div>
           </div>
         ) : (
-          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Failed to load data.</div>
+          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Gagal memuat data.</div>
         )}
       </Modal>
     </>
@@ -415,34 +414,35 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   return (
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input className="input" placeholder="Search recipe name..." value={search}
+        <input className="input" placeholder="Cari nama resep..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 220 }} />
         <select className="input" value={venueId} onChange={e => { setVenueId(e.target.value); setPage(1); }} style={{ width: 150 }}>
-          <option value="">All Venues</option>
+          <option value="">Semua Venue</option>
           {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
         </select>
         <select className="input" value={sheet} onChange={e => { setSheet(e.target.value); setPage(1); }} style={{ width: 160 }}>
-          <option value="">All Sheets</option>
+          <option value="">Semua Sheet</option>
           {SHEETS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} recipes</span>
-        <a href="/hpp/recipe-builder/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>+ Add Recipe</a>
+        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} resep</span>
+        <a href="/hpp/recipe-builder/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>+ Tambah Resep</a>
       </div>
 
       <div className="card-body flush">
         {loading ? (
-          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
+          <div className="table-responsive">
           <Table>
             <thead>
               <tr>
-                <th>Recipe Name</th>
+                <th>Nama Resep</th>
                 <th>Venue / Sheet</th>
-                <th className="right">Yield</th>
-                <th className="right">Ingredients Subtotal</th>
-                <th className="right">Total COGS</th>
-                <th className="right">Sale Price</th>
-                <th className="right" style={{ width: 120 }}>Actions</th>
+                <th className="right">Yield (Hasil)</th>
+                <th className="right">Subtotal Bahan</th>
+                <th className="right">Total HPP</th>
+                <th className="right">Harga Jual</th>
+                <th className="right" style={{ width: 120 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -456,7 +456,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                   <td className="right ">{Number(row.yield).toLocaleString('id-ID')} <span className="muted">{row.yield_unit ?? 'pcs'}</span></td>
                   <td className="right ">{rp(row.subtotal)}</td>
                   <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost)}</td>
-                  <td className="right ">{row.sale_price ? rp(row.sale_price) : <span className="muted">Base Prep</span>}</td>
+                  <td className="right ">{row.sale_price ? rp(row.sale_price) : <span className="muted">Persiapan Dasar</span>}</td>
                   <td className="right">
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
                       <a href={`/hpp/recipe-builder/${row.id}`} className="btn" style={{ padding: '6px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: 6 }}>
@@ -471,6 +471,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
               ))}
             </tbody>
           </Table>
+          </div>
         )}
       </div>
 
@@ -479,7 +480,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
             <ChevronLeft size={16} />
           </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Page {page} of {totalPages}</span>
+          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Halaman {page} dari {totalPages}</span>
           <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
             <ChevronRight size={16} />
           </button>
@@ -488,20 +489,19 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
 
       <ConfirmDialog
         open={!!deleteConfirm}
-        title="Delete Recipe?"
-        message="Are you sure you want to delete this recipe?"
-        confirmText="Delete"
-        cancelText="Cancel"
+        title="Hapus Resep?"
+        message="Apakah Anda yakin ingin menghapus resep ini?"
+        confirmText="Hapus"
+        cancelText="Batal"
         danger={true}
         loading={deleting}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm(null)}
       />
 
-      {/* Recipe Viewer Modal */}
-      <Modal isOpen={!!viewRecipeModal} onClose={() => setViewRecipeModal(null)} title="Recipe Details" maxWidth={680}>
+      <Modal isOpen={!!viewRecipeModal} onClose={() => setViewRecipeModal(null)} title="Detail Resep" maxWidth={680}>
         {viewRecipeLoading ? (
-          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading recipe...</div>
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Memuat resep...</div>
         ) : viewRecipeData ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 4px' }}>
@@ -519,13 +519,13 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
               </div>
             </div>
 
-            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div className="table-responsive" style={{ border: '1px solid var(--border)', borderRadius: 8 }}>
               <Table>
                 <thead>
                   <tr>
-                    <th>Ingredient</th>
-                    <th className="right">Qty</th>
-                    <th className="center">Unit</th>
+                    <th>Bahan Baku</th>
+                    <th className="right">Jml</th>
+                    <th className="center">Satuan</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -541,7 +541,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
             </div>
           </div>
         ) : (
-          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Failed to load recipe.</div>
+          <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Gagal memuat resep.</div>
         )}
       </Modal>
     </>
@@ -586,7 +586,7 @@ function IngredientsTab() {
     setForm({
       name: row.name,
       default_unit: row.default_unit || '',
-      standard_cost_per_unit: row.standard_cost_per_unit ? String(row.standard_cost_per_unit) : '',
+      standard_cost_per_unit: row.standard_cost_per_unit != null ? String(Number(row.standard_cost_per_unit)) : '',
       description: row.description || ''
     });
     setModalOpen(true);
@@ -640,25 +640,26 @@ function IngredientsTab() {
   return (
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-        <input className="input" placeholder="Search ingredient name..." value={search}
+        <input className="input" placeholder="Cari nama bahan baku..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 260 }} />
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} ingredients</span>
-        <button className="btn btn-primary" onClick={handleOpenAdd}>+ Add Ingredient</button>
+        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} bahan baku</span>
+        <button className="btn btn-primary" onClick={handleOpenAdd}>+ Tambah Bahan Baku</button>
       </div>
 
       <div className="card-body flush">
         {loading ? (
-          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
+          <div className="table-responsive">
           <Table>
             <thead>
               <tr>
-                <th>Ingredient Name</th>
-                <th>Unit</th>
-                <th className="right">Standard Cost/Unit</th>
-                <th className="right">Used in Recipes</th>
-                <th>Description</th>
-                <th className="right">Actions</th>
+                <th>Nama Bahan Baku</th>
+                <th>Satuan</th>
+                <th className="right">Biaya Standar/Satuan</th>
+                <th className="right">Digunakan di Resep</th>
+                <th>Deskripsi</th>
+                <th className="right">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -691,6 +692,7 @@ function IngredientsTab() {
               ))}
             </tbody>
           </Table>
+          </div>
         )}
       </div>
 
@@ -699,14 +701,13 @@ function IngredientsTab() {
           <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
             <ChevronLeft size={16} />
           </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Page {page} of {totalPages}</span>
+          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Halaman {page} dari {totalPages}</span>
           <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
             <ChevronRight size={16} />
           </button>
         </div>
       )}
 
-      {/* Modal Add/Edit */}
       {modalOpen && (
         <div className="modal-overlay" onClick={() => setModalOpen(false)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden' }}>
@@ -715,7 +716,7 @@ function IngredientsTab() {
                 <div style={{ background: '#f1f5f9', padding: 8, borderRadius: 8, color: 'var(--foreground)', display: 'flex' }}>
                   <Package size={20} />
                 </div>
-                <h2 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>{editId ? 'Edit Ingredient' : 'New Ingredient'}</h2>
+                <h2 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>{editId ? 'Edit Bahan Baku' : 'Bahan Baku Baru'}</h2>
               </div>
               <button className="btn" style={{ border: 'none', padding: 6, color: 'var(--muted)', display: 'flex' }} onClick={() => setModalOpen(false)}>
                 <X size={20} />
@@ -724,22 +725,22 @@ function IngredientsTab() {
             
             <div className="modal-body form-grid" style={{ padding: '24px', gap: 20 }}>
               <div style={{ gridColumn: '1 / -1' }}>
-                <Input label="Ingredient Name" placeholder="e.g. Arabica Coffee Beans" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                <Input label="Nama Bahan Baku" placeholder="misal: Biji Kopi Arabika" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>
-              <Input label="Default Unit" placeholder="e.g. gr, ml, pcs" value={form.default_unit} onChange={e => setForm(f => ({ ...f, default_unit: e.target.value }))} />
-              <Input label="Standard Cost / Unit" placeholder="Rp 0" type="number" min="0" step="1" required value={form.standard_cost_per_unit} onChange={e => setForm(f => ({ ...f, standard_cost_per_unit: e.target.value }))} />
+              <Input label="Satuan Default" placeholder="misal: gr, ml, pcs" value={form.default_unit} onChange={e => setForm(f => ({ ...f, default_unit: e.target.value }))} />
+              <Input label="Biaya Standar / Satuan" placeholder="Rp 0" type="number" min="0" step="1" required value={form.standard_cost_per_unit} onChange={e => setForm(f => ({ ...f, standard_cost_per_unit: e.target.value }))} />
               
               <div style={{ gridColumn: '1 / -1' }} className="form-group">
-                <label className="form-label">Description (Optional)</label>
-                <textarea className="input" rows={3} placeholder="Add any notes about pricing or unit conversion here..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                <label className="form-label">Deskripsi (Opsional)</label>
+                <textarea className="input" rows={3} placeholder="Tambahkan catatan tentang harga atau konversi satuan di sini..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
               </div>
             </div>
             
             <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: '#f8fafc', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-              <button className="btn" style={{ padding: '8px 16px', fontWeight: 600, background: '#fff', border: '1px solid var(--border)' }} onClick={() => setModalOpen(false)}>Cancel</button>
+              <button className="btn" style={{ padding: '8px 16px', fontWeight: 600, background: '#fff', border: '1px solid var(--border)' }} onClick={() => setModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" style={{ padding: '8px 24px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }} onClick={handleSave} disabled={saving}>
                 {saving ? null : <Save size={16} />}
-                {saving ? 'Saving...' : 'Save Data'}
+                {saving ? 'Menyimpan...' : 'Simpan Data'}
               </button>
             </div>
           </div>
@@ -748,10 +749,10 @@ function IngredientsTab() {
 
       <ConfirmDialog
         open={!!deleteConfirm}
-        title="Delete Ingredient?"
-        message="Are you sure you want to delete this ingredient?"
-        confirmText="Delete"
-        cancelText="Cancel"
+        title="Hapus Bahan Baku?"
+        message="Apakah Anda yakin ingin menghapus bahan baku ini?"
+        confirmText="Hapus"
+        cancelText="Batal"
         danger={true}
         loading={deleting}
         onConfirm={confirmDelete}
@@ -781,26 +782,27 @@ function KitchenTab() {
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
         <select className="input" value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 180 }}>
-          <option value="">All Kitchen</option>
+          <option value="">Semua Kitchen</option>
           <option value="Kitchen 2025">Kitchen 2025</option>
         </select>
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{filtered.length} recipes</span>
+        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{filtered.length} resep</span>
       </div>
       <div className="card-body flush">
         {loading ? (
-          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
+          <div className="table-responsive">
           <Table>
             <thead>
               <tr>
-                <th>Recipe Name</th>
+                <th>Nama Resep</th>
                 <th>Sheet</th>
-                <th className="right">Yield</th>
-                <th className="right">Raw Cost</th>
-                <th className="right">COGS (+10%)</th>
-                <th className="right">Cost/Unit Yield</th>
-                <th className="right">Sale Price</th>
-                <th className="right">COGS %</th>
+                <th className="right">Yield (Hasil)</th>
+                <th className="right">Biaya Bahan Baku</th>
+                <th className="right">HPP (+10%)</th>
+                <th className="right">Biaya/Satuan Yield</th>
+                <th className="right">Harga Jual</th>
+                <th className="right">% HPP</th>
               </tr>
             </thead>
             <tbody>
@@ -812,7 +814,7 @@ function KitchenTab() {
                   <td className="right ">{rp(row.raw_cost)}</td>
                   <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost_with_xfactor)}</td>
                   <td className="right ">{rp(row.cost_per_unit_yield)}</td>
-                  <td className="right ">{row.sale_price > 0 ? rp(row.sale_price) : <span className="muted">Base Prep</span>}</td>
+                  <td className="right ">{row.sale_price > 0 ? rp(row.sale_price) : <span className="muted">Persiapan Dasar</span>}</td>
                   <td className="right " style={{ color: row.hpp_ratio_pct && row.hpp_ratio_pct > 50 ? '#dc2626' : row.hpp_ratio_pct && row.hpp_ratio_pct > 35 ? '#d97706' : '#166534' }}>
                     {row.hpp_ratio_pct != null ? `${row.hpp_ratio_pct}%` : '—'}
                   </td>
@@ -820,6 +822,7 @@ function KitchenTab() {
               ))}
             </tbody>
           </Table>
+          </div>
         )}
       </div>
     </>
@@ -842,9 +845,9 @@ export default function HppPage() {
   }, []);
 
   const tabDefs = [
-    { key: 'menus', label: 'POS Menus' },
-    { key: 'recipes', label: 'Recipe Cards' },
-    { key: 'ingredients', label: 'Ingredients' },
+    { key: 'menus', label: 'Menu POS' },
+    { key: 'recipes', label: 'Kartu Resep' },
+    { key: 'ingredients', label: 'Bahan Baku' },
     { key: 'kitchen', label: 'Kitchen' },
   ] as const;
 
@@ -856,7 +859,7 @@ export default function HppPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head">
           <div>
-            <h3>COGS & Recipes</h3>
+            <h3>HPP & Resep</h3>
           </div>
         </div>
 
@@ -864,12 +867,12 @@ export default function HppPage() {
         {stats && (
           <div style={{ display: 'flex', gap: 0, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
             {[
-              { label: 'Total POS Menus', value: stats.totalMenus, iconColor: '#475569', icon: Calculator },
-              { label: 'Total Recipes', value: stats.totalRecipes, iconColor: '#475569', icon: FileText },
-              { label: 'Ingredients', value: stats.totalIngredients, iconColor: '#475569', icon: PackageSearch },
-              { label: 'Green Margin', value: marginMap['GREEN'] ?? 0, iconColor: '#15803d', icon: CheckCircle2 },
-              { label: 'Yellow Margin', value: marginMap['YELLOW'] ?? 0, iconColor: '#a16207', icon: AlertCircle },
-              { label: 'Red Margin', value: marginMap['RED'] ?? 0, iconColor: '#b91c1c', icon: XCircle },
+              { label: 'Total Menu POS', value: stats.totalMenus, iconColor: '#475569', icon: Calculator },
+              { label: 'Total Resep', value: stats.totalRecipes, iconColor: '#475569', icon: FileText },
+              { label: 'Bahan Baku', value: stats.totalIngredients, iconColor: '#475569', icon: PackageSearch },
+              { label: 'Margin Hijau', value: marginMap['GREEN'] ?? 0, iconColor: '#15803d', icon: CheckCircle2 },
+              { label: 'Margin Kuning', value: marginMap['YELLOW'] ?? 0, iconColor: '#a16207', icon: AlertCircle },
+              { label: 'Margin Merah', value: marginMap['RED'] ?? 0, iconColor: '#b91c1c', icon: XCircle },
             ].map((s, i) => {
               const Icon = s.icon;
               return (
@@ -898,7 +901,7 @@ export default function HppPage() {
                   background: '#016e3f', color: '#ffffff',
                   padding: '2px 10px', borderRadius: 99, fontSize: 12, fontWeight: 600,
                 }}>{v.venue}</span>
-                <span className="muted" style={{ fontSize: 12 }}>{v.count} recipes</span>
+                <span className="muted" style={{ fontSize: 12 }}>{v.count} resep</span>
               </div>
             ))}
           </div>

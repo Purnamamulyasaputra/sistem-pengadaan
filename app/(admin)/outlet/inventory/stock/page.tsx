@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Table } from '@/components/ui/Table';
-import { Search } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 
 type OutletStockRow = {
   item_id: number;
@@ -14,11 +15,23 @@ type OutletStockRow = {
   barcode: string | null;
 };
 
+function formatUnit(unit: string | null | undefined): string {
+  if (!unit) return '';
+  const u = unit.toLowerCase().trim();
+  if (u === 'l') return 'liter';
+  if (u === 'g' || u === 'gr') return 'gram';
+  return unit;
+}
+
 export default function OutletInventoryStockPage() {
   const [data, setData] = useState<OutletStockRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(15);
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -66,147 +79,165 @@ export default function OutletInventoryStockPage() {
 
 
 
-  const filteredData = search.trim() 
-    ? data.filter(d => 
-        d.item_name.toLowerCase().includes(search.toLowerCase()) || 
-        (d.barcode && d.barcode.toLowerCase().includes(search.toLowerCase()))
-      )
-    : data;
+  const categories = Array.from(new Set(data.map(d => d.category_name))).sort();
+
+  const filteredData = data.filter(d => {
+    const isLowStock = d.minimum_threshold !== null && d.current_balance <= d.minimum_threshold;
+    const isOutOfStock = d.current_balance <= 0;
+    const status = isOutOfStock ? 'OUT_OF_STOCK' : isLowStock ? 'LOW_STOCK' : 'AVAILABLE';
+
+    const matchCategory = !categoryFilter || d.category_name === categoryFilter;
+    const matchStatus = !statusFilter || status === statusFilter;
+    const matchSearch = !search.trim() || (() => {
+      const code = `ERC${String(d.item_id).padStart(5, '0')}`;
+      return d.item_name.toLowerCase().includes(search.toLowerCase()) ||
+        code.toLowerCase().includes(search.toLowerCase()) ||
+        (d.barcode && d.barcode.toLowerCase().includes(search.toLowerCase()));
+    })();
+
+    return matchCategory && matchStatus && matchSearch;
+  });
+
+  const totalPages = Math.ceil(filteredData.length / limit);
+  const paginatedData = filteredData.slice((page - 1) * limit, page * limit);
 
   return (
     <section className="screen">
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Inventory Stock Balance</h3>
-            <p className="hint">Sisa stok fisik bahan baku dan operasional di outlet saat ini.</p>
+            <h3>Stok Inventaris Saat Ini</h3>
+            <p className="hint">Stok fisik bahan baku dan perlengkapan operasional saat ini di outlet.</p>
           </div>
-          <div style={{ position: 'relative', width: 300 }}>
-            <Search style={{ position: 'absolute', left: 10, top: 8, width: 14, height: 14, color: 'var(--muted)' }} />
-            <input
-              type="text"
-              className="input"
-              style={{ paddingLeft: 30 }}
-              placeholder="Cari nama barang atau barcode..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', width: 220 }}>
+              <Search style={{ position: 'absolute', left: 10, top: 8, width: 14, height: 14, color: 'var(--muted)' }} />
+              <input
+                type="text"
+                className="input"
+                style={{ paddingLeft: 30, height: 32, fontSize: 13, width: '100%' }}
+                placeholder="Cari barang/barcode..."
+                value={search}
+                onChange={e => { setSearch(e.target.value); setPage(1); }}
+              />
+            </div>
+            <select className="input" style={{ height: 32, fontSize: 13, width: 160 }} value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setPage(1); }}>
+              <option value="">Semua Kategori</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select className="input" style={{ height: 32, fontSize: 13, width: 140 }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
+              <option value="">Semua Status</option>
+              <option value="AVAILABLE">Tersedia (Aman)</option>
+              <option value="LOW_STOCK">Stok Menipis</option>
+              <option value="OUT_OF_STOCK">Stok Habis (0)</option>
+            </select>
+            <select className="input" style={{ height: 32, fontSize: 13, width: 70 }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+              <option value="15">15</option>
+              <option value="32">32</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>
+                  <div style={{ display: 'flex', gap: 3 }}>
+                    {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+                      let p = page;
+                      if (totalPages <= 3) p = i + 1;
+                      else if (page <= 2) p = i + 1;
+                      else if (page >= totalPages - 1) p = totalPages - 2 + i;
+                      else p = page - 1 + i;
+                      return (
+                        <button key={p} className={`btn ${p === page ? 'btn-primary' : 'btn-outline'}`} style={{ padding: '2px 6px', fontSize: 11, height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p)}>{p}</button>
+                      );
+                    })}
+                  </div>
+                  <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}><ChevronRight size={13} /></button>
+                </div>
+              )}
+              <span className="muted" style={{ fontSize: 12 }}>{filteredData.length} barang ditemukan</span>
+            </div>
           </div>
         </div>
 
         <div className="card-body flush">
           {loading ? (
             <div style={{ padding: 40, textAlign: 'center' }} className="muted">
-              Memuat data inventori...
+              Memuat data stok...
             </div>
           ) : (
             <Table>
               <thead>
                 <tr>
-                  <th style={{ width: 120 }}>CODE</th>
-                  <th>ITEM</th>
-                  <th style={{ width: 120 }}>PURCH. UNIT</th>
-                  <th style={{ width: 120 }}>SMALL. UNIT</th>
-                  <th className="right" style={{ width: 100 }}>STOCK</th>
-                  <th className="right" style={{ width: 80 }}>MIN</th>
+                  <th style={{ width: 100 }}>KODE</th>
+                  <th style={{ width: 320 }}>BARANG</th>
+                  <th style={{ width: 120 }}>SATUAN BELI</th>
+                  <th style={{ width: 120 }}>SATUAN TERKECIL</th>
+                  <th className="right" style={{ width: 160 }}>STOK</th>
+                  <th className="right" style={{ width: 160 }}>MIN</th>
                   <th className="center" style={{ width: 100 }}>STATUS</th>
-                  <th className="center" style={{ width: 110 }}>ACTIONS</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredData.map(row => {
+                {paginatedData.map(row => {
                   const isLowStock = row.minimum_threshold !== null && row.current_balance <= row.minimum_threshold;
                   return (
-                    <tr key={row.item_id}>
+                    <tr
+                      key={row.item_id}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        if (editingId !== row.item_id) {
+                          setEditingId(row.item_id);
+                          setEditValue(row.minimum_threshold?.toString() || '0');
+                        }
+                      }}
+                      title="Klik baris untuk mengubah stok minimum"
+                    >
                       <td style={{ fontFamily: 'monospace', color: 'var(--muted)', fontSize: 13 }}>
-                        {row.barcode || '-'}
+                        ERC{String(row.item_id).padStart(5, '0')}
+                        {row.barcode && <div style={{ fontSize: 11, marginTop: 2 }}>{row.barcode}</div>}
                       </td>
                       <td>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>{row.item_name}</div>
                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{row.category_name}</div>
                       </td>
-                      <td style={{ fontSize: 13, color: 'var(--muted)' }}>{row.purchase_unit}</td>
-                      <td style={{ fontSize: 13, color: 'var(--muted)' }}>{row.smallest_unit}</td>
-                      
+                      <td style={{ fontSize: 13, color: 'var(--muted)' }}>{formatUnit(row.purchase_unit)}</td>
+                      <td style={{ fontSize: 13, color: 'var(--muted)' }}>{formatUnit(row.smallest_unit)}</td>
+
                       <td className="right" style={{ fontSize: 13, color: isLowStock ? 'var(--red)' : 'var(--ink)' }}>
-                        {row.current_balance.toLocaleString('id-ID')} <span style={{ fontSize: 12, color: 'var(--muted)' }}>{row.smallest_unit}</span>
+                        {row.current_balance.toLocaleString('id-ID')} <span style={{ fontSize: 12, color: 'var(--muted)' }}>{formatUnit(row.smallest_unit)}</span>
                       </td>
-                      
+
                       <td className="right">
-                        {editingId === row.item_id ? (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-                            <input 
-                              autoFocus
-                              type="text" 
-                              className="input" 
-                              style={{ width: 60, textAlign: 'right', padding: '4px 6px', height: 26, fontSize: 13 }}
-                              value={editValue}
-                              onChange={e => setEditValue(e.target.value.replace(/[^0-9.]/g, ''))}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') handleSaveMin(row.item_id);
-                                if (e.key === 'Escape') setEditingId(null);
-                              }}
-                              onBlur={() => handleSaveMin(row.item_id)}
-                            />
-                            <span style={{ fontSize: 11, color: 'var(--muted)', width: '35px', textAlign: 'left' }}>{row.smallest_unit}</span>
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: 13, color: 'var(--ink)' }}>
-                            {row.minimum_threshold !== null ? (
-                              <>{row.minimum_threshold} <span style={{ fontSize: 12, color: 'var(--muted)' }}>{row.smallest_unit}</span></>
-                            ) : (
-                              <span style={{ color: 'var(--muted)' }}>-</span>
-                            )}
-                          </span>
-                        )}
+                        <span style={{ fontSize: 13, color: 'var(--ink)' }}>
+                          {row.minimum_threshold !== null ? (
+                            <>{row.minimum_threshold} <span style={{ fontSize: 12, color: 'var(--muted)' }}>{formatUnit(row.smallest_unit)}</span></>
+                          ) : (
+                            <span style={{ color: 'var(--muted)' }}>-</span>
+                          )}
+                        </span>
                       </td>
-                      
+
                       <td className="center">
                         {row.current_balance <= 0 ? (
-                          <span className="badge badge-danger">Habis</span>
+                          <span className="badge badge-danger">Stok Habis</span>
                         ) : isLowStock ? (
-                          <span className="badge" style={{ background: '#fef08a', color: '#854d0e' }}>Kurang</span>
+                          <span className="badge" style={{ background: '#fef08a', color: '#854d0e' }}>Stok Menipis</span>
                         ) : (
-                          <span className="badge badge-success">Ada</span>
+                          <span className="badge badge-success">Tersedia</span>
                         )}
                       </td>
-                      
-                      <td className="center">
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-
-                          <button 
-                            onClick={() => {
-                              setEditingId(row.item_id);
-                              setEditValue(row.minimum_threshold?.toString() || '0');
-                            }}
-                            title="Edit Minimum Stok"
-                            style={{
-                              border: '1px solid var(--border)',
-                              background: '#fff',
-                              borderRadius: 4,
-                              width: 26,
-                              height: 26,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              color: 'var(--blue)'
-                            }}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
+                      <td></td>
                     </tr>
                   );
                 })}
                 {filteredData.length === 0 && (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: 30 }} className="muted">
-                      Tidak ada barang ditemukan.
+                    <td colSpan={8} className="center muted" style={{ padding: 40 }}>
+                      Tidak ada data stok yang cocok dengan pencarian/filter ini.
                     </td>
                   </tr>
                 )}
@@ -215,6 +246,42 @@ export default function OutletInventoryStockPage() {
           )}
         </div>
       </div>
+      <Modal
+        isOpen={editingId !== null}
+        onClose={() => setEditingId(null)}
+        title="Ubah Stok Minimum"
+        maxWidth={400}
+        footer={
+          <>
+            <button className="btn btn-outline" onClick={() => setEditingId(null)} disabled={saving}>Batal</button>
+            <button className="btn btn-primary" onClick={() => editingId !== null && handleSaveMin(editingId)} disabled={saving}>
+              {saving ? 'Menyimpan...' : 'Simpan'}
+            </button>
+          </>
+        }
+      >
+        <div style={{ padding: '10px 0' }}>
+          <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 500 }}>
+            Batas Minimum Baru untuk {editingId ? data.find(d => d.item_id === editingId)?.item_name : ''}
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="text"
+              className="input"
+              autoFocus
+              style={{ flex: 1 }}
+              value={editValue}
+              onChange={e => setEditValue(e.target.value.replace(/[^0-9.]/g, ''))}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && editingId !== null) handleSaveMin(editingId);
+              }}
+            />
+            <span style={{ color: 'var(--muted)', fontSize: 13 }}>
+              {editingId ? formatUnit(data.find(d => d.item_id === editingId)?.smallest_unit) : ''}
+            </span>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

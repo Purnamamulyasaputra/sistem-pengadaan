@@ -8,7 +8,7 @@ export const metadata = {
 
 async function getOutlets(): Promise<{ id: string; name: string }[]> {
     try {
-        const res = await query('SELECT id, name FROM moka_outlets ORDER BY name ASC');
+        const res = await query('SELECT id, name FROM outlets ORDER BY name ASC');
         return res.rows.map((row) => ({
             id: String(row.id),
             name: String(row.name)

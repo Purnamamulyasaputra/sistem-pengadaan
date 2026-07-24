@@ -49,7 +49,7 @@ export async function createDeliveryNote(data: {
     for (const item of data.items) {
       // Validate physical stock
       const balRes = await client.query(
-        `SELECT log.ending_balance, i.name as item_name 
+        `SELECT log.ending_balance, i.name as item_name, i.smallest_unit 
          FROM inventory_logs log
          JOIN items i ON i.id = log.item_id 
          WHERE log.item_id = $1 
@@ -58,16 +58,21 @@ export async function createDeliveryNote(data: {
       );
       const currentStock = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
       const itemName = balRes.rows[0]?.item_name ?? 'Unknown Item';
+      const smallestUnit = (balRes.rows[0]?.smallest_unit || '').toLowerCase();
       
-      if (item.qty_shipped > currentStock) {
-        throw new Error(`Stok ${itemName} tidak mencukupi. Dikirim: ${item.qty_shipped}, Tersedia: ${currentStock}`);
+      // Auto-detect central ratio: ml->Liter (÷1000), gr->Kg (÷1000), others->no conversion
+      const centralRatio = (smallestUnit === 'ml' || smallestUnit === 'gr' || smallestUnit === 'g') ? 1000 : 1;
+      const actualQtyShipped = item.qty_shipped * centralRatio;
+      
+      if (actualQtyShipped > currentStock) {
+        throw new Error(`Stok ${itemName} tidak mencukupi. Dikirim: ${item.qty_shipped} (= ${actualQtyShipped} ${balRes.rows[0]?.smallest_unit}), Tersedia: ${(currentStock / centralRatio).toFixed(2)} ${centralRatio === 1000 ? (smallestUnit === 'ml' ? 'Liter' : 'Kg') : smallestUnit}`);
       }
 
       const uniqueBarcode = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000).toString();
       await client.query(
         `INSERT INTO delivery_note_items (delivery_note_id, order_item_id, item_id, qty_shipped, price_at_shipment, keterangan, unique_barcode)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [dn.id, item.order_item_id, item.item_id, item.qty_shipped, item.price_at_shipment, item.keterangan || null, uniqueBarcode]
+        [dn.id, item.order_item_id, item.item_id, actualQtyShipped, item.price_at_shipment, item.keterangan || null, uniqueBarcode]
       );
     }
 

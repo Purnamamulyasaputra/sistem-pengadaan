@@ -25,9 +25,6 @@ export default function CreateRequestPage() {
   const [error, setError] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Hardcoded for Phase 1 demo
-  const OUTLET_ID = 1;
-  const CREATED_BY = 2; // Assuming 2 is an outlet admin
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -82,7 +79,7 @@ export default function CreateRequestPage() {
 
           if (lowStockItems.length > 0) {
              setCart(lowStockItems);
-             setToast({ open: true, message: `${lowStockItems.length} item Low Stock otomatis ditambahkan!`, type: 'info' });
+             setToast({ open: true, message: `${lowStockItems.length} item Stok Rendah otomatis ditambahkan!`, type: 'info' });
           }
         }
       } catch (e) {
@@ -143,18 +140,16 @@ export default function CreateRequestPage() {
   };
 
   async function handleSubmit() {
-    if (!deliveryDate) { setError('Delivery date is required.'); return; }
-    if (!cart.length) { setError('Cart is empty.'); return; }
+    if (!deliveryDate) { setError('Tanggal pengiriman wajib diisi.'); return; }
+    if (!cart.length) { setError('Keranjang kosong.'); return; }
     setSubmitting(true); setError('');
     try {
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          outlet_id: OUTLET_ID,
           order_date: orderDate,
           delivery_date: deliveryDate,
-          created_by: CREATED_BY,
           items: cart.filter(l => l.item_id !== null && parseFloat(l.qty) > 0).map(l => {
             const floatQty = parseFloat(l.qty) || 0;
             // The qty is already guaranteed to be in purchase_unit and rounded
@@ -163,7 +158,7 @@ export default function CreateRequestPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) { setError(data.message || 'Failed to submit request'); return; }
+      if (!res.ok || !data.success) { setError(data.message || 'Gagal mengirim permintaan'); return; }
       router.push('/outlet/requests');
     } catch (err: any) {
       setError(err.message);
@@ -178,12 +173,12 @@ export default function CreateRequestPage() {
       <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({...toast, open: false})} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <button className="btn" onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px' }}>
-          <ChevronLeft size={18} /> Back
+          <ChevronLeft size={18} /> Kembali
         </button>
         <div>
-          <h2 style={{ margin: 0 }}>Create Manual Request</h2>
+          <h2 style={{ margin: 0 }}>Buat Permintaan Manual</h2>
           <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-            Create a purchase request manually or review auto-suggested low stock items.
+            Buat permintaan pembelian secara manual atau tinjau saran item stok rendah otomatis.
           </div>
         </div>
       </div>
@@ -195,11 +190,11 @@ export default function CreateRequestPage() {
 
           <div className="form-grid" style={{ marginBottom: 30, maxWidth: 600 }}>
             <div className="form-group">
-              <label>Order Date</label>
+              <label>Tanggal Order</label>
               <Input type="date" value={orderDate} disabled />
             </div>
             <div className="form-group">
-              <label>Expected Delivery</label>
+              <label>Estimasi Kirim</label>
               <Input
                 type="date"
                 value={deliveryDate}
@@ -214,13 +209,13 @@ export default function CreateRequestPage() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h4 style={{ margin: 0 }}>Items ({cart.length})</h4>
+            <h4 style={{ margin: 0 }}>Barang ({cart.length})</h4>
             <div style={{ display: 'flex', gap: 12 }}>
               <Button variant="outline" size="sm" onClick={addEmptyRow} style={{ borderColor: '#86efac', background: '#f0fdf4' }}>
-                + Add Item
+                + Tambah Barang
               </Button>
               <Button variant="primary" size="sm" onClick={() => setShowConfirm(true)} disabled={submitting || cart.length === 0}>
-                {submitting ? 'Submitting...' : 'Submit Request'}
+                {submitting ? 'Mengirim...' : 'Kirim Permintaan'}
               </Button>
             </div>
           </div>
@@ -228,12 +223,12 @@ export default function CreateRequestPage() {
           <Table>
             <thead>
               <tr>
-                <th>Item Name</th>
-                <th className="right" style={{ width: 120 }}>Qty Request</th>
-                <th>Purchasing Unit</th>
-                <th className="muted" style={{ width: 180 }}>Conversion Preview</th>
-                <th>Notes</th>
-                <th className="center">Actions</th>
+                <th>Nama Barang</th>
+                <th className="right" style={{ width: 120 }}>Jml Diminta</th>
+                <th>Satuan Pembelian</th>
+                <th className="muted" style={{ width: 180 }}>Pratinjau Konversi</th>
+                <th>Catatan</th>
+                <th className="center">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -242,7 +237,7 @@ export default function CreateRequestPage() {
                   <td className={c.item_id ? "font-bold" : ""}>
                     {!c.item_id ? (
                       <select className="input" style={{ width: '100%', maxWidth: 300 }} value={c.item_id || ''} onChange={e => updateCartItemSelect(c.id, e.target.value)}>
-                        <option value="">-- Select Item --</option>
+                        <option value="">-- Pilih Barang --</option>
                         {items.map(i => {
                           const isActive = activeItemIds.includes(i.id);
                           const inCart = cart.some(cartItem => String(cartItem.item_id) === String(i.id));
@@ -265,7 +260,7 @@ export default function CreateRequestPage() {
                     {c.item_id ? `≈ ${Number((parseFloat(c.qty || '0') * c.ratio).toFixed(2)).toLocaleString('id-ID')} ${c.smallest_unit}` : '-'}
                   </td>
                   <td>
-                     <Input type="text" value={c.note} onChange={e => updateCartNote(c.id, e.target.value)} placeholder="Notes (Optional)" style={{ height: 32, minWidth: 150 }} />
+                     <Input type="text" value={c.note} onChange={e => updateCartNote(c.id, e.target.value)} placeholder="Catatan (Opsional)" style={{ height: 32, minWidth: 150 }} />
                   </td>
                   <td className="center">
                     <Button size="sm" onClick={() => removeCartItem(c.id)} title="Delete" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
@@ -275,7 +270,7 @@ export default function CreateRequestPage() {
                 </tr>
               ))}
               {cart.length === 0 && (
-                <tr><td colSpan={6} className="center muted" style={{ padding: 40 }}>Your cart is empty. Click "+ Add Item" to add items.</td></tr>
+                <tr><td colSpan={6} className="center muted" style={{ padding: 40 }}>Keranjang Anda kosong. Klik "+ Tambah Barang" untuk menambahkan barang.</td></tr>
               )}
             </tbody>
           </Table>
@@ -286,13 +281,13 @@ export default function CreateRequestPage() {
 
       <ConfirmDialog
         open={showConfirm}
-        title="Submit Purchase Request"
-        message={`Are you sure you want to submit this request with ${cart.length} item(s)?`}
+        title="Kirim Permintaan Pembelian"
+        message={`Apakah Anda yakin ingin mengirim permintaan ini dengan ${cart.length} barang?`}
         onCancel={() => setShowConfirm(false)}
         onConfirm={handleSubmit}
         loading={submitting}
-        confirmText="Yes, Submit"
-        cancelText="Cancel"
+        confirmText="Ya, Kirim"
+        cancelText="Batal"
       />
     </section>
   );

@@ -155,7 +155,7 @@ export default function ReceiptClient({ poId }: { poId: number }) {
             disabled={saving}
             style={{ fontWeight: 600, padding: '8px 24px' }}
           >
-            {saving ? 'Menyimpan...' : 'Validate Receipt'}
+            {saving ? 'Menyimpan...' : 'Validasi Penerimaan'}
           </button>
         </div>
         

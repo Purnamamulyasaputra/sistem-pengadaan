@@ -6,6 +6,8 @@ import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { HelpCircle } from 'lucide-react';
+import { Pagination } from '@/components/ui/Pagination';
 
 export default function OutletOpnameDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -16,6 +18,8 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [limit, setLimit] = useState<number | 'all'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchOpname = useCallback(async () => {
     setLoading(true);
@@ -48,7 +52,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   const handleQtyChange = (itemId: number, systemBalance: number, actualQty: string) => {
     if (isLocked) return;
     const numericVal = actualQty.replace(/[^0-9.]/g, '');
-    const qty = numericVal === '' ? 0 : parseFloat(numericVal);
+    const qty = numericVal === '' ? systemBalance : parseFloat(numericVal);
 
     const existing = details.find(d => d.item_id === itemId);
     if (existing) {
@@ -65,7 +69,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
       for (const detail of details) {
         const payload = {
           ...detail,
-          actual_physical_qty: detail.actual_physical_qty === '' ? 0 : parseFloat(detail.actual_physical_qty)
+          actual_physical_qty: detail.actual_physical_qty === '' ? detail.system_balance : parseFloat(detail.actual_physical_qty)
         };
         await fetch(`/api/opname/${id}/detail`, {
           method: 'POST',
@@ -79,13 +83,13 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
         const res = await fetch(`/api/opname/${id}/lock`, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-          alert('Stock Opname successfully locked.');
+          alert('Stock Opname berhasil dikunci.');
           fetchOpname();
         } else {
-          alert(data.message || 'Failed to lock opname.');
+          alert(data.message || 'Gagal mengunci opname.');
         }
       } else {
-        alert('Draft saved successfully.');
+        alert('Draft berhasil disimpan.');
       }
     } catch (err: any) {
       alert(err.message);
@@ -94,38 +98,67 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
     }
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading opname data...</div>;
-  if (!header) return <div style={{ padding: 40, textAlign: 'center' }}>Session not found.</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat data opname...</div>;
+  if (!header) return <div style={{ padding: 40, textAlign: 'center' }}>Sesi tidak ditemukan.</div>;
+
+  const paginatedItems = limit === 'all' ? items : items.slice((currentPage - 1) * limit, currentPage * limit);
+  const totalPages = limit === 'all' ? 1 : Math.ceil(items.length / limit);
 
   return (
     <section className="screen">
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Opname Detail — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
+            <h3>Detail Opname — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
             <div style={{ marginTop: 8 }}>
               <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
             </div>
           </div>
-          <Link href="/outlet/opname">
-            <Button variant="outline" size="sm">Back to List</Button>
-          </Link>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <select className="input" style={{ width: 90, padding: '6px 10px', fontSize: 13 }} value={limit} onChange={(e) => { setLimit(e.target.value === 'all' ? 'all' : Number(e.target.value)); setCurrentPage(1); }}>
+              <option value="all">Semua</option>
+              <option value="8">8</option>
+              <option value="32">32</option>
+            </select>
+            {!isLocked && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving}>Simpan Draft</Button>
+                <Button variant="primary" size="sm" onClick={() => {
+                  if (confirm('Apakah Anda yakin ingin mengunci sesi ini? Data tidak dapat diubah setelah dikunci.')) {
+                    handleSave(true);
+                  }
+                }} disabled={saving}>
+                  Kunci & Submit
+                </Button>
+              </>
+            )}
+            <Link href="/outlet/opname">
+              <Button variant="outline" size="sm">Kembali</Button>
+            </Link>
+          </div>
         </div>
         
         <div className="card-body flush">
           <Table>
             <thead>
               <tr>
-                <th>Item Name</th>
-                <th>Category</th>
-                <th className="right">System Balance</th>
-                <th className="right" style={{ width: 140 }}>Physical Qty</th>
-                <th className="right">Variance</th>
-                <th className="right">Usage Cost Est.</th>
+                <th>Nama Barang</th>
+                <th>Kategori</th>
+                <th className="right">Stok Sistem</th>
+                <th className="right" style={{ width: 140 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                    Stok Fisik
+                    <span title="Barang tanpa inputan akan otomatis dianggap memiliki selisih (variance) 0." style={{ display: 'inline-flex', cursor: 'help' }}>
+                      <HelpCircle size={14} className="muted" />
+                    </span>
+                  </div>
+                </th>
+                <th className="right">Selisih</th>
+                <th className="right">Est. Biaya Pemakaian</th>
               </tr>
             </thead>
             <tbody>
-              {items.map(item => {
+              {paginatedItems.map(item => {
                 const detail = getDetail(item.item_id);
                 const actual = detail ? detail.actual_physical_qty : '';
                 const variance = detail ? detail.variance : 0;
@@ -136,7 +169,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                   <tr key={item.item_id}>
                     <td className="font-bold">{item.item_name}</td>
                     <td className="muted">{item.category_name}</td>
-                    <td className="right num">{Number(item.system_balance).toFixed(2)} {item.smallest_unit}</td>
+                    <td className="right num">{Number(item.system_balance).toLocaleString('id-ID', { maximumFractionDigits: 0 })} {item.smallest_unit}</td>
                     <td className="right">
                       <input 
                         type="text" 
@@ -144,14 +177,14 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                         value={actual} 
                         onChange={(e) => handleQtyChange(item.item_id, item.system_balance, e.target.value)} 
                         disabled={isLocked}
-                        placeholder="0.00"
+                        placeholder="0"
                         style={{ height: 32, width: '100%', borderColor: actual === '' ? '#fca5a5' : 'var(--border)' }} 
                       />
                     </td>
                     <td className="right num">
                       {variance !== 0 ? (
                         <span style={{ color: variance > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
-                          {variance > 0 ? '+' : ''}{variance.toFixed(2)}
+                          {variance > 0 ? '+' : ''}{variance.toLocaleString('id-ID', { maximumFractionDigits: 0 })}
                         </span>
                       ) : '-'}
                     </td>
@@ -164,23 +197,16 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
             </tbody>
           </Table>
           
-          {!isLocked && (
-            <div style={{ padding: 24, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-                Items without input will be considered having 0 variance.
-              </p>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <Button variant="outline" onClick={() => handleSave(false)} disabled={saving}>Save Draft</Button>
-                <Button variant="primary" onClick={() => {
-                  if (confirm('Are you sure you want to lock this session? Data cannot be changed after locking.')) {
-                    handleSave(true);
-                  }
-                }} disabled={saving}>
-                  Lock & Submit
-                </Button>
-              </div>
-            </div>
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={items.length}
+              itemsPerPage={limit as number}
+              onPageChange={setCurrentPage}
+            />
           )}
+          
         </div>
       </div>
     </section>

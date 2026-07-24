@@ -27,7 +27,7 @@ export default function ProfilePage() {
     <div className="animate-fade-in" style={{ maxWidth: 500 }}>
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title">My Account Profile</h2>
+          <h2 className="card-title">Profil Akun Saya</h2>
         </div>
         <div className="card-body">
           {profile ? (
@@ -40,13 +40,13 @@ export default function ProfilePage() {
                   <div style={{ fontSize: 18, fontWeight: 700 }}>{profile.name}</div>
                   <div style={{ color: 'var(--text-muted)' }}>{profile.email}</div>
                   <span className={`badge ${profile.role === 'ADMIN_PUSAT' ? 'badge-primary' : 'badge-success'}`} style={{ marginTop: 4, display: 'inline-block' }}>
-                    {profile.role === 'ADMIN_PUSAT' ? 'Central Warehouse Admin' : 'Outlet Admin'}
+                    {profile.role === 'ADMIN_PUSAT' ? 'Admin Gudang Pusat' : 'Admin Outlet'}
                   </span>
                 </div>
               </div>
 
               <div className="form-group">
-                <label className="form-label">Full Name</label>
+                <label className="form-label">Nama Lengkap</label>
                 <input className="form-control" value={profile.name} readOnly disabled />
               </div>
               <div className="form-group">
@@ -54,16 +54,16 @@ export default function ProfilePage() {
                 <input className="form-control" value={profile.email} readOnly disabled />
               </div>
               <div className="form-group">
-                <label className="form-label">Assigned Location</label>
-                <input className="form-control" value={outlet ? `${outlet.name} (${outlet.type})` : 'Central Warehouse'} readOnly disabled />
+                <label className="form-label">Lokasi Tugas</label>
+                <input className="form-control" value={outlet ? `${outlet.name} (${outlet.type})` : 'Gudang Pusat'} readOnly disabled />
               </div>
 
               <div className="alert-banner alert-warning" style={{ marginTop: 12 }}>
-                To change password or account data, contact IT / System Administrator.
+                Untuk mengubah kata sandi atau data akun, hubungi IT / Administrator Sistem.
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Loading profile...</div>
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Memuat profil...</div>
           )}
         </div>
       </div>

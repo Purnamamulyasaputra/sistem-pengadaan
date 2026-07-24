@@ -35,31 +35,31 @@ export default function DeliveryOrdersPage() {
 
         <div className="card-head">
           <div>
-            <h3>Delivery Orders</h3>
+            <h3>Surat Jalan</h3>
           </div>
           <Link href="/delivery-orders/create">
-            <Button variant="primary" size="sm">+ Create Delivery Order</Button>
+            <Button variant="primary" size="sm">+ Buat Surat Jalan</Button>
           </Link>
         </div>
         <div className="card-body flush">
           {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading delivery orders...</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat surat jalan...</div>
           ) : notes.length === 0 ? (
             <div className="empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-              <h4>No delivery orders</h4>
-              <p>You haven't created any delivery orders yet.</p>
+              <h4>Tidak ada surat jalan</h4>
+              <p>Anda belum membuat surat jalan apapun.</p>
               <Link href="/delivery-orders/create" style={{ display: 'inline-block', marginTop: 12 }}>
-                <Button variant="primary" size="sm">Create First DO</Button>
+                <Button variant="primary" size="sm">Buat Surat Jalan Pertama</Button>
               </Link>
             </div>
           ) : (
             <Table>
               <thead>
                 <tr>
-                  <th>DO No.</th>
-                  <th>Destination Outlet</th>
-                  <th>Delivery Date</th>
+                  <th>No. SJ</th>
+                  <th>Outlet Tujuan</th>
+                  <th>Tanggal Kirim</th>
                   <th className="center">Status</th>
                 </tr>
               </thead>

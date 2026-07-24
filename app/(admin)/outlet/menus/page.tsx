@@ -4,6 +4,8 @@ import { Table } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
+import { Button } from '@/components/ui/Button';
 
 // ─── Types ───────────────────────────────────────────────────
 type Category = { id: number; name: string };
@@ -44,7 +46,7 @@ const rp = (v: number | null) =>
 const pct = (v: number | null) =>
   v == null ? '—' : `${(Number(v) * 100).toFixed(1)}%`;
 
-import { CheckCircle2, AlertCircle, XCircle, Calculator, PackageSearch, FileText, ChevronLeft, ChevronRight, X, Pencil, Trash2, Package, Save, Eye } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, Calculator, PackageSearch, FileText, ChevronLeft, ChevronRight, X, Pencil, Trash2, Package, Save, Eye, RefreshCw, Search } from 'lucide-react';
 
 function MarginBadge({ flag }: { flag: string | null }) {
   if (!flag) return <span style={{ color: 'var(--muted)', fontSize: 11 }}>—</span>;
@@ -118,24 +120,48 @@ function MenusTab({ categories }: { categories: Category[] }) {
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
-          className="input" placeholder="Search menu name..." value={search}
+          className="input" placeholder="Cari nama menu..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
           style={{ width: 220 }}
         />
         <select className="input" value={catId} onChange={e => { setCatId(e.target.value); setPage(1); }} style={{ width: 180 }}>
-          <option value="">All Categories</option>
+          <option value="">Semua Kategori</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select className="input" value={marginFlag} onChange={e => { setMarginFlag(e.target.value); setPage(1); }} style={{ width: 150 }}>
-          <option value="">All Margins</option>
-          <option value="GREEN">Green (&lt;35%)</option>
-          <option value="YELLOW">Yellow (35–50%)</option>
-          <option value="RED">Red (&gt;50%)</option>
+          <option value="">Semua Margin</option>
+          <option value="GREEN">Hijau (&lt;35%)</option>
+          <option value="YELLOW">Kuning (35–50%)</option>
+          <option value="RED">Merah (&gt;50%)</option>
         </select>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-          <span className="muted" style={{ fontSize: 13 }}>
-            {total} Menus found
+          <span className="muted" style={{ fontSize: 12 }}>
+            {total} Menu ditemukan
           </span>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                <ChevronLeft size={13} />
+              </button>
+              <div style={{ display: 'flex', gap: 3 }}>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let p = page;
+                  if (totalPages <= 5) p = i + 1;
+                  else if (page <= 3) p = i + 1;
+                  else if (page >= totalPages - 2) p = totalPages - 4 + i;
+                  else p = page - 2 + i;
+                  return (
+                    <button key={p} className={`btn ${p === page ? 'btn-primary' : 'btn-outline'}`} style={{ padding: '2px 6px', fontSize: 11, height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p)}>
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+              <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          )}
           <div 
             className="group" 
             style={{ position: 'relative', cursor: 'help', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}
@@ -150,18 +176,18 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 flexDirection: 'column', gap: 8
               }}
             >
-              <span className="font-bold" style={{ fontSize: 13, marginBottom: 4, color: '#12201a' }}>COGS % Indicators</span>
+              <span className="font-bold" style={{ fontSize: 13, marginBottom: 4, color: '#12201a' }}>Indikator HPP %</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e' }}></span>
-                <span className="muted"><strong>Green</strong> (&lt; 35% - Healthy)</span>
+                <span className="muted"><strong>Hijau</strong> (&lt; 35% - Sehat)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#eab308' }}></span>
-                <span className="muted"><strong>Yellow</strong> (35–50% - Warning)</span>
+                <span className="muted"><strong>Kuning</strong> (35–50% - Peringatan)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }}></span>
-                <span className="muted"><strong>Red</strong> (&gt; 50% - Critical)</span>
+                <span className="muted"><strong>Merah</strong> (&gt; 50% - Kritis)</span>
               </div>
             </div>
           </div>
@@ -171,21 +197,21 @@ function MenusTab({ categories }: { categories: Category[] }) {
       {/* Table */}
       <div className="card-body flush">
         {loading ? (
-          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading data...</div>
+          <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : data.length === 0 ? (
           <div className="empty-state" style={{ padding: 40 }}>
-            <p className="muted">No data matched the filters.</p>
+            <p className="muted">Tidak ada data yang sesuai dengan filter.</p>
           </div>
         ) : (
           <Table>
             <thead>
               <tr>
-                <th>Category</th>
-                <th>Menu / Variant</th>
-                <th className="right">Sale Price</th>
-                <th className="right">COGS</th>
-                <th className="right">Gross Profit</th>
-                <th className="right">COGS %</th>
+                <th>Kategori</th>
+                <th>Menu / Varian</th>
+                <th className="right">Harga Jual</th>
+                <th className="right">HPP</th>
+                <th className="right">Laba Kotor</th>
+                <th className="right">HPP %</th>
                 <th className="right">Margin %</th>
                 <th className="center">Status</th>
               </tr>
@@ -217,23 +243,12 @@ function MenusTab({ categories }: { categories: Category[] }) {
         )}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 16, borderTop: '1px solid var(--border)' }}>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-            <ChevronLeft size={16} />
-          </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Page {page} of {totalPages}</span>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
+
 
       {/* Menu Detail Modal */}
-      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Menu & COGS Detail" maxWidth={680}>
+      <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Detail Menu & HPP" maxWidth={680}>
         {detailLoading ? (
-          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Loading detail...</div>
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Memuat detail...</div>
         ) : detailData ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Header Info */}
@@ -243,7 +258,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 {detailData.menu.variant && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{detailData.menu.variant}</div>}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Base Cost</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total HPP</div>
                 <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{rp(detailData.menu.hpp)}</div>
               </div>
             </div>
@@ -251,21 +266,21 @@ function MenusTab({ categories }: { categories: Category[] }) {
 
             {/* Ingredients Table */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Raw Material Composition <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(Read-Only)</span></div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Komposisi Bahan Baku <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(Hanya Baca)</span></div>
               {detailData.ingredients?.length === 0 ? (
                 <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                  No recipes linked to this menu in your venue.
+                  Tidak ada resep yang terhubung ke menu ini di outlet Anda.
                 </div>
               ) : (
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                   <Table>
                     <thead>
                       <tr>
-                        <th>Ingredient</th>
+                        <th>Bahan Baku</th>
                         <th className="right">Qty</th>
-                        <th className="center">Unit</th>
-                        <th className="right">Price/Unit</th>
-                        <th className="right">Extension</th>
+                        <th className="center">Satuan</th>
+                        <th className="right">Harga/Satuan</th>
+                        <th className="right">Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -282,7 +297,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                     <tfoot>
                       <tr style={{ background: '#f8fafc', borderTop: '2px solid var(--border)' }}>
                         <td colSpan={3} style={{ padding: '10px 14px', fontSize: 13 }}></td>
-                        <td className="right" style={{ fontWeight: 600, fontSize: 13, padding: '10px 14px' }}>Total Raw Cost</td>
+                        <td className="right" style={{ fontWeight: 600, fontSize: 13, padding: '10px 14px' }}>Total Biaya Bahan</td>
                         <td className="right" style={{ fontWeight: 700, color: '#016e3f', fontSize: 14, padding: '10px 14px' }}>
                           {Math.round(detailData.ingredients.reduce((sum: number, i: any) => sum + Number(i.cost || 0), 0)).toLocaleString('id-ID')}
                         </td>
@@ -375,7 +390,27 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           <option value="">All Sheets</option>
           {SHEETS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} recipes</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+          <span className="muted" style={{ fontSize: 12 }}>{total} recipes</span>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>
+              <div style={{ display: 'flex', gap: 3 }}>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let p = page;
+                  if (totalPages <= 5) p = i + 1;
+                  else if (page <= 3) p = i + 1;
+                  else if (page >= totalPages - 2) p = totalPages - 4 + i;
+                  else p = page - 2 + i;
+                  return (
+                    <button key={p} className={`btn ${p === page ? 'btn-primary' : 'btn-outline'}`} style={{ padding: '2px 6px', fontSize: 11, height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p)}>{p}</button>
+                  );
+                })}
+              </div>
+              <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}><ChevronRight size={13} /></button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="card-body flush">
@@ -391,12 +426,11 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                 <th className="right">Ingredients Subtotal</th>
                 <th className="right">Total COGS</th>
                 <th className="right">Sale Price</th>
-                <th className="right" style={{ width: 80 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {data.map(row => (
-                <tr key={row.id}>
+                <tr key={row.id} onClick={() => openViewRecipe(row.id)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontWeight: 600 }}>{row.name}</td>
                   <td>
                     <div>{row.venue_name}</div>
@@ -406,11 +440,6 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                   <td className="right ">{rp(row.subtotal)}</td>
                   <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost)}</td>
                   <td className="right ">{row.sale_price ? rp(row.sale_price) : <span className="muted">Base Prep</span>}</td>
-                  <td className="right">
-                    <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6 }} onClick={() => openViewRecipe(row.id)}>
-                      <Eye size={14} />
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -418,29 +447,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 16, borderTop: '1px solid var(--border)' }}>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-            <ChevronLeft size={16} />
-          </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Page {page} of {totalPages}</span>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
 
-      <ConfirmDialog
-        open={!!deleteConfirm}
-        title="Delete Recipe?"
-        message="Are you sure you want to delete this recipe?"
-        confirmText="Delete"
-        cancelText="Cancel"
-        danger={true}
-        loading={deleting}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteConfirm(null)}
-      />
 
       {/* Recipe Viewer Modal */}
       <Modal isOpen={!!viewRecipeModal} onClose={() => setViewRecipeModal(null)} title="Recipe Details" maxWidth={680}>
@@ -594,8 +601,27 @@ function IngredientsTab() {
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
         <input className="input" placeholder="Search ingredient name..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 260 }} />
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} ingredients</span>
-        <button className="btn btn-primary" onClick={handleOpenAdd}>+ Add Ingredient</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+          <span className="muted" style={{ fontSize: 12 }}>{total} ingredients</span>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>
+              <div style={{ display: 'flex', gap: 3 }}>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let p = page;
+                  if (totalPages <= 5) p = i + 1;
+                  else if (page <= 3) p = i + 1;
+                  else if (page >= totalPages - 2) p = totalPages - 4 + i;
+                  else p = page - 2 + i;
+                  return (
+                    <button key={p} className={`btn ${p === page ? 'btn-primary' : 'btn-outline'}`} style={{ padding: '2px 6px', fontSize: 11, height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p)}>{p}</button>
+                  );
+                })}
+              </div>
+              <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}><ChevronRight size={13} /></button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="card-body flush">
@@ -610,7 +636,6 @@ function IngredientsTab() {
                 <th className="right">Standard Cost/Unit</th>
                 <th className="right">Used in Recipes</th>
                 <th>Description</th>
-                <th className="right" style={{ width: 80 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -632,10 +657,6 @@ function IngredientsTab() {
                     </span>
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>{row.description ?? '—'}</td>
-                  <td className="right">
-                    <button className="btn" style={{ padding: '6px', marginRight: 4 }} onClick={() => handleOpenEdit(row)}><Pencil size={14} /></button>
-                    <button className="btn" style={{ padding: '6px', color: 'var(--red)' }} onClick={() => setDeleteConfirm(row.id)}><Trash2 size={14} /></button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -643,97 +664,8 @@ function IngredientsTab() {
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 16, borderTop: '1px solid var(--border)' }}>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-            <ChevronLeft size={16} />
-          </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Hal. {page} dari {totalPages}</span>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
 
-      {/* Modal Add/Edit */}
-      {modalOpen && (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden' }}>
-            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyItems: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                <div style={{ background: '#f1f5f9', padding: 8, borderRadius: 8, color: 'var(--foreground)', display: 'flex' }}>
-                  <Package size={20} />
-                </div>
-                <h2 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>{editId ? 'Edit Ingredient' : 'New Ingredient'}</h2>
-              </div>
-              <button className="btn" style={{ border: 'none', padding: 6, color: 'var(--muted)', display: 'flex' }} onClick={() => setModalOpen(false)}>
-                <X size={20} />
-              </button>
-            </div>
 
-            <div className="modal-body form-grid" style={{ padding: '24px', gap: 20 }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label">Link to Master Item (Optional)</label>
-                <select 
-                  className="input" 
-                  value={form.item_id} 
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val) {
-                      const matched = masterItems.find(i => String(i.id) === val);
-                      if (matched) {
-                        setForm(f => ({ 
-                          ...f, 
-                          item_id: val, 
-                          name: matched.name, 
-                          default_unit: matched.smallest_unit, 
-                          standard_cost_per_unit: String(Math.round(matched.current_average_price / matched.conversion_ratio))
-                        }));
-                      }
-                    } else {
-                      setForm(f => ({ ...f, item_id: '' }));
-                    }
-                  }}
-                >
-                  <option value="">-- No Link (Manual/Homemade Prep) --</option>
-                  {masterItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-                </select>
-                {form.item_id && <div style={{ fontSize: 11, color: 'var(--primary)', marginTop: 6 }}>Harga dan satuan akan otomatis tersinkronisasi dari Master Item ini.</div>}
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Input label="Ingredient Name" placeholder="e.g. Arabica Coffee Beans" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} disabled={!!form.item_id} />
-              </div>
-              <Input label="Default Unit" placeholder="e.g. gr, ml, pcs" value={form.default_unit} onChange={e => setForm(f => ({ ...f, default_unit: e.target.value }))} disabled={!!form.item_id} />
-              <Input label="Standard Cost / Unit" placeholder="Rp 0" type="number" min="0" step="1" required value={form.standard_cost_per_unit} onChange={e => setForm(f => ({ ...f, standard_cost_per_unit: e.target.value }))} disabled={!!form.item_id} />
-
-              <div style={{ gridColumn: '1 / -1' }} className="form-group">
-                <label className="form-label">Description (Optional)</label>
-                <textarea className="input" rows={3} placeholder="Add any notes about pricing or unit conversion here..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: '#f8fafc', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-              <button className="btn" style={{ padding: '8px 16px', fontWeight: 600, background: '#fff', border: '1px solid var(--border)' }} onClick={() => setModalOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" style={{ padding: '8px 24px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }} onClick={handleSave} disabled={saving}>
-                {saving ? null : <Save size={16} />}
-                {saving ? 'Saving...' : 'Save Data'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={!!deleteConfirm}
-        title="Delete Ingredient?"
-        message="Are you sure you want to delete this ingredient?"
-        confirmText="Delete"
-        cancelText="Cancel"
-        danger={true}
-        loading={deleting}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteConfirm(null)}
-      />
     </>
   );
 }
@@ -805,9 +737,247 @@ function KitchenTab() {
   );
 }
 
+// ─── Capacity Tab ───────────────────────────────────────────────
+type CapacityItem = {
+  moka_item_id: string;
+  name: string;
+  estimated_portions: number;
+  has_ingredients: boolean;
+  unit: string;
+  breakdown: {
+    ingredient_name: string;
+    needed_per_portion: number;
+    current_stock: number;
+    unit: string;
+    estimated_portions: number;
+  }[];
+};
+
+function CapacityTab() {
+  const [data, setData] = useState<CapacityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+  const [detailModalItem, setDetailModalItem] = useState<CapacityItem | null>(null);
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(15);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/sales-transactions/estimation');
+      const json = await res.json();
+      if (json.success) {
+        setData(json.data || []);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, limit]);
+
+  const filteredData = data.filter(d => {
+    const matchSearch = d.name.toLowerCase().includes(search.toLowerCase());
+    const portions = Math.max(0, d.estimated_portions || 0);
+    
+    if (statusFilter === 'green') return matchSearch && d.has_ingredients && portions > 10;
+    if (statusFilter === 'yellow') return matchSearch && d.has_ingredients && portions > 0 && portions <= 10;
+    if (statusFilter === 'red') return matchSearch && d.has_ingredients && portions === 0;
+    return matchSearch;
+  });
+
+  const totalPages = Math.ceil(filteredData.length / limit) || 1;
+  const paginatedData = filteredData.slice((page - 1) * limit, page * limit);
+
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxVisible = 3;
+    let start = Math.max(1, page - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    if (end - start + 1 < maxVisible) start = Math.max(1, end - maxVisible + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: 220 }}>
+            <Search style={{ position: 'absolute', left: 10, top: 7, width: 14, height: 14, color: 'var(--muted)' }} />
+            <input type="text" placeholder="Search menu..." value={search} onChange={e => setSearch(e.target.value)} className="input" style={{ paddingLeft: 30, fontSize: 12, height: 28, width: '100%' }} />
+          </div>
+          <Select value={statusFilter} onChange={(val) => setStatusFilter(val as any)} options={[{ value: 'all', label: 'All Status' }, { value: 'green', label: 'Aman (> 10)' }, { value: 'yellow', label: 'Menipis (1 - 10)' }, { value: 'red', label: 'Habis (0)' }]} style={{ width: 160 }} inputStyle={{ padding: '2px 8px', fontSize: 12, height: 28 }} />
+          <Select value={limit} onChange={setLimit} options={[{ value: 8, label: '8' }, { value: 15, label: '15' }, { value: 32, label: '32' }, { value: 50, label: '50' }]} style={{ width: 70 }} inputStyle={{ padding: '2px 6px', fontSize: 12, height: 28 }} />
+          <Button variant="outline" onClick={fetchData} style={{ height: 28, fontSize: 12, padding: '0 10px', background: '#ffffff' }} disabled={loading}>
+            <RefreshCw size={12} className={loading ? 'spin' : ''} style={{ marginRight: 6 }} /> Refresh
+          </Button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {!loading && totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>
+              <div style={{ display: 'flex', gap: 3 }}>
+                {getPageNumbers().map(p => (
+                  <button key={p} className={`btn ${p === page ? 'btn-primary' : 'btn-outline'}`} style={{ padding: '2px 6px', fontSize: 11, height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p)}>{p}</button>
+                ))}
+              </div>
+              <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}><ChevronRight size={13} /></button>
+            </div>
+          )}
+          <span className="muted" style={{ fontSize: 12 }}>{filteredData.length} Menu found</span>
+        </div>
+      </div>
+
+      <div className="card-body flush">
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Mengkalkulasi estimasi porsi menu...</div>
+        ) : data.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center' }} className="empty-state">
+            <AlertCircle size={32} style={{ margin: '0 auto 12px', color: 'var(--muted)' }} />
+            <h4 style={{ margin: '0 0 6px 0', fontSize: 15, fontWeight: 600 }}>Belum Ada Pemetaan Resep Moka</h4>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>Silakan hubungkan menu Moka POS dengan resep bahan baku di halaman Master Data Moka.</p>
+          </div>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <th style={{ paddingLeft: 20 }}>NAMA MENU MOKA</th>
+                <th className="center" style={{ width: 180 }}>ESTIMASI KAPASITAS</th>
+                <th className="center" style={{ width: 180 }}>STATUS STOK</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedData.length === 0 ? (
+                <tr><td colSpan={3} className="center" style={{ padding: 30, color: 'var(--muted)', fontSize: 13 }}>Tidak ada menu yang sesuai dengan filter pencarian.</td></tr>
+              ) : (
+                paginatedData.map(item => {
+                  const portions = Math.max(0, item.estimated_portions || 0);
+                  
+                  let badgeConfig = { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca', label: 'Habis' };
+                  let numColor = 'var(--red)';
+                  
+                  if (!item.has_ingredients) {
+                    badgeConfig = { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0', label: 'Belum Ada Resep' };
+                    numColor = 'var(--muted)';
+                  } else if (portions > 10) { 
+                    badgeConfig = { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', label: 'Aman' };
+                    numColor = 'var(--foreground)';
+                  } else if (portions > 0) { 
+                    badgeConfig = { bg: '#fefce8', text: '#a16207', border: '#fef08a', label: 'Menipis' };
+                    numColor = '#d97706';
+                  }
+
+                  return (
+                    <tr key={item.moka_item_id} onClick={() => setDetailModalItem(item)} style={{ cursor: 'pointer' }}>
+                      <td style={{ paddingLeft: 20, fontWeight: 500, fontSize: 13, color: 'var(--foreground)' }}>
+                        {item.name}
+                      </td>
+                      <td className="center">
+                        {!item.has_ingredients ? (
+                          <span style={{ fontSize: 13, color: 'var(--muted)' }}>—</span>
+                        ) : (
+                          <span style={{ fontSize: 13, fontWeight: 600, color: numColor }}>
+                            {portions} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--muted)' }}>{item.unit}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="center">
+                        <span style={{
+                          background: badgeConfig.bg, color: badgeConfig.text, border: `1px solid ${badgeConfig.border}`,
+                          padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 500,
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                          {badgeConfig.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </Table>
+        )}
+      </div>
+
+      <Modal isOpen={!!detailModalItem} onClose={() => setDetailModalItem(null)} title="Detail Kapasitas Menu" maxWidth={700}>
+        {detailModalItem && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>{detailModalItem.name}</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Bahan baku yang menentukan batas maksimal porsi menu ini.</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Maks. Porsi</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: detailModalItem.estimated_portions > 10 ? 'var(--foreground)' : (detailModalItem.estimated_portions > 0 ? '#d97706' : 'var(--danger)') }}>
+                  {detailModalItem.estimated_portions} <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--muted)' }}>{detailModalItem.unit}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Bahan Baku</th>
+                    <th className="right">Stok Saat Ini</th>
+                    <th className="right">Kebutuhan / {detailModalItem.unit}</th>
+                    <th className="right">Kapasitas Porsi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailModalItem.breakdown.length === 0 ? (
+                    <tr><td colSpan={4} className="center muted" style={{ padding: 20 }}>Belum ada resep bahan baku.</td></tr>
+                  ) : (
+                    detailModalItem.breakdown.map((b, i) => {
+                      const isBottleneck = b.estimated_portions === detailModalItem.estimated_portions;
+                      return (
+                        <tr key={i} style={{ background: isBottleneck ? '#fef2f2' : undefined }}>
+                          <td style={{ fontWeight: 500 }}>
+                            {b.ingredient_name}
+                            {isBottleneck && <span style={{ marginLeft: 8, fontSize: 10, background: '#fee2e2', color: '#b91c1c', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>Limit Terendah</span>}
+                          </td>
+                          <td className="right font-mono" style={{ color: b.current_stock === 0 ? 'var(--danger)' : 'inherit' }}>
+                            {Number(b.current_stock).toLocaleString('id-ID', { maximumFractionDigits: 3 })} <span className="muted font-sans" style={{ fontSize: 11 }}>{b.unit}</span>
+                          </td>
+                          <td className="right font-mono">
+                            {Number(b.needed_per_portion).toLocaleString('id-ID', { maximumFractionDigits: 3 })} <span className="muted font-sans" style={{ fontSize: 11 }}>{b.unit}</span>
+                          </td>
+                          <td className="right font-mono font-bold" style={{ color: isBottleneck ? 'var(--danger)' : 'var(--foreground)' }}>
+                            {Number(b.estimated_portions).toLocaleString('id-ID')} <span className="muted font-sans" style={{ fontSize: 11, fontWeight: 400 }}>{detailModalItem.unit}</span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </Table>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+              <Button variant="primary" onClick={() => setDetailModalItem(null)}>Tutup</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────
 export default function HppPage() {
-  const [tab, setTab] = useState<'menus' | 'recipes' | 'ingredients' | 'kitchen'>('menus');
+  const [tab, setTab] = useState<'menus' | 'recipes' | 'ingredients' | 'kitchen' | 'capacity'>('menus');
   const [stats, setStats] = useState<Stats | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -821,12 +991,13 @@ export default function HppPage() {
   }, []);
 
   const tabDefs = [
-    { key: 'menus', label: 'POS Menus' },
-    { key: 'recipes', label: 'Recipe Cards' },
-    { key: 'ingredients', label: 'Ingredients' },
+    { key: 'menus', label: 'Menu POS' },
+    { key: 'recipes', label: 'Resep' },
+    { key: 'ingredients', label: 'Bahan Baku' },
+    { key: 'capacity', label: 'Kapasitas Penjualan (Estimasi)' },
   ];
   if (stats?.byVenue?.some(v => v.venue === 'Kitchen' || v.venue === 'Turangga')) {
-    tabDefs.push({ key: 'kitchen', label: 'Kitchen Summary' });
+    tabDefs.push({ key: 'kitchen', label: 'Ringkasan Dapur' });
   }
 
   const marginMap = (stats?.marginBreakdown ?? []).reduce((a, b) => ({ ...a, [b.flag]: b.count }), {} as Record<string, number>);
@@ -837,9 +1008,9 @@ export default function HppPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head">
           <div>
-            <h3>POS Menus & COGS</h3>
+            <h3>Menu POS & HPP</h3>
             <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 13 }}>
-              Menu list and Cost of Goods Sold (COGS) specifically for your outlet. (Read-Only)
+              Daftar menu dan Harga Pokok Penjualan (HPP) khusus untuk outlet Anda. (Hanya Baca)
             </p>
           </div>
         </div>
@@ -864,6 +1035,7 @@ export default function HppPage() {
         {tab === 'recipes' && <RecipesTab venues={venues} />}
         {tab === 'ingredients' && <IngredientsTab />}
         {tab === 'kitchen' && <KitchenTab />}
+        {tab === 'capacity' && <CapacityTab />}
       </div>
     </section>
   );

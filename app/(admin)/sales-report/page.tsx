@@ -17,7 +17,7 @@ export default async function SalesReportPage({ searchParams }: { searchParams: 
     }
 
     // Fetch available outlets
-    const outletsRes = await query('SELECT id, name FROM moka_outlets ORDER BY name ASC');
+    const outletsRes = await query('SELECT id, name FROM outlets ORDER BY name ASC');
     const outlets = outletsRes.rows.map(r => ({ id: String(r.id), name: String(r.name) }));
 
     const syncStatus = await getSyncStatus();

@@ -25,7 +25,7 @@ export default function ReportsPage() {
 
   const exportExcel = () => {
     if (reportData.length === 0) {
-      alert("No data to export");
+      alert("Tidak ada data untuk diekspor");
       return;
     }
     
@@ -45,8 +45,8 @@ export default function ReportsPage() {
 
     const ws = XLSX.utils.json_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Inventory Value Report');
-    XLSX.writeFile(wb, `Inventory_Report_${year}_${month}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Laporan Nilai Persediaan');
+    XLSX.writeFile(wb, `Laporan_Persediaan_${year}_${month}.xlsx`);
   };
 
   let grandTotalIn = 0;
@@ -68,27 +68,27 @@ export default function ReportsPage() {
     grandTotalAdj += valAdj;
     grandTotalValue += valCurrent;
 
-    const cat = r.category_name || 'Uncategorized';
+    const cat = r.category_name || 'Tidak Berkategori';
     categoryMap.set(cat, (categoryMap.get(cat) || 0) + valCurrent);
   });
 
   const chartData = Array.from(categoryMap.entries()).map(([name, value]) => ({
     name,
-    'Inventory Value': value
+    'Nilai Persediaan': value
   }));
 
   return (
     <section className="screen">
       <div className="card">
         <div className="tabs" style={{ marginBottom: 0 }}>
-          <a href="/reports" className="tab active" style={{ textDecoration: 'none' }}>Financial Report</a>
-          <a href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Price History</a>
-          <a href="/reports/profit-projection" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Profit Simulator</a>
+          <a href="/reports" className="tab active" style={{ textDecoration: 'none' }}>Laporan Keuangan</a>
+          <a href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</a>
+          <a href="/reports/profit-projection" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Simulator Laba</a>
         </div>
         <div className="card-head">
           <div>
-            <h3>Procurement & Inventory Financial Report</h3>
-            <p className="muted" style={{ margin: 0, marginTop: 4 }}>Values calculated using Moving Average algorithm.</p>
+            <h3>Laporan Keuangan Pengadaan & Persediaan</h3>
+            <p className="muted" style={{ margin: 0, marginTop: 4 }}>Nilai dihitung menggunakan algoritma Moving Average.</p>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <Select 
@@ -103,13 +103,13 @@ export default function ReportsPage() {
               options={[year-1, year, year+1].map(y => ({ value: y, label: String(y) }))}
               style={{ width: 100 }}
             />
-            <Button variant="outline" size="sm" onClick={exportExcel}>⬇ Export Excel</Button>
+            <Button variant="outline" size="sm" onClick={exportExcel}>⬇ Ekspor Excel</Button>
           </div>
         </div>
         
         {chartData.length > 0 && (
           <div style={{ padding: '24px 24px 0 24px' }}>
-            <h4 style={{ marginBottom: 16 }}>Current Inventory Value by Category</h4>
+            <h4 style={{ marginBottom: 16 }}>Nilai Persediaan Saat Ini Berdasarkan Kategori</h4>
             <div style={{ height: 220, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
@@ -121,7 +121,7 @@ export default function ReportsPage() {
                     cursor={false}
                     contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
-                  <Bar dataKey="Inventory Value" fill="#016e3f" radius={[4, 4, 0, 0]} maxBarSize={60} />
+                  <Bar dataKey="Nilai Persediaan" fill="#016e3f" radius={[4, 4, 0, 0]} maxBarSize={60} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -130,19 +130,19 @@ export default function ReportsPage() {
 
         <div className="card-body flush" style={{ marginTop: 24 }}>
           {loading ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Loading financial data...</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data keuangan...</div>
           ) : reportData.length === 0 ? (
-            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>No transactions found for this period.</div>
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Tidak ada transaksi ditemukan untuk periode ini.</div>
           ) : (
             <Table>
               <thead>
                 <tr>
-                  <th style={{ padding: '8px 12px', fontSize: 12 }}>Item Name</th>
-                  <th style={{ padding: '8px 12px', fontSize: 12 }}>Category</th>
-                  <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Total IN Value</th>
-                  <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Distributed Value</th>
-                  <th className="right" style={{ padding: '8px 12px', fontSize: 12, color: '#dc2626' }}>Adjusted Value</th>
-                  <th className="right" style={{ padding: '8px 12px', fontSize: 12, background: '#f8fafc' }}>Current Stock Value</th>
+                  <th style={{ padding: '8px 12px', fontSize: 12 }}>Nama Barang</th>
+                  <th style={{ padding: '8px 12px', fontSize: 12 }}>Kategori</th>
+                  <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Total Nilai MASUK</th>
+                  <th className="right" style={{ padding: '8px 12px', fontSize: 12 }}>Nilai Distribusi</th>
+                  <th className="right" style={{ padding: '8px 12px', fontSize: 12, color: '#dc2626' }}>Nilai Penyesuaian</th>
+                  <th className="right" style={{ padding: '8px 12px', fontSize: 12, background: '#f8fafc' }}>Nilai Stok Saat Ini</th>
                 </tr>
               </thead>
               <tbody style={{ fontSize: 13 }}>
@@ -171,7 +171,7 @@ export default function ReportsPage() {
               </tbody>
               <tfoot>
                 <tr style={{ background: '#f1f5f9', fontWeight: 700, borderTop: '2px solid var(--border)', fontSize: 13 }}>
-                  <td colSpan={2} className="right" style={{ padding: '8px 12px' }}>GRAND TOTAL</td>
+                  <td colSpan={2} className="right" style={{ padding: '8px 12px' }}>TOTAL KESELURUHAN</td>
                   <td className="right num" style={{ padding: '8px 12px' }}>Rp {grandTotalIn.toLocaleString('id-ID')}</td>
                   <td className="right num" style={{ padding: '8px 12px' }}>Rp {grandTotalDist.toLocaleString('id-ID')}</td>
                   <td className="right num" style={{ padding: '8px 12px', color: '#dc2626' }}>Rp {grandTotalAdj.toLocaleString('id-ID')}</td>

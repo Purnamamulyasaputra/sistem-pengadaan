@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
 
     const result = isOutlet
       ? await getOutletHppRecipes(session.outletId as number, {
+          venueId: venueId ? parseInt(venueId) : undefined,
+          sourceSheet: sourceSheet ?? undefined,
           search,
           limit,
           offset,

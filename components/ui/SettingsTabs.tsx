@@ -13,7 +13,7 @@ export function SettingsTabs() {
         className={`tab ${pathname === '/settings' ? 'active' : ''}`} 
         style={{ textDecoration: 'none', color: pathname === '/settings' ? undefined : 'inherit' }}
       >
-        Company Profile
+        Profil Perusahaan
       </Link>
 
 
@@ -22,7 +22,7 @@ export function SettingsTabs() {
         className={`tab ${pathname.startsWith('/settings/users') ? 'active' : ''}`} 
         style={{ textDecoration: 'none', color: pathname.startsWith('/settings/users') ? undefined : 'inherit' }}
       >
-        User Management
+        Manajemen Pengguna
       </Link>
     </div>
   );

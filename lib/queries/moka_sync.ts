@@ -36,23 +36,19 @@ export async function syncBusinessAndOutlets(token: any) {
             const outlets = outletData.data?.outlets || [];
 
             for (const out of outlets) {
-                // Upsert Outlet
+                // Upsert Outlet directly to the main 'outlets' table
                 await query(`
-                    INSERT INTO moka_outlets (id, business_id, name, address, phone_number, city, province, is_active_subscription, is_default, synchronized_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    INSERT INTO outlets (id, name, type, phone, address, city, state, moka_business_id)
+                    VALUES ($1, $2, 'STORE', $3, $4, $5, $6, $7)
                     ON CONFLICT (id) DO UPDATE SET
                         name = EXCLUDED.name,
+                        phone = EXCLUDED.phone,
                         address = EXCLUDED.address,
-                        phone_number = EXCLUDED.phone_number,
                         city = EXCLUDED.city,
-                        province = EXCLUDED.province,
-                        is_active_subscription = EXCLUDED.is_active_subscription,
-                        is_default = EXCLUDED.is_default,
-                        synchronized_at = EXCLUDED.synchronized_at,
-                        updated_at = CURRENT_TIMESTAMP
+                        state = EXCLUDED.state,
+                        moka_business_id = EXCLUDED.moka_business_id
                 `, [
-                    out.id, biz.id, out.name, out.address, out.phone_number,
-                    out.city, out.province, out.is_active_subscription, out.is_default, timestamp
+                    out.id, out.name, out.phone_number, out.address, out.city, out.province, biz.id
                 ]);
             }
         }
@@ -69,7 +65,7 @@ export async function syncItems(token: any) {
         if (!token) throw new Error("No token provided");
 
         // Get active outlets specific to this business
-        const outRes = await query('SELECT id FROM moka_outlets WHERE business_id = $1', [token.business_id]);
+        const outRes = await query('SELECT id FROM outlets WHERE moka_business_id = $1', [token.business_id]);
         const outlets = outRes.rows;
         const timestamp = new Date();
         let totalItemsSynced = 0;
@@ -140,7 +136,7 @@ export async function getSyncStatus(businessId?: number | string | null) {
             bizRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_business WHERE id = $1', [businessId]);
             itemRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_items WHERE business_id = $1', [businessId]);
             salesRes = await query('SELECT MAX(sync_date) as last_sync FROM moka_item_sales WHERE business_id = $1', [businessId]);
-            trxRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_transactions t JOIN moka_outlets o ON t.outlet_id = o.id WHERE o.business_id = $1', [businessId]);
+            trxRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_transactions t');
             custRes = await query('SELECT MAX(synced_at) as last_sync FROM moka_customers WHERE business_id = $1', [businessId]);
         } else {
             bizRes = await query('SELECT MAX(synchronized_at) as last_sync FROM moka_business');
@@ -165,7 +161,7 @@ export async function getSyncStatus(businessId?: number | string | null) {
 
 export async function getMokaOutlets() {
     try {
-        const res = await query('SELECT id, name FROM moka_outlets ORDER BY name ASC');
+        const res = await query('SELECT id, name FROM outlets ORDER BY name ASC');
         return res.rows;
     } catch (error) {
         console.error("Error fetching moka outlets:", error);

@@ -33,6 +33,7 @@ export default function PurchaseOrdersPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,6 +70,7 @@ export default function PurchaseOrdersPage() {
     fetchPOs();
     fetch('/api/vendors').then(r => r.json()).then(d => setVendors((d.data ?? []).filter((v: Vendor) => v.is_active !== false)));
     fetch('/api/items?active_only=true').then(r => r.json()).then(d => setItems(d.data ?? []));
+    fetch('/api/purchase-orders/suggestions').then(r => r.json()).then(d => setAlerts(d.data ?? []));
     fetch('/api/outlets').then(r => r.json()).then(d => {
       const activeOutlets = (d.data ?? []).filter((o: Outlet) => o.is_active !== false);
       setOutlets(activeOutlets);
@@ -97,6 +99,44 @@ export default function PurchaseOrdersPage() {
 
   function removeLine(i: number) {
     setLines(l => l.filter((_, idx) => idx !== i));
+  }
+
+  async function autoFillLowStock() {
+    try {
+      const res = await fetch('/api/purchase-orders/suggestions');
+      const data = await res.json();
+      if (data.success && data.data) {
+        const suggestions = data.data;
+        if (suggestions.length === 0) {
+          return;
+        }
+        
+        setLines(current => {
+          const valid = current.filter(l => l.description || l.item_id || (l.type === 'note' && l.description));
+          const newLines = suggestions.map((a: any) => {
+             const item = items.find(i => String(i.id) === String(a.item_id));
+             const conversion = item && item.conversion_ratio > 0 ? item.conversion_ratio : 1;
+             const deficit = a.minimum_threshold - Number(a.current_balance);
+             const suggestedPurchaseQty = deficit > 0 ? Math.ceil(deficit / conversion) : 1;
+             
+             return {
+               type: 'product',
+               item_id: String(a.item_id),
+               description: a.item_name,
+               qty: String(suggestedPurchaseQty),
+               unit_price: item ? String(item.current_average_price || 0) : '0',
+               tax_percent: '11',
+               disc_percent: '0',
+               purchase_unit: item ? item.purchase_unit : a.smallest_unit,
+             };
+          });
+          return [...valid, ...newLines];
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Gagal memuat barang dengan stok rendah');
+    }
   }
 
   function updateLine(i: number, field: string, value: string) {
@@ -380,15 +420,17 @@ export default function PurchaseOrdersPage() {
         <div className="card">
           <div className="card-head" style={{ paddingBottom: 10 }}>
             <div>
-              <h3 style={{ fontSize: 18, margin: 0 }}>Requests for Quotation</h3>
+              <h3 style={{ fontSize: 18, margin: 0 }}>Permintaan Penawaran (PO)</h3>
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => {
               setError('');
               setDraftPO(null);
-              setForm({ vendor_id: '', vendor_reference: '', deliver_to: '', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
+              setForm({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
               setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
               setShowModal(true);
-            }}>Create PO</button>
+              // otomatis masukkan saran reorder
+              setTimeout(() => autoFillLowStock(), 100);
+            }}>Buat PO</button>
           </div>
 
           {/* Odoo KPI Dashboard */}
@@ -397,43 +439,43 @@ export default function PurchaseOrdersPage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <div style={{ width: 85, height: 50, background: 'var(--primary)', color: 'white', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(1, 110, 63, 0.2)' }} onClick={() => setStatusFilter('RFQ')}>
                 <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{toSend}</div>
-                <div style={{ fontSize: 11, marginTop: 2 }}>To Send</div>
+                <div style={{ fontSize: 11, marginTop: 2 }}>Akan Dikirim</div>
               </div>
               <div style={{ width: 85, height: 50, background: '#f8fafc', color: '#475569', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', cursor: 'pointer' }} onClick={() => setStatusFilter('RFQ_TERKIRIM')}>
                 <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1, color: 'var(--primary)' }}>{waiting}</div>
-                <div style={{ fontSize: 11, marginTop: 2 }}>Waiting</div>
+                <div style={{ fontSize: 11, marginTop: 2 }}>Menunggu</div>
               </div>
               <div style={{ width: 85, height: 50, background: '#fef2f2', color: '#ef4444', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px solid #fecaca', cursor: 'pointer' }}>
                 <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{late}</div>
-                <div style={{ fontSize: 11, marginTop: 2 }}>Late</div>
+                <div style={{ fontSize: 11, marginTop: 2 }}>Terlambat</div>
               </div>
             </div>
 
             {/* Right Metrics */}
             <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 32px', fontSize: 12, color: '#475569' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 3, borderBottom: '1px solid #f1f5f9' }}>
-                <span>Avg Order Value</span>
+                <span>Rata-rata Nilai Order</span>
                 <span className="font-bold text-dark">{fmtCurrency(avgOrderValue).replace(',00', '')}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 3, borderBottom: '1px solid #f1f5f9' }}>
-                <span>Purchased Last 7 Days</span>
+                <span>Pembelian 7 Hari Terakhir</span>
                 <span className="font-bold text-dark">{fmtCurrency(purchased7Days).replace(',00', '')}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 3, borderBottom: '1px solid #f1f5f9' }}>
-                <span>Lead Time to Purchase</span>
-                <span className="font-bold text-dark">0.00 Days</span>
+                <span>Waktu Tunggu Pembelian</span>
+                <span className="font-bold text-dark">0.00 Hari</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 3, borderBottom: '1px solid #f1f5f9' }}>
-                <span>RFQs Sent Last 7 Days</span>
+                <span>RFQ Dikirim 7 Hari Terakhir</span>
                 <span className="font-bold text-dark">{rfqSent7Days}</span>
               </div>
             </div>
           </div>
 
           <div className="card-body flush table-responsive" style={{ minHeight: 400 }}>
-            {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Loading...</div> : pos.length === 0 ? (
+            {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Memuat...</div> : pos.length === 0 ? (
               <div style={{ padding: 60, textAlign: 'center', color: '#64748b', fontSize: 15 }}>
-                No purchase orders found
+                Tidak ada purchase order ditemukan
               </div>
             ) : (
               <>
@@ -442,11 +484,11 @@ export default function PurchaseOrdersPage() {
                     <tr style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', color: '#334155' }}>
                       <th style={{ width: 40, paddingLeft: 16 }}><input type="checkbox" /></th>
                       <th style={{ width: 30 }}></th>
-                      <th>NO PO</th>
+                      <th>NO. PO</th>
                       <th>Vendor</th>
-                      <th>Order Deadline</th>
-                      <th>Activities</th>
-                      <th>Source Document</th>
+                      <th>Batas Waktu Order</th>
+                      <th>Aktivitas</th>
+                      <th>Dokumen Sumber</th>
                       <th className="right">Total</th>
                       <th className="center">Status</th>
                     </tr>
@@ -480,14 +522,14 @@ export default function PurchaseOrdersPage() {
                 {pos.length > ITEMS_PER_PAGE && (
                   <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0' }}>
                     <div className="muted" style={{ fontSize: 13 }}>
-                      Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, pos.length)} of {pos.length}
+                      Menampilkan {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, pos.length)} dari {pos.length}
                     </div>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                      <button className="btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Seb</button>
                       <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', fontSize: 13, fontWeight: 600 }}>
-                        Page {currentPage} of {Math.ceil(pos.length / ITEMS_PER_PAGE)}
+                        Halaman {currentPage} dari {Math.ceil(pos.length / ITEMS_PER_PAGE)}
                       </div>
-                      <button className="btn" onClick={() => setCurrentPage(p => Math.min(Math.ceil(pos.length / ITEMS_PER_PAGE), p + 1))} disabled={currentPage === Math.ceil(pos.length / ITEMS_PER_PAGE)}>Next</button>
+                      <button className="btn" onClick={() => setCurrentPage(p => Math.min(Math.ceil(pos.length / ITEMS_PER_PAGE), p + 1))} disabled={currentPage === Math.ceil(pos.length / ITEMS_PER_PAGE)}>Lanjut</button>
                     </div>
                   </div>
                 )}
@@ -543,39 +585,39 @@ export default function PurchaseOrdersPage() {
               <div style={{ display: 'flex', gap: 8 }}>
                 {(!draftPO || draftPO.status === 'RFQ') && (
                   <>
-                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={openEmailModal} disabled={saving}>Send by Email</button>
-                    <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => handleSave()} disabled={saving}>{saving ? 'Saving...' : 'Save Draft'}</button>
+                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={openEmailModal} disabled={saving}>Kirim via Email</button>
+                    <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => handleSave()} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan Draft'}</button>
                   </>
                 )}
                 {draftPO?.status === 'RFQ_TERKIRIM' && (
-                  <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => handleUpdateStatus(draftPO.id, 'PURCHASE_ORDER')} disabled={saving}>Confirm Order</button>
+                  <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => handleUpdateStatus(draftPO.id, 'PURCHASE_ORDER')} disabled={saving}>Konfirmasi Order</button>
                 )}
                 {(draftPO?.status === 'PURCHASE_ORDER' || draftPO?.status === 'DITERIMA_SEBAGIAN') && (
                   <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => {
                     window.location.href = `/warehouse/receipt/${draftPO.id}`;
-                  }} disabled={saving}>Receive Products</button>
+                  }} disabled={saving}>Terima Produk</button>
                 )}
                 {draftPO && draftPO.status !== 'DIBATALKAN' && draftPO.status !== 'SELESAI' && draftPO.status !== 'DITERIMA_SEBAGIAN' && (
-                  <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 600 }} onClick={() => setConfirmCancel(true)} disabled={saving}>Cancel Order</button>
+                  <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 600 }} onClick={() => setConfirmCancel(true)} disabled={saving}>Batalkan Order</button>
                 )}
                 <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={handleDownloadPDF} title="Download/View PDF Document">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                   PDF
                 </button>
-                <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={() => setShowModal(false)}>Back to list</button>
+                <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={() => setShowModal(false)}>Kembali ke daftar</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', fontSize: 13, fontWeight: 600, color: '#64748b' }}>
                 {draftPO?.status === 'DIBATALKAN' ? (
-                  <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '4px 16px', borderRadius: 16, border: '1px solid #f87171' }}>Canceled</div>
+                  <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '4px 16px', borderRadius: 16, border: '1px solid #f87171' }}>Dibatalkan</div>
                 ) : (
                   <>
                     <div style={{ background: (!draftPO || draftPO.status === 'RFQ') ? 'var(--primary)' : '#f1f5f9', color: (!draftPO || draftPO.status === 'RFQ') ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ</div>
                     <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
-                    <div style={{ background: draftPO?.status === 'RFQ_TERKIRIM' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'RFQ_TERKIRIM' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ Sent</div>
+                    <div style={{ background: draftPO?.status === 'RFQ_TERKIRIM' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'RFQ_TERKIRIM' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ Dikirim</div>
                     <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
                     <div style={{ background: draftPO?.status === 'PURCHASE_ORDER' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'PURCHASE_ORDER' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Purchase Order</div>
                     <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
-                    <div style={{ background: draftPO?.status === 'SELESAI' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'SELESAI' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Done</div>
+                    <div style={{ background: draftPO?.status === 'SELESAI' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'SELESAI' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Selesai</div>
                   </>
                 )}
               </div>
@@ -598,25 +640,25 @@ export default function PurchaseOrdersPage() {
                     <div className="form-group">
                       <label className="req">Vendor</label>
                       <select className="input" value={form.vendor_id} onChange={e => setForm(f => ({ ...f, vendor_id: e.target.value }))}>
-                        <option value="">Select vendor...</option>
+                        <option value="">Pilih vendor...</option>
                         {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
-                      <label>Vendor Reference</label>
-                      <input className="input" value={form.vendor_reference} onChange={e => setForm(f => ({ ...f, vendor_reference: e.target.value }))} placeholder="e.g. PO-REF-123" />
+                      <label>Referensi Vendor</label>
+                      <input className="input" value={form.vendor_reference} onChange={e => setForm(f => ({ ...f, vendor_reference: e.target.value }))} placeholder="misal: PO-REF-123" />
                     </div>
                   </div>
 
                   {/* Right Column */}
                   <div style={{ flex: 1, minWidth: 300, display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div className="form-group" style={{ position: 'relative' }}>
-                      <label>Deliver To</label>
+                      <label>Kirim Ke</label>
                       <input className="input" value={form.deliver_to} onFocus={(e) => { setDeliverToFocused(true); e.target.select(); }} onBlur={() => setTimeout(() => setDeliverToFocused(false), 200)} onChange={e => {
                         const val = e.target.value;
                         const matched = outlets.find(o => o.name === val);
                         setForm(f => ({ ...f, deliver_to: val, destination_outlet_id: matched ? String(matched.id) : '' }));
-                      }} placeholder="Select or type destination..." />
+                      }} placeholder="Pilih atau ketik tujuan..." />
 
                       {deliverToFocused && (
                         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
@@ -634,17 +676,17 @@ export default function PurchaseOrdersPage() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                       <div className="form-group">
-                        <label>Order Date</label>
+                        <label>Tanggal Order</label>
                         <input className="input" type="date" min={new Date().toISOString().split('T')[0]} value={form.order_date} onChange={e => setForm(f => ({ ...f, order_date: e.target.value }))} onKeyDown={e => e.preventDefault()} onClick={e => (e.target as HTMLInputElement).showPicker && (e.target as HTMLInputElement).showPicker()} />
                       </div>
                       <div className="form-group">
-                        <label>Order Deadline</label>
+                        <label>Batas Waktu Order</label>
                         <input className="input" type="date" min={new Date().toISOString().split('T')[0]} value={form.order_deadline} onChange={e => setForm(f => ({ ...f, order_deadline: e.target.value }))} onKeyDown={e => e.preventDefault()} onClick={e => (e.target as HTMLInputElement).showPicker && (e.target as HTMLInputElement).showPicker()} />
                       </div>
                     </div>
                     <div className="form-group">
-                      <label>Payment Terms</label>
-                      <input className="input" value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))} placeholder="e.g. 30 days, Cash" />
+                      <label>Ketentuan Pembayaran</label>
+                      <input className="input" value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))} placeholder="misal: 30 days, Cash" />
                     </div>
                   </div>
                 </div>
@@ -652,7 +694,7 @@ export default function PurchaseOrdersPage() {
                 {/* Odoo Style Tabs */}
                 <div style={{ marginTop: 20 }}>
                   <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border)', paddingBottom: 0, marginBottom: 16 }}>
-                    {['Ingredients', 'Other Info', 'Alternatives'].map(tab => (
+                    {['Bahan / Produk', 'Info Lainnya', 'Alternatif'].map(tab => (
                       <div key={tab}
                         onClick={() => setActiveTab(tab)}
                         style={{
@@ -668,19 +710,19 @@ export default function PurchaseOrdersPage() {
                     ))}
                   </div>
 
-                  {activeTab === 'Ingredients' && (
+                  {activeTab === 'Bahan / Produk' && (
                     <div>
                       <div className="table-responsive" style={{ overflow: 'visible' }}>
                         <table style={{ margin: 0, width: '100%' }}>
                           <thead>
                             <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                              <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200 }}>Ingredient</th>
-                              <th className="right" style={{ minWidth: 80 }}>Quantity</th>
-                              <th className="center" style={{ minWidth: 220 }}>Unit</th>
-                              <th className="right" style={{ minWidth: 100 }}>Unit Price</th>
-                              <th className="right" style={{ minWidth: 70 }}>Taxes %</th>
-                              <th className="right" style={{ minWidth: 70 }}>Disc.%</th>
-                              <th className="right" style={{ minWidth: 100 }}>Amount</th>
+                              <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200 }}>Bahan / Produk</th>
+                              <th className="right" style={{ minWidth: 80 }}>Kuantitas</th>
+                              <th className="center" style={{ minWidth: 220 }}>Satuan</th>
+                              <th className="right" style={{ minWidth: 100 }}>Harga Satuan</th>
+                              <th className="right" style={{ minWidth: 70 }}>Pajak %</th>
+                              <th className="right" style={{ minWidth: 70 }}>Diskon %</th>
+                              <th className="right" style={{ minWidth: 100 }}>Jumlah</th>
                               <th style={{ width: 40 }}></th>
                             </tr>
                           </thead>
@@ -690,7 +732,7 @@ export default function PurchaseOrdersPage() {
                                 return (
                                   <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                     <td style={{ padding: '8px 16px' }}>
-                                      <textarea className="input" rows={2} style={{ width: '100%', resize: 'none', fontStyle: 'italic', fontSize: 13 }} placeholder="Type a note..." value={line.description} onChange={e => updateLine(idx, 'description', e.target.value)} />
+                                      <textarea className="input" rows={2} style={{ width: '100%', resize: 'none', fontStyle: 'italic', fontSize: 13 }} placeholder="Ketik catatan..." value={line.description} onChange={e => updateLine(idx, 'description', e.target.value)} />
                                     </td>
                                     <td colSpan={6}></td>
                                     <td className="center" style={{ padding: '6px 4px' }}>
@@ -710,7 +752,7 @@ export default function PurchaseOrdersPage() {
                                       onFocus={(e) => { setActiveDropdown(idx); e.target.select(); }}
                                       onBlur={() => setTimeout(() => setActiveDropdown(null), 200)}
                                       onChange={e => handleItemTextChange(idx, e.target.value)}
-                                      placeholder="Ingredient name..."
+                                      placeholder="Nama bahan/produk..."
                                     />
                                     {activeDropdown === idx && (
                                       <div style={{ position: 'absolute', top: '100%', left: 16, right: 16, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 999, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
@@ -724,7 +766,7 @@ export default function PurchaseOrdersPage() {
                                           </div>
                                         ))}
                                         {items.filter(i => i.name.toLowerCase().includes((line.item_id ? '' : line.description).toLowerCase())).length === 0 && (
-                                          <div style={{ padding: '8px 12px', color: '#64748b', fontStyle: 'italic', fontSize: 13 }}>No matches found</div>
+                                          <div style={{ padding: '8px 12px', color: '#64748b', fontStyle: 'italic', fontSize: 13 }}>Tidak ada kecocokan</div>
                                         )}
                                       </div>
                                     )}
@@ -787,19 +829,19 @@ export default function PurchaseOrdersPage() {
                       </div>
 
                       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>Add an ingredient</button>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }}>Add a section</button>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={addNote}>Add a note</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>Tambah bahan/produk</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }}>Tambah bagian</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={addNote}>Tambah catatan</button>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', marginTop: 32 }}>
                         <div style={{ minWidth: 300 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, color: '#64748b' }}>
-                            <span>Untaxed Amount:</span>
+                            <span>Jumlah Sebelum Pajak:</span>
                             <span className="num">{fmtCurrency(computedSubtotal).replace(',00', '')}</span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, color: '#64748b' }}>
-                            <span>Taxes:</span>
+                            <span>Pajak:</span>
                             <span className="num">{fmtCurrency(computedTax).replace(',00', '')}</span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 18 }}>
@@ -811,33 +853,33 @@ export default function PurchaseOrdersPage() {
                     </div>
                   )}
 
-                  {activeTab === 'Other Info' && (
+                  {activeTab === 'Info Lainnya' && (
                     <div className="form-grid" style={{ columnGap: 60 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Purchase Rep</div>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Admin Pembelian</div>
                           <input className="input" value="Admin Pusat" disabled style={{ flex: 1 }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Company</div>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Perusahaan</div>
                           <input className="input" value="Sunrise Daily Pusat" disabled style={{ flex: 1 }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Source Document</div>
-                          <input className="input" placeholder="e.g. OP/0001" style={{ flex: 1 }} />
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Dokumen Sumber</div>
+                          <input className="input" placeholder="misal: OP/0001" style={{ flex: 1 }} />
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Agreement</div>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Perjanjian</div>
                           <input className="input" style={{ flex: 1 }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Payment Terms</div>
+                          <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Ketentuan Pembayaran</div>
                           <select className="input" style={{ flex: 1 }} value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}>
-                            <option value="">Immediate Payment</option>
-                            <option value="15 Days">15 Days</option>
-                            <option value="30 Days">30 Days</option>
+                            <option value="">Pembayaran Langsung</option>
+                            <option value="15 Days">15 Hari</option>
+                            <option value="30 Days">30 Hari</option>
                           </select>
                         </div>
                       </div>
@@ -851,12 +893,12 @@ export default function PurchaseOrdersPage() {
       )}
 
       {/* Email Modal */}
-      <Modal isOpen={showEmailModal} onClose={() => !sendingEmail && setShowEmailModal(false)} title={pdfPreviewUrl ? "Compose Email & Preview" : "Compose Email"} maxWidth={pdfPreviewUrl ? 1100 : 700}>
+      <Modal isOpen={showEmailModal} onClose={() => !sendingEmail && setShowEmailModal(false)} title={pdfPreviewUrl ? "Tulis Email & Pratinjau" : "Tulis Email"} maxWidth={pdfPreviewUrl ? 1100 : 700}>
         <div style={{ padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 12 }}>
-            <button className="btn btn-outline" onClick={() => setShowEmailModal(false)} disabled={sendingEmail}>Cancel</button>
+            <button className="btn btn-outline" onClick={() => setShowEmailModal(false)} disabled={sendingEmail}>Batal</button>
             <button className="btn btn-primary" onClick={handleSendEmail} disabled={sendingEmail}>
-              {sendingEmail ? 'Sending...' : 'Send Email'}
+              {sendingEmail ? 'Mengirim...' : 'Kirim Email'}
               {!sendingEmail && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 8 }}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>}
             </button>
           </div>
@@ -868,17 +910,17 @@ export default function PurchaseOrdersPage() {
             {/* Left: Email Form */}
             <div style={{ flex: 1, minWidth: 350, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div className="form-group">
-                <label className="req">To (Email Vendor)</label>
+                <label className="req">Ke (Email Vendor)</label>
                 <input className="input" type="email" placeholder="vendor@example.com" value={emailForm.to} onChange={e => setEmailForm(f => ({ ...f, to: e.target.value }))} disabled={sendingEmail} />
               </div>
 
               <div className="form-group">
-                <label className="req">Subject</label>
+                <label className="req">Subjek</label>
                 <input className="input" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} disabled={sendingEmail} />
               </div>
 
               <div className="form-group">
-                <label>Message Body</label>
+                <label>Isi Pesan</label>
                 <textarea className="input" value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} disabled={sendingEmail} style={{ resize: 'none', minHeight: '320px', lineHeight: '1.5' }} />
               </div>
 
@@ -891,11 +933,11 @@ export default function PurchaseOrdersPage() {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>{draftPO?.po_number || 'Purchase_Order'}.pdf</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Attached Document &bull; Click to preview</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Dokumen Terlampir &bull; Klik untuk pratinjau</div>
                 </div>
                 {!pdfPreviewUrl && (
                   <button className="btn btn-sm btn-outline" style={{ padding: '4px 8px', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); setPdfPreviewUrl(generatePDFBase64()); }}>
-                    Preview
+                    Pratinjau
                   </button>
                 )}
               </div>
@@ -904,7 +946,7 @@ export default function PurchaseOrdersPage() {
             {/* Right: PDF Preview */}
             {pdfPreviewUrl && (
               <div style={{ flex: 1, minWidth: 400, display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.3s ease' }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 }}>PDF Preview</label>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 }}>Pratinjau PDF</label>
                 <iframe src={pdfPreviewUrl} style={{ width: '100%', height: '540px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f1f5f9' }}></iframe>
               </div>
             )}

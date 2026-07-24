@@ -15,7 +15,7 @@ export async function GET(req: Request) {
         let queryStr = `
             SELECT t.*, o.name as outlet_name 
             FROM moka_transactions t
-            LEFT JOIN moka_outlets o ON t.outlet_id = o.id
+            LEFT JOIN outlets o ON t.outlet_id = o.id
             WHERE 1=1
         `;
         let summaryQueryStr = `
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
                 COALESCE(SUM(CASE WHEN t.is_refunded = true THEN 1 ELSE 0 END), 0) AS total_refunded,
                 COALESCE(SUM(CASE WHEN LOWER(t.payment_type) LIKE '%cash%' OR LOWER(t.payment_type_label) LIKE '%cash%' THEN 1 ELSE 0 END), 0) AS cash_count
             FROM moka_transactions t
-            LEFT JOIN moka_outlets o ON t.outlet_id = o.id
+            LEFT JOIN outlets o ON t.outlet_id = o.id
             WHERE 1=1
         `;
         
