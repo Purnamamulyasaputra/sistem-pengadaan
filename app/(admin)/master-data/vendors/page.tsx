@@ -182,9 +182,9 @@ export default function VendorsPage() {
                         <td>
                           <span style={{ 
                             display: 'inline-block', 
-                            padding: '4px 10px', 
+                            padding: '2px 8px', 
                             borderRadius: '12px', 
-                            fontSize: '12px', 
+                            fontSize: '11px', 
                             fontWeight: 600,
                             background: v.is_active ? '#dcfce7' : '#f1f5f9',
                             color: v.is_active ? '#166534' : '#475569'

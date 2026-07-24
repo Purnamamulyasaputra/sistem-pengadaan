@@ -76,6 +76,9 @@ export async function createDeliveryNote(data: {
       );
     }
 
+    // Update order status to SHIPPED
+    await client.query(`UPDATE orders SET status = 'SHIPPED', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status != 'COMPLETED'`, [data.order_id]);
+
     return dn;
   });
 }

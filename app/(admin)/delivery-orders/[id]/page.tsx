@@ -188,7 +188,10 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
               <h3 style={{ fontSize: 24 }}>{dn.delivery_note_number}</h3>
               <div style={{ marginTop: 8, display: 'flex', gap: 12, alignItems: 'center' }}>
                 <Badge variant={dn.status === 'DITERIMA' ? 'green' : dn.status === 'DIKIRIM' ? 'blue' : dn.status === 'CANCELED' ? 'red' : 'gray'}>
-                  {dn.status}
+                  {dn.status === 'CANCELED' ? 'Dibatalkan' : 
+                   dn.status === 'DITERIMA' ? 'Diterima' : 
+                   dn.status === 'DIKIRIM' ? 'Dikirim' : 
+                   dn.status === 'DRAFT' ? 'Draft' : dn.status}
                 </Badge>
                 <span className="muted">Ke: {dn.outlet_name}</span>
               </div>

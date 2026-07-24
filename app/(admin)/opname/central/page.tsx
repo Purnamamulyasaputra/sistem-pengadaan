@@ -89,40 +89,32 @@ export default function CentralOpnamePage() {
             <Table>
               <thead>
                 <tr>
-                  <th style={{ padding: '12px 24px', fontSize: 12 }}>Tanggal Opname</th>
-                  <th style={{ padding: '12px 24px', fontSize: 12 }}>Waktu Mulai</th>
-                  <th style={{ padding: '12px 24px', fontSize: 12 }}>Terakhir Diubah</th>
-                  <th style={{ padding: '12px 24px', fontSize: 12 }}>Dilakukan Oleh</th>
-                  <th className="right" style={{ padding: '12px 24px', fontSize: 12 }}>Est. Biaya Pemakaian</th>
-                  <th className="center" style={{ padding: '12px 24px', fontSize: 12 }}>Status</th>
-                  <th className="right" style={{ padding: '12px 24px', fontSize: 12 }}>Aksi</th>
+                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Tanggal Opname</th>
+                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Waktu Mulai</th>
+                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Terakhir Diubah</th>
+                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Dilakukan Oleh</th>
+                  <th className="right" style={{ padding: '12px 16px', fontSize: 11 }}>Est. Biaya Pemakaian</th>
+                  <th className="center" style={{ padding: '12px 16px', fontSize: 11 }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {sessions.map(s => (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td className="font-bold" style={{ padding: '12px 24px', fontSize: 13 }}>{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
-                    <td className="muted" style={{ padding: '12px 24px', fontSize: 13 }}>
+                  <tr key={s.id} onClick={() => router.push(`/opname/central/${s.id}`)} className="hover-row" style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
+                    <td className="font-bold" style={{ padding: '12px 16px', fontSize: 12 }}>{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
+                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>
                       {new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="muted" style={{ padding: '12px 24px', fontSize: 13 }}>
+                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>
                       {new Date(s.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="muted" style={{ padding: '12px 24px', fontSize: 13 }}>{s.pic_name}</td>
-                    <td className="right font-mono font-bold" style={{ padding: '12px 24px', fontSize: 13, color: Number(s.total_value) > 0 ? '#dc2626' : 'var(--muted)' }}>
+                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>{s.pic_name}</td>
+                    <td className="right font-mono font-bold" style={{ padding: '12px 16px', fontSize: 12, color: Number(s.total_value) > 0 ? '#dc2626' : 'var(--muted)' }}>
                       Rp {Number(s.total_value).toLocaleString('id-ID')}
                     </td>
-                    <td className="center" style={{ padding: '12px 24px' }}>
+                    <td className="center" style={{ padding: '12px 16px' }}>
                       <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
                         {s.status}
                       </Badge>
-                    </td>
-                    <td className="right" style={{ padding: '12px 24px' }}>
-                      <Link href={`/opname/central/${s.id}`}>
-                        <Button size="sm" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
-                          {s.status === 'DRAFT' ? 'Lanjutkan' : 'Lihat Detail'}
-                        </Button>
-                      </Link>
                     </td>
                   </tr>
                 ))}

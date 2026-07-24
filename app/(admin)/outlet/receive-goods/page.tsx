@@ -238,12 +238,11 @@ export default function ReceiveGoodsPage() {
                   <th>Tanggal Kirim</th>
                   <th>Sopir</th>
                   <th className="center">Status</th>
-                  <th className="right">Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {deliveryNotes.map(dn => (
-                  <tr key={dn.id}>
+                  <tr key={dn.id} onClick={() => openScan(dn)} className="hover-row" style={{ cursor: 'pointer' }}>
                     <td className="font-mono text-primary font-bold">{dn.delivery_note_number}</td>
                     <td className="font-mono font-bold">
                       PO-{new Date(dn.delivery_date).getFullYear()}-{String(dn.order_id).padStart(5, '0')}
@@ -254,11 +253,6 @@ export default function ReceiveGoodsPage() {
                       <Badge variant={dn.status === 'DITERIMA' ? 'green' : 'amber'}>
                         {dn.status === 'DITERIMA' ? 'Diterima' : dn.status === 'DIKIRIM' ? 'Dikirim' : dn.status}
                       </Badge>
-                    </td>
-                    <td className="right">
-                      <Button variant={dn.status === 'DITERIMA' ? 'outline' : 'primary'} size="sm" onClick={() => openScan(dn)}>
-                        {dn.status === 'DITERIMA' ? 'Lihat Bukti' : 'Verifikasi Barang'}
-                      </Button>
                     </td>
                   </tr>
                 ))}

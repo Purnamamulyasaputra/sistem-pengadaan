@@ -75,8 +75,11 @@ export default function DeliveryOrdersPage() {
                     <td className="font-bold">{n.outlet_name}</td>
                     <td>{new Date(n.delivery_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
                     <td className="center">
-                      <Badge variant={n.status === 'DITERIMA' ? 'green' : n.status === 'DIKIRIM' ? 'blue' : 'gray'}>
-                        {n.status}
+                      <Badge variant={n.status === 'DITERIMA' ? 'green' : n.status === 'DIKIRIM' ? 'blue' : n.status === 'CANCELED' ? 'red' : 'gray'}>
+                        {n.status === 'CANCELED' ? 'Dibatalkan' : 
+                         n.status === 'DITERIMA' ? 'Diterima' : 
+                         n.status === 'DIKIRIM' ? 'Dikirim' : 
+                         n.status === 'DRAFT' ? 'Draft' : n.status}
                       </Badge>
                     </td>
                   </tr>

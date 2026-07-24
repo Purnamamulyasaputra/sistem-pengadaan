@@ -33,13 +33,18 @@ export default function PublicReceiveClient() {
       .then(data => {
         if (!data.success) throw new Error(data.message);
         setDn(data.dn);
-        setItems(data.dn.items.map((item: any) => ({
-          order_item_id: item.order_item_id,
-          item_name: item.item_name,
-          qty_shipped: item.qty_shipped,
-          qty_received: item.qty_shipped,
-          receive_notes: '',
-        })));
+        setItems(data.dn.items.map((item: any) => {
+          const ratio = Number(item.conversion_ratio) || 1;
+          return {
+            order_item_id: item.order_item_id,
+            item_name: item.item_name,
+            purchase_unit: item.purchase_unit,
+            ratio: ratio,
+            qty_shipped_display: item.qty_shipped / ratio,
+            qty_received_display: item.qty_shipped / ratio,
+            receive_notes: '',
+          };
+        }));
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
@@ -55,7 +60,7 @@ export default function PublicReceiveClient() {
   };
 
   const handleQtyChange = (orderItemId: number, value: number) => {
-    setItems(prev => prev.map(i => i.order_item_id === orderItemId ? { ...i, qty_received: value } : i));
+    setItems(prev => prev.map(i => i.order_item_id === orderItemId ? { ...i, qty_received_display: value } : i));
   };
 
   const handleNotesChange = (orderItemId: number, value: string) => {
@@ -76,7 +81,7 @@ export default function PublicReceiveClient() {
       formData.append('photo', photo);
       formData.append('items', JSON.stringify(items.map(i => ({
         order_item_id: i.order_item_id,
-        qty_received: i.qty_received,
+        qty_received: i.qty_received_display * i.ratio,
         receive_notes: i.receive_notes,
       }))));
 
@@ -133,7 +138,7 @@ export default function PublicReceiveClient() {
     </div>
   );
 
-  if (dn && dn.status !== 'DIKIRIM') return (
+  if (dn && dn.status !== 'DIKIRIM' && dn.status !== 'DRAFT') return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Albert Sans, sans-serif', padding: 24 }}>
       <div style={{ background: '#fff', borderRadius: 12, padding: 32, textAlign: 'center', maxWidth: 400, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
         <h3 style={{ margin: '0 0 8px' }}>Tidak Dapat Diproses</h3>
@@ -217,20 +222,23 @@ export default function PublicReceiveClient() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
                     <div>
                       <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Jml Dikirim</div>
-                      <div style={{ fontWeight: 600, fontSize: 16 }}>{item.qty_shipped}</div>
+                      <div style={{ fontWeight: 600, fontSize: 16 }}>{item.qty_shipped_display} <span style={{ fontSize: 13, color: '#64748b' }}>{item.purchase_unit}</span></div>
                     </div>
                     <div>
                       <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Jml Diterima <span style={{ color: '#dc2626' }}>*</span></div>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={item.qty_received}
-                        onChange={e => handleQtyChange(item.order_item_id, parseFloat(e.target.value) || 0)}
-                        disabled={submitting}
-                        required
-                        style={{ textAlign: 'right', fontWeight: 600 }}
-                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.qty_received_display}
+                          onChange={e => handleQtyChange(item.order_item_id, parseFloat(e.target.value) || 0)}
+                          disabled={submitting}
+                          required
+                          style={{ textAlign: 'right', fontWeight: 600, flex: 1 }}
+                        />
+                        <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>{item.purchase_unit}</span>
+                      </div>
                     </div>
                   </div>
                   <div>

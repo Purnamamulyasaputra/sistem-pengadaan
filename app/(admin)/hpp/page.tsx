@@ -288,29 +288,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
               </div>
             </div>
 
-            {/* Price Set Section */}
-            <div style={{ background: '#f8fafc', padding: '16px 20px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 10 }}>Atur Harga Master Pusat</div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div style={{ flex: 1 }}>
-                  <Input
-                    type="text"
-                    value={newPrice ? Number(newPrice.replace(/\D/g, '')).toLocaleString('id-ID') : ''}
-                    onChange={e => {
-                      const raw = e.target.value.replace(/\D/g, '');
-                      setNewPrice(raw);
-                    }}
-                    placeholder="Masukkan harga jual..."
-                  />
-                </div>
-                <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={handleSavePrice}>
-                  <Save size={15} /> Simpan Harga
-                </button>
-              </div>
-              <div style={{ fontSize: 11, color: '#475569', marginTop: 8 }}>
-                Ini mengubah harga default. Penyesuaian harga di outlet tidak akan terpengaruh.
-              </div>
-            </div>
+
 
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Komposisi Bahan Baku <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(Hanya Baca)</span></div>

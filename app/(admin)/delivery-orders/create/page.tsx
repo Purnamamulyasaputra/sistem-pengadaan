@@ -75,7 +75,8 @@ export default function CreateDeliveryOrderPage() {
         qty_shipped: (() => {
           const u = (i.smallest_unit || '').toLowerCase();
           const ratio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
-          return parseFloat(Number(i.qty_request / ratio).toFixed(3));
+          const inSmallest = i.qty_request * (Number(i.conversion_ratio) || 1);
+          return parseFloat(Number(inSmallest / ratio).toFixed(3));
         })(),
         current_stock: parseFloat(i.current_stock ?? '0'),
         selected: i.item_status === 'READY_DI_GUDANG',
@@ -113,7 +114,11 @@ export default function CreateDeliveryOrderPage() {
       return;
     }
 
-    const overStockItems = selectedItems.filter(i => (i.qty_shipped * (Number(i.conversion_ratio) || 1)) > i.current_stock);
+    const overStockItems = selectedItems.filter(i => {
+      const u = (i.smallest_unit || '').toLowerCase();
+      const ratio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
+      return (i.qty_shipped * ratio) > i.current_stock;
+    });
     if (overStockItems.length > 0) {
       const names = overStockItems.map(i => i.item_name).join(', ');
       setError(`Stok tidak mencukupi untuk: ${names}. Kurangi jumlah yang akan dikirim.`);
@@ -140,7 +145,7 @@ export default function CreateDeliveryOrderPage() {
         items: selectedItems.map(i => ({
           order_item_id: i.order_item_id,
           item_id: i.item_id,
-          qty_shipped: i.qty_shipped * (Number(i.conversion_ratio) || 1),
+          qty_shipped: i.qty_shipped,
           price_at_shipment: i.current_average_price,
           keterangan: i.keterangan || ''
         }))
@@ -279,7 +284,7 @@ export default function CreateDeliveryOrderPage() {
                         {isExceeded && item.selected && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4 }}>Stok Tidak Cukup</div>}
                       </td>
                       <td className="center num font-bold">
-                        {parseFloat(Number(item.qty_request / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
+                        {parseFloat(Number((item.qty_request * (Number(item.conversion_ratio) || 1)) / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
                       </td>
                       <td className="center">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>

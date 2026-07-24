@@ -184,15 +184,15 @@ export default function CreateRequestPage() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ overflow: 'visible' }}>
 
-        <div className="card-body">
+        <div className="card-body" style={{ minHeight: 500 }}>
           {error && <div className="alert-banner alert-danger" style={{ marginBottom: 20 }}>{error}</div>}
 
           <div className="form-grid" style={{ marginBottom: 30, maxWidth: 600 }}>
             <div className="form-group">
               <label>Tanggal Order</label>
-              <Input type="date" value={orderDate} disabled />
+              <Input type="date" value={orderDate} disabled style={{ width: 160 }} />
             </div>
             <div className="form-group">
               <label>Estimasi Kirim</label>
@@ -205,6 +205,7 @@ export default function CreateRequestPage() {
                 onClick={(e) => {
                   try { (e.target as HTMLInputElement).showPicker(); } catch (err) { }
                 }}
+                style={{ width: 160 }}
               />
             </div>
           </div>
@@ -221,7 +222,7 @@ export default function CreateRequestPage() {
             </div>
           </div>
 
-          <Table>
+          <Table responsive={false}>
             <thead>
               <tr>
                 <th>Nama Barang</th>

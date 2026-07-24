@@ -210,7 +210,7 @@ function RequestsContent() {
                 onChange={val => setStatusFilter(val)}
                 options={[
                   { value: '', label: 'Semua Status' },
-                  { value: 'PENDING', label: 'Pending' },
+                  { value: 'PENDING', label: 'Menunggu' },
                   { value: 'PROCESSING', label: 'Diproses' },
                   { value: 'SHIPPED', label: 'Dikirim' },
                   { value: 'COMPLETED', label: 'Selesai' }
@@ -372,7 +372,7 @@ function RequestsContent() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <p className="muted" style={{ margin: 0 }}>{selectedOrder?.order?.outlet_name}: {selectedOrder ? formatDate(selectedOrder.order.order_date) : ''}</p>
             <div style={{ display: 'flex', gap: 8 }}>
-              {selectedOrder?.items?.some(i => i.fulfillment_status === 'SANGGUP') && (
+              {selectedOrder?.items?.some(i => i.fulfillment_status === 'SANGGUP') && !['SHIPPED', 'COMPLETED', 'DIKIRIM', 'SELESAI'].includes(selectedOrder.order.status) && (
                 <Link href={`/delivery-orders/create?order_id=${selectedOrder.order.id}`} style={{ textDecoration: 'none' }}>
                   <Button variant="outline" size="sm" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>
                     Kirim ke Outlet

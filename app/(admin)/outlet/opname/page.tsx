@@ -115,12 +115,11 @@ export default function OutletOpnamePage() {
                   <th>Dilakukan Oleh</th>
                   <th className="right">Est. Biaya Pemakaian</th>
                   <th className="center">Status</th>
-                  <th className="right">Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {(limit === 'all' ? sessions : sessions.slice((currentPage - 1) * limit, currentPage * limit)).map(s => (
-                  <tr key={s.id}>
+                  <tr key={s.id} onClick={() => router.push(`/outlet/opname/${s.id}`)} className="hover-row" style={{ cursor: 'pointer' }}>
                     <td className="font-bold">{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
                     <td className="muted" style={{ fontSize: 13 }}>
                       {new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
@@ -134,13 +133,6 @@ export default function OutletOpnamePage() {
                       <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
                         {s.status}
                       </Badge>
-                    </td>
-                    <td className="right">
-                      <Link href={`/outlet/opname/${s.id}`}>
-                        <Button size="sm" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
-                          {s.status === 'DRAFT' ? 'Lanjutkan' : 'Lihat Detail'}
-                        </Button>
-                      </Link>
                     </td>
                   </tr>
                 ))}

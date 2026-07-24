@@ -7,12 +7,12 @@ import { Toast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
 interface PO {
-  id: number; po_number: string; vendor_name: string; order_date: string;
+  id: number; po_number: string; vendor_name: string; vendor_id?: number | string; order_date: string;
   order_deadline?: string; status: string; total: number; buyer_name: string;
   created_at: string;
 }
 
-interface Vendor { id: number; name: string; is_active?: boolean; email?: string; }
+interface Vendor { id: number; name: string; is_active?: boolean; email?: string; phone?: string; }
 interface Item { id: number; name: string; purchase_unit: string; smallest_unit?: string; conversion_ratio: number; current_average_price: number; }
 interface Outlet { id: number; name: string; is_active?: boolean; }
 
@@ -111,32 +111,32 @@ export default function PurchaseOrdersPage() {
         if (suggestions.length === 0) {
           return;
         }
-        
+
         setLines(current => {
           const valid = current.filter(l => l.description || l.item_id || (l.type === 'note' && l.description));
           const newLines = suggestions.map((a: any) => {
-             const item = items.find(i => String(i.id) === String(a.item_id));
-             const conversion = item && item.conversion_ratio > 0 ? item.conversion_ratio : 1;
-             const deficit = a.minimum_threshold - Number(a.current_balance);
-             const suggestedPurchaseQty = deficit > 0 ? Math.ceil(deficit / conversion) : 1;
-             
-             return {
-               type: 'product',
-               item_id: String(a.item_id),
-               description: a.item_name,
-               qty: String(suggestedPurchaseQty),
-               unit_price: item ? String(item.current_average_price || 0) : '0',
-               tax_percent: '11',
-               disc_percent: '0',
-               purchase_unit: item ? item.purchase_unit : a.smallest_unit,
-             };
+            const item = items.find(i => String(i.id) === String(a.item_id));
+            const conversion = item && item.conversion_ratio > 0 ? item.conversion_ratio : 1;
+            const deficit = a.minimum_threshold - Number(a.current_balance);
+            const suggestedPurchaseQty = deficit > 0 ? Math.ceil(deficit / conversion) : 1;
+
+            return {
+              type: 'product',
+              item_id: String(a.item_id),
+              description: a.item_name,
+              qty: String(suggestedPurchaseQty),
+              unit_price: item ? String(item.current_average_price || 0) : '0',
+              tax_percent: '11',
+              disc_percent: '0',
+              purchase_unit: item ? item.purchase_unit : a.smallest_unit,
+            };
           });
           return [...valid, ...newLines];
         });
       }
     } catch (e) {
       console.error(e);
-      alert('Gagal memuat barang dengan stok rendah');
+      setToast({ isOpen: true, message: 'Gagal memuat barang dengan stok rendah', type: 'error' });
     }
   }
 
@@ -355,6 +355,9 @@ export default function PurchaseOrdersPage() {
       } else {
         setShowEmailModal(false);
         setToast({ isOpen: true, message: 'Email berhasil dikirim!', type: 'success' });
+        if (draftPO?.status === 'RFQ') {
+          handleUpdateStatus(draftPO.id, 'RFQ_TERKIRIM');
+        }
       }
     } catch (err: any) {
       setError('Gagal mengirim email: ' + err.message);
@@ -362,6 +365,38 @@ export default function PurchaseOrdersPage() {
       setSendingEmail(false);
     }
   }
+  const handleSendWA = () => {
+    if (!draftPO) return;
+    const selectedVendor = vendors.find(v => String(v.id) === String(draftPO.vendor_id));
+    if (!selectedVendor?.phone) {
+      setToast({ isOpen: true, message: 'Nomor telepon vendor ini belum terdaftar. Harap lengkapi pada menu Master Data terlebih dahulu.', type: 'error' });
+      return;
+    }
+
+    let phone = selectedVendor.phone.replace(/\D/g, '');
+    if (phone.startsWith('0')) {
+      phone = '62' + phone.substring(1);
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
+    const systemPhone = process.env.NEXT_PUBLIC_SYSTEM_PHONE || '';
+    const text = `Halo ${selectedVendor.name}, berikut adalah dokumen Purchase Order (PO: ${draftPO.po_number}) dari Sunrise Daily. Terima kasih.`;
+
+    const encodedText = encodeURIComponent(text);
+
+    if (draftPO.status === 'RFQ') {
+      handleUpdateStatus(draftPO.id, 'RFQ_TERKIRIM');
+    }
+
+    // Otomatis download PDF
+    handleDownloadPDF();
+
+    // Buka WhatsApp Web/App di tab baru dengan jeda sedikit agar download terpicu
+    setTimeout(() => {
+      window.open(`https://wa.me/${phone}?text=${encodedText}`, '_blank');
+    }, 300);
+  };
+
 
   function handleDownloadPDF() {
     const pdfDataUri = generatePDFBase64();
@@ -394,7 +429,14 @@ export default function PurchaseOrdersPage() {
   // Calculate KPIs
   const toSend = pos.filter(p => p.status === 'RFQ').length;
   const waiting = pos.filter(p => p.status === 'RFQ_TERKIRIM' || p.status === 'PURCHASE_ORDER').length;
-  const late = pos.filter(p => p.order_deadline && new Date(p.order_deadline) < new Date() && !['SELESAI', 'DIBATALKAN'].includes(p.status)).length;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const late = pos.filter(p => {
+    if (!p.order_deadline || ['SELESAI', 'DIBATALKAN'].includes(p.status)) return false;
+    const deadline = new Date(p.order_deadline);
+    deadline.setHours(0, 0, 0, 0);
+    return deadline.getTime() < todayStart.getTime();
+  }).length;
 
   const avgOrderValue = pos.length ? pos.reduce((s, p) => s + Number(p.total), 0) / pos.length : 0;
   const purchased7Days = pos.filter(p => new Date(p.created_at) > new Date(Date.now() - 7 * 86400000)).reduce((s, p) => s + Number(p.total), 0);
@@ -406,9 +448,9 @@ export default function PurchaseOrdersPage() {
 
       <ConfirmDialog
         open={confirmCancel}
-        title="Cancel Order"
-        message="Are you sure you want to cancel this order?"
-        confirmText="Cancel Order"
+        title="Batalkan Pesanan Ini?"
+        message="Yakin ingin membatalkan pesanan ini?"
+        confirmText="Batalkan Pesanan"
         danger={true}
         onConfirm={() => {
           if (draftPO) handleUpdateStatus(draftPO.id, 'DIBATALKAN');
@@ -506,9 +548,9 @@ export default function PurchaseOrdersPage() {
                           <td className="text-dark">{po.order_deadline ? new Date(po.order_deadline).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
                           <td className="muted">
                             {['RFQ_TERKIRIM', 'PURCHASE_ORDER', 'DITERIMA_SEBAGIAN', 'SELESAI'].includes(po.status) ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#475569', fontSize: 13, fontWeight: 600 }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                                Email
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#016e3f', fontSize: 13, fontWeight: 600 }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                                Dikirim
                               </span>
                             ) : '—'}
                           </td>
@@ -587,6 +629,7 @@ export default function PurchaseOrdersPage() {
                 {(!draftPO || draftPO.status === 'RFQ') && (
                   <>
                     <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={openEmailModal} disabled={saving}>Kirim via Email</button>
+                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={handleSendWA} disabled={saving}>Kirim via WA</button>
                     <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => handleSave()} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan Draft'}</button>
                   </>
                 )}
@@ -605,20 +648,20 @@ export default function PurchaseOrdersPage() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                   PDF
                 </button>
-                <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={() => setShowModal(false)}>Kembali ke daftar</button>
+                <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={() => setShowModal(false)}>Kembali</button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', fontSize: 13, fontWeight: 600, color: '#64748b' }}>
+              <div style={{ display: 'flex', alignItems: 'center', fontSize: 11, fontWeight: 600, color: '#64748b' }}>
                 {draftPO?.status === 'DIBATALKAN' ? (
-                  <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '4px 16px', borderRadius: 16, border: '1px solid #f87171' }}>Dibatalkan</div>
+                  <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '2px 10px', borderRadius: 12, border: '1px solid #f87171' }}>Dibatalkan</div>
                 ) : (
                   <>
-                    <div style={{ background: (!draftPO || draftPO.status === 'RFQ') ? 'var(--primary)' : '#f1f5f9', color: (!draftPO || draftPO.status === 'RFQ') ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ</div>
-                    <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
-                    <div style={{ background: draftPO?.status === 'RFQ_TERKIRIM' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'RFQ_TERKIRIM' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>RFQ Dikirim</div>
-                    <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
-                    <div style={{ background: draftPO?.status === 'PURCHASE_ORDER' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'PURCHASE_ORDER' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Purchase Order</div>
-                    <div style={{ width: 24, height: 1, background: '#cbd5e1', margin: '0 4px' }} />
-                    <div style={{ background: draftPO?.status === 'SELESAI' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'SELESAI' ? '#fff' : 'inherit', padding: '4px 16px', borderRadius: 16 }}>Selesai</div>
+                    <div style={{ background: (!draftPO || draftPO.status === 'RFQ') ? 'var(--primary)' : '#f1f5f9', color: (!draftPO || draftPO.status === 'RFQ') ? '#fff' : 'inherit', padding: '2px 10px', borderRadius: 12 }}>RFQ</div>
+                    <div style={{ width: 16, height: 1, background: '#cbd5e1', margin: '0 2px' }} />
+                    <div style={{ background: draftPO?.status === 'RFQ_TERKIRIM' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'RFQ_TERKIRIM' ? '#fff' : 'inherit', padding: '2px 10px', borderRadius: 12 }}>RFQ Dikirim</div>
+                    <div style={{ width: 16, height: 1, background: '#cbd5e1', margin: '0 2px' }} />
+                    <div style={{ background: draftPO?.status === 'PURCHASE_ORDER' ? 'var(--primary)' : '#f1f5f9', color: draftPO?.status === 'PURCHASE_ORDER' ? '#fff' : 'inherit', padding: '2px 10px', borderRadius: 12 }}>Purchase Order</div>
+                    <div style={{ width: 16, height: 1, background: '#cbd5e1', margin: '0 2px' }} />
+                    <div style={{ background: (draftPO?.status === 'SELESAI' || draftPO?.status === 'DITERIMA_SEBAGIAN') ? 'var(--primary)' : '#f1f5f9', color: (draftPO?.status === 'SELESAI' || draftPO?.status === 'DITERIMA_SEBAGIAN') ? '#fff' : 'inherit', padding: '2px 10px', borderRadius: 12 }}>Selesai</div>
                   </>
                 )}
               </div>

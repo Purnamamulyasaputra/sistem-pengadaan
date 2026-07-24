@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { OrderStatusBadge } from '@/components/shared/OrderStatusBadge';
+import TableRowLink from '@/components/shared/TableRowLink';
 
 async function getDashboardStats(role: string, outletId: number | null) {
   try {
@@ -185,9 +186,6 @@ export default async function DashboardPage() {
           <div>
             <h3>{isCentral ? 'Rekap Status Order per Outlet' : 'Riwayat Permintaan Saya'}</h3>
           </div>
-          <Link href="/requests" style={{ textDecoration: 'none' }}>
-            <Button variant="primary" size="sm">Buka Rekap Detail</Button>
-          </Link>
         </div>
         <div className="card-body flush">
           {recentOrders.length === 0 ? (
@@ -205,24 +203,18 @@ export default async function DashboardPage() {
                   <th>Tanggal Order</th>
                   <th>Tanggal Kirim</th>
                   <th className="center">Status</th>
-                  <th className="right">Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {recentOrders.map((order: any) => {
                   return (
-                    <tr key={order.id}>
+                    <TableRowLink key={order.id} href={`/requests?open_id=${order.id}`} className="hover-row">
                       <td className="font-mono text-primary font-bold">PO-{String(order.id).padStart(4, '0')}</td>
                       {isCentral && <td className="font-bold">{order.outlet_name}</td>}
                       <td>{fmtDate(order.order_date)}</td>
                       <td className="muted">{fmtDate(order.delivery_date)}</td>
                       <td className="center"><OrderStatusBadge status={order.status} /></td>
-                      <td className="right">
-                        <Link href={`/requests?open_id=${order.id}`} style={{ textDecoration: 'none' }}>
-                          <Button size="sm" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>Detail</Button>
-                        </Link>
-                      </td>
-                    </tr>
+                    </TableRowLink>
                   );
                 })}
               </tbody>
