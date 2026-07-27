@@ -33,20 +33,21 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   return pool.query<T>(text, params);
 }
 
-// Helper for transactions (BEGIN...COMMIT within the same client checkout)
 export async function withTransaction<T>(
   callback: (client: PoolClient) => Promise<T>
 ): Promise<T> {
   const client = await pool.connect();
+  let transactionError: Error | undefined;
   try {
     await client.query('BEGIN');
     const result = await callback(client);
     await client.query('COMMIT');
     return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
+  } catch (err: any) {
+    transactionError = err;
+    try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Rollback failed:', rollbackErr); }
     throw err;
   } finally {
-    client.release();
+    client.release(transactionError);
   }
 }

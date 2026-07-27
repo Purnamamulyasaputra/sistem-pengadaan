@@ -9,6 +9,7 @@ import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
 import { Toast } from '@/components/ui/Toast';
 import { RefreshCcw, Search, Truck, Info } from 'lucide-react';
+import { CombinedStockView } from './CombinedStockView';
 
 interface Outlet { id: number; name: string; }
 interface Category { id: number; name: string; }
@@ -23,6 +24,7 @@ export default function StockMonitoringPage() {
     categories: Category[];
   } | null>(null);
   
+  const [activeTab, setActiveTab] = useState<'PER_OUTLET' | 'GABUNGAN'>('PER_OUTLET');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ open: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
   const [searchTerm, setSearchTerm] = useState('');
@@ -122,15 +124,38 @@ export default function StockMonitoringPage() {
     <div className="fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h1 style={{ margin: '0 0 8px' }}>Stok Seluruh Outlet</h1>
-          <p className="muted" style={{ margin: 0 }}>Pantau ketersediaan stok fisik secara live di seluruh cabang.</p>
+          <h1 style={{ margin: '0 0 8px' }}>Pemantauan Stok</h1>
+          <p className="muted" style={{ margin: 0 }}>Pantau ketersediaan stok fisik secara live di seluruh cabang dan pusat.</p>
         </div>
-        <Button variant="primary" onClick={fetchData} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <RefreshCcw size={16} className={loading ? 'spin' : ''} />
-          {loading ? 'Memuat Data...' : 'Refresh Data Stok'}
-        </Button>
+        {activeTab === 'PER_OUTLET' && (
+          <Button variant="primary" onClick={fetchData} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <RefreshCcw size={16} className={loading ? 'spin' : ''} />
+            {loading ? 'Memuat Data...' : 'Refresh Data Stok'}
+          </Button>
+        )}
       </div>
 
+      <div className="tabs" style={{ marginBottom: 20 }}>
+        <button 
+          className={`tab ${activeTab === 'PER_OUTLET' ? 'active' : ''}`} 
+          onClick={() => setActiveTab('PER_OUTLET')}
+          style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'PER_OUTLET' ? '2px solid var(--primary)' : '2px solid transparent', padding: '12px 16px', fontSize: 14, fontWeight: activeTab === 'PER_OUTLET' ? 600 : 500, color: activeTab === 'PER_OUTLET' ? 'var(--primary)' : 'var(--muted)' }}
+        >
+          Rincian Per Outlet
+        </button>
+        <button 
+          className={`tab ${activeTab === 'GABUNGAN' ? 'active' : ''}`} 
+          onClick={() => setActiveTab('GABUNGAN')}
+          style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'GABUNGAN' ? '2px solid var(--primary)' : '2px solid transparent', padding: '12px 16px', fontSize: 14, fontWeight: activeTab === 'GABUNGAN' ? 600 : 500, color: activeTab === 'GABUNGAN' ? 'var(--primary)' : 'var(--muted)' }}
+        >
+          Total Keseluruhan (Pusat + Outlet)
+        </button>
+      </div>
+
+      {activeTab === 'GABUNGAN' ? (
+        <CombinedStockView />
+      ) : (
+      <>
       <div className="card" style={{ overflow: 'visible' }}>
         <div className="card-head" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
@@ -285,6 +310,8 @@ export default function StockMonitoringPage() {
           itemsPerPage={itemsPerPage}
           onPageChange={setCurrentPage}
         />
+      )}
+      </>
       )}
 
       <style dangerouslySetInnerHTML={{ __html: `

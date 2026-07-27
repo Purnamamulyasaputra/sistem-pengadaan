@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { FileText } from 'lucide-react';
+import { Select } from '@/components/ui/Select';
+import { Input } from '@/components/ui/Input';
+import { FileText, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
 interface DeliveryNote {
   id: number;
@@ -20,16 +22,42 @@ export default function DeliveryOrdersPage() {
   const router = useRouter();
   const [notes, setNotes] = useState<DeliveryNote[]>([]);
   const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [outletFilter, setOutletFilter] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [outlets, setOutlets] = useState<{id: number, name: string}[]>([]);
+  const limit = 20;
+
+  useEffect(() => {
+    fetch('/api/outlets')
+      .then(r => r.json())
+      .then(d => setOutlets(d.data || []))
+      .catch(console.error);
+  }, []);
 
   const fetchNotes = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/delivery-notes');
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString()
+    });
+    if (statusFilter) params.append('status', statusFilter);
+    if (outletFilter) params.append('outlet_id', outletFilter);
+    if (searchQuery) params.append('search', searchQuery);
+
+    const res = await fetch(`/api/delivery-notes?${params.toString()}`);
     const data = await res.json();
     setNotes(data.data ?? []);
+    setTotal(data.total ?? 0);
     setLoading(false);
-  }, []);
+  }, [page, statusFilter, outletFilter, searchQuery]);
 
   useEffect(() => { fetchNotes(); }, [fetchNotes]);
+
+  const totalPages = Math.ceil(total / limit);
 
   return (
     <section className="screen">
@@ -38,10 +66,57 @@ export default function DeliveryOrdersPage() {
         <div className="card-head">
           <div>
             <h3>Surat Jalan</h3>
+            <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Daftar pengiriman ke outlet</p>
           </div>
-          <Link href="/delivery-orders/create">
-            <Button variant="primary" size="sm">+ Buat Surat Jalan</Button>
-          </Link>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ width: 220, position: 'relative' }}>
+              <Input 
+                placeholder="Cari No. SJ..." 
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    setSearchQuery(searchInput);
+                    setPage(1);
+                  }
+                }}
+                style={{ paddingRight: 32 }}
+              />
+              <Search 
+                size={16} 
+                style={{ position: 'absolute', right: 10, top: 10, color: '#94a3b8', cursor: 'pointer' }} 
+                onClick={() => { setSearchQuery(searchInput); setPage(1); }}
+              />
+            </div>
+            <div style={{ width: 180 }}>
+              <Select
+                value={outletFilter}
+                onChange={(val) => { setOutletFilter(String(val)); setPage(1); }}
+                options={[
+                  { label: 'Semua Outlet', value: '' },
+                  ...outlets.map(o => ({ label: o.name, value: String(o.id) }))
+                ]}
+                searchable
+                placeholder="Semua Outlet"
+              />
+            </div>
+            <div style={{ width: 160 }}>
+              <Select
+                value={statusFilter}
+                onChange={(val) => { setStatusFilter(String(val)); setPage(1); }}
+                options={[
+                  { label: 'Semua Status', value: '' },
+                  { label: 'Draft', value: 'DRAFT' },
+                  { label: 'Dikirim', value: 'DIKIRIM' },
+                  { label: 'Diterima', value: 'DITERIMA' },
+                  { label: 'Dibatalkan', value: 'CANCELED' }
+                ]}
+              />
+            </div>
+            <Link href="/delivery-orders/create">
+              <Button variant="primary" size="sm">+ Buat Surat Jalan</Button>
+            </Link>
+          </div>
         </div>
         <div className="card-body flush">
           {loading ? (
@@ -92,6 +167,37 @@ export default function DeliveryOrdersPage() {
                 ))}
               </tbody>
             </Table>
+          )}
+          
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderTop: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: 13, color: '#64748b' }}>
+                Menampilkan {(page - 1) * limit + 1} - {Math.min(page * limit, total)} dari {total} data
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={page === 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  <ChevronLeft size={14} /> Prev
+                </Button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 32, fontSize: 13, fontWeight: 500 }}>
+                  {page} / {totalPages}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={page === totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  Next <ChevronRight size={14} />
+                </Button>
+              </div>
+            </div>
           )}
         </div>
       </div>

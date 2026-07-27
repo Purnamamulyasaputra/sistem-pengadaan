@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getStockCountHeaders } from '@/lib/queries/opname';
+import { getStockCountHeaderById } from '@/lib/queries/opname';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ headerId: string }> }) {
   const session = await getSession();
@@ -8,12 +8,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ head
   
   const { headerId } = await params;
   
-  // We reuse the existing list function but filter it via the query in memory if we have to, 
-  // or ideally we could have a getStockCountHeaderById, but getStockCountHeaders is fine for now
-  // Wait, getStockCountHeaders doesn't accept headerId.
-  // Actually, we can fetch all and find, or just create a quick query here.
-  const headers = await getStockCountHeaders();
-  const header = headers.find(h => String(h.id) === String(headerId));
+  const header = await getStockCountHeaderById(Number(headerId));
   
   if (!header) return NextResponse.json({ success: false, message: 'Not found', data: null }, { status: 404 });
   

@@ -8,6 +8,7 @@ export type OutletStockRow = {
   purchase_unit: string;
   smallest_unit: string;
   minimum_threshold: number | null;
+  target_stock: number;
   barcode: string | null;
   incoming_balance?: number;
   conversion_ratio?: number;
@@ -23,10 +24,11 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
       i.smallest_unit,
       i.conversion_ratio,
       i.barcode,
+      i.target_stock,
       COALESCE(os.current_balance, 0)::numeric AS current_balance,
-      ois.minimum_threshold,
+      COALESCE(ois.minimum_threshold, i.minimum_threshold) AS minimum_threshold,
       (
-        SELECT COALESCE(SUM(oi.smallest_unit_qty), 0)
+        SELECT COALESCE(SUM(COALESCE(oi.approved_smallest_qty, oi.smallest_unit_qty)), 0)
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
         WHERE o.outlet_id = $1 AND oi.item_id = i.id 

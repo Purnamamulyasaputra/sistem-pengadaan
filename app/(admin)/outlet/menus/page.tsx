@@ -278,7 +278,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
 
             {/* Ingredients Table */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Komposisi Bahan Baku <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(Hanya Baca)</span></div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Komposisi Bahan Baku (Resep)</div>
               {detailData.ingredients?.length === 0 ? (
                 <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
                   Tidak ada resep yang terhubung ke menu ini di outlet Anda.
@@ -1005,7 +1005,7 @@ function CapacityTab() {
 
 // ─── Main Page ────────────────────────────────────────────────
 export default function HppPage() {
-  const [tab, setTab] = useState<'menus' | 'recipes' | 'ingredients' | 'kitchen' | 'capacity'>('menus');
+  const [tab, setTab] = useState<'menus' | 'recipes' | 'ingredients' | 'kitchen'>('menus');
   const [stats, setStats] = useState<Stats | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -1019,14 +1019,9 @@ export default function HppPage() {
   }, []);
 
   const tabDefs = [
-    { key: 'menus', label: 'Menu POS' },
-    { key: 'recipes', label: 'Resep' },
+    { key: 'menus', label: 'Menu POS & Resep' },
     { key: 'ingredients', label: 'Bahan Baku' },
-    { key: 'capacity', label: 'Kapasitas Penjualan' },
   ];
-  if (stats?.byVenue?.some(v => v.venue === 'Kitchen' || v.venue === 'Turangga')) {
-    tabDefs.push({ key: 'kitchen', label: 'Ringkasan Dapur' });
-  }
 
   const marginMap = (stats?.marginBreakdown ?? []).reduce((a, b) => ({ ...a, [b.flag]: b.count }), {} as Record<string, number>);
 
@@ -1060,10 +1055,7 @@ export default function HppPage() {
         </div>
 
         {tab === 'menus' && <MenusTab categories={categories} />}
-        {tab === 'recipes' && <RecipesTab venues={venues} />}
         {tab === 'ingredients' && <IngredientsTab />}
-        {tab === 'kitchen' && <KitchenTab />}
-        {tab === 'capacity' && <CapacityTab />}
       </div>
     </section>
   );

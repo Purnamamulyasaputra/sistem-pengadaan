@@ -93,7 +93,6 @@ const OUTLET_MENU: NavItem[] = [
 
   { section: 'LAPORAN & PENGATURAN' },
   { href: '/outlet/sales', label: 'Analitik Penjualan', icon: <Icon name="trend" /> },
-  { href: '/settings/profile', label: 'Profil Akun', icon: <Icon name="user" /> },
 ];
 
 export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
@@ -135,6 +134,10 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
       localStorage.setItem('lastSeenReturns', Date.now().toString());
       setLiveReturnsCount(0);
     }
+    if (pathname === '/outlet/receive-goods' && role === 'ADMIN_OUTLET') {
+      localStorage.setItem('lastSeenReceiveGoods', Date.now().toString());
+      setLiveRequestCount(0);
+    }
   }, [pathname, role]);
 
   useEffect(() => {
@@ -161,8 +164,10 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             setLiveReturnsCount(data.count ?? 0);
           }
         } else if (role === 'ADMIN_OUTLET') {
+          const lastSeenReceiveGoods = localStorage.getItem('lastSeenReceiveGoods') || '';
+          const receiveUrl = lastSeenReceiveGoods ? `/api/delivery-notes/shipped-count?since=${lastSeenReceiveGoods}` : '/api/delivery-notes/shipped-count';
           const [reqRes, alertsRes] = await Promise.all([
-            fetch('/api/delivery-notes/shipped-count', { cache: 'no-store' }),
+            fetch(receiveUrl, { cache: 'no-store' }),
             fetch('/api/outlet/alerts/count', { cache: 'no-store' })
           ]);
           if (reqRes.ok) {
@@ -248,7 +253,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
 
             if (item.href === '/purchase-orders' && pathname.startsWith('/goods-receipt')) isActive = true;
             if (item.href === '/reports') {
-              isActive = pathname === '/reports' || pathname.startsWith('/reports/profit-projection') || pathname.startsWith('/price-history');
+              isActive = pathname === '/reports' || pathname.startsWith('/reports/profit-projection') || pathname.startsWith('/price-history') || pathname.startsWith('/reports/inventory-value');
             }
             if (item.href === '/reports/sales-analytics') {
               isActive = pathname.startsWith('/reports/sales-analytics');

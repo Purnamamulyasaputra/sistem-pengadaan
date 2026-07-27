@@ -37,7 +37,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       SELECT 
         ri.id, ri.quantity AS qty, ri.unit, 
         ri.cost_per_unit, ri.extension AS cost,
-        i.name AS ingredient_name
+        i.name AS ingredient_name,
+        r.id AS recipe_id, r.name AS recipe_name
       FROM recipe_ingredients ri
       JOIN recipes r ON r.id = ri.recipe_id
       JOIN ingredients i ON i.id = ri.ingredient_id

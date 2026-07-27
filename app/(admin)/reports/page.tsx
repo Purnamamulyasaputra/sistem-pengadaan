@@ -69,7 +69,6 @@ export default function ReportsPage() {
           <a href="/reports" className="tab active" style={{ textDecoration: 'none' }}>Grafik Keuangan</a>
           <a href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</a>
           <a href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</a>
-          <a href="/reports/profit-projection" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Simulator Laba</a>
         </div>
         <div className="card-head">
           <div>

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, Fragment } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
@@ -32,8 +32,13 @@ interface AggregatedProduct {
   conversion_ratio?: string;
   total_requested: string;
   central_stock: string;
+  breakdown?: Array<{
+    outlet_name: string;
+    qty: number;
+    order_id: number;
+    order_date: string;
+  }>;
 }
-
 
 const ITEM_STATUS_LABELS: Record<string, string> = {
   DITERIMA_DARI_OUTLET: 'Diterima dari Outlet', PROSES_BELANJA: 'Proses Belanja',
@@ -77,6 +82,7 @@ function RequestsContent() {
   const [aggregatedProducts, setAggregatedProducts] = useState<AggregatedProduct[]>([]);
   const [aggCurrentPage, setAggCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAggProduct, setSelectedAggProduct] = useState<AggregatedProduct | null>(null);
 
   const ITEMS_PER_PAGE = 25;
   const AGG_ITEMS_PER_PAGE = 20;
@@ -84,8 +90,8 @@ function RequestsContent() {
   const searchParams = useSearchParams();
   const openId = searchParams.get('open_id');
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     const params = new URLSearchParams();
     if (statusFilter) params.set('status', statusFilter);
     if (startDate) params.set('start_date', startDate);
@@ -94,12 +100,12 @@ function RequestsContent() {
     const res = await fetch(`/api/orders?${params}`);
     const data = await res.json();
     setOrders(data.data ?? []);
-    setLoading(false);
-    setCurrentPage(1); // Reset to first page when fetching new data
+    if (!silent) setLoading(false);
+    if (!silent) setCurrentPage(1);
   }, [statusFilter, startDate, endDate]);
 
-  const fetchAggregated = useCallback(async () => {
-    setLoading(true);
+  const fetchAggregated = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     const params = new URLSearchParams();
     if (statusFilter) params.set('status', statusFilter);
     if (startDate) params.set('start_date', startDate);
@@ -108,13 +114,24 @@ function RequestsContent() {
     const res = await fetch(`/api/orders/aggregated?${params}`);
     const data = await res.json();
     setAggregatedProducts(data.data ?? []);
-    setLoading(false);
-    setAggCurrentPage(1);
+    if (!silent) setLoading(false);
+    if (!silent) setAggCurrentPage(1);
   }, [statusFilter, startDate, endDate]);
 
   useEffect(() => {
-    if (viewMode === 'by-outlet') fetchOrders();
-    else fetchAggregated();
+    if (viewMode === 'by-outlet') {
+      fetchOrders();
+    } else {
+      fetchAggregated();
+    }
+    
+    // Auto-refresh interval (silent)
+    const interval = setInterval(() => {
+      if (viewMode === 'by-outlet') fetchOrders(true);
+      else fetchAggregated(true);
+    }, 15000);
+    
+    return () => clearInterval(interval);
   }, [viewMode, fetchOrders, fetchAggregated]);
 
   const handleViewOrder = useCallback(async (order: Order) => {
@@ -128,13 +145,17 @@ function RequestsContent() {
   }, []);
 
   useEffect(() => {
-    if (!loading && openId && orders.length > 0) {
+    if (!loading && openId && orders.length > 0 && viewMode === 'by-outlet') {
       const orderToOpen = orders.find(o => String(o.id) === openId);
       if (orderToOpen) {
         handleViewOrder(orderToOpen);
+        // Hapus parameter open_id dari URL agar tidak terus-menerus memicu modal terbuka
+        const url = new URL(window.location.href);
+        url.searchParams.delete('open_id');
+        window.history.replaceState({}, '', url.toString());
       }
     }
-  }, [loading, openId, orders, handleViewOrder]);
+  }, [loading, openId, orders, handleViewOrder, viewMode]);
 
   async function handleUpdateItem(orderItemId: number, updates: Record<string, unknown>) {
     setSaving(orderItemId);
@@ -162,7 +183,7 @@ function RequestsContent() {
       <div className="card">
         <div className="card-head" style={{ alignItems: 'flex-start' }}>
           <div>
-            <h3 style={{ margin: '0 0 12px 0' }}>Rekap Permintaan</h3>
+            <h3 style={{ margin: '0 0 12px 0' }}>Rekap Purchase Request (PR)</h3>
             <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border)' }}>
               <div
                 style={{ paddingBottom: 8, cursor: 'pointer', fontWeight: viewMode === 'by-outlet' ? 600 : 500, color: viewMode === 'by-outlet' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-outlet' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
@@ -248,11 +269,11 @@ function RequestsContent() {
                       {(() => {
                         const filteredAgg = aggregatedProducts.filter(p => p.item_name.toLowerCase().includes(searchQuery.toLowerCase()));
                         return filteredAgg.slice((aggCurrentPage - 1) * AGG_ITEMS_PER_PAGE, aggCurrentPage * AGG_ITEMS_PER_PAGE).map(p => {
-                          const neededRaw = Number(p.total_requested) || 0;
-                          const stockRaw = Number(p.central_stock) || 0;
                           const ratio = Number(p.conversion_ratio) || 1;
-
-                          const neededPurchase = neededRaw / ratio;
+                          const neededPurchase = Number(p.total_requested) || 0;
+                          const neededRaw = neededPurchase * ratio;
+                          const stockRaw = Number(p.central_stock) || 0;
+                          
                           const stockPurchase = stockRaw / ratio;
 
                           const isShortage = neededRaw > stockRaw;
@@ -261,17 +282,24 @@ function RequestsContent() {
                           const fmtRaw = (num: number) => num.toLocaleString('id-ID');
 
                           return (
-                            <tr key={p.item_id}>
-                              <td className="font-bold" style={{ padding: '4px 16px', fontSize: 13 }}>{p.item_name}</td>
-                              <td className="center" style={{ padding: '4px 16px' }}>
+                            <tr 
+                              key={p.item_id}
+                              onClick={() => setSelectedAggProduct(p)}
+                              style={{ cursor: 'pointer' }}
+                              className="hover:bg-[#f8fafc] transition-colors"
+                            >
+                              <td className="font-bold" style={{ padding: '8px 16px', fontSize: 13 }}>
+                                {p.item_name}
+                              </td>
+                              <td className="center" style={{ padding: '8px 16px' }}>
                                 <div className="font-bold text-primary" style={{ fontSize: 13 }}>{fmt(neededPurchase)} {p.unit}</div>
                                 {ratio > 1 && <div className="muted" style={{ fontSize: 10 }}>({fmtRaw(neededRaw)} {p.smallest_unit})</div>}
                               </td>
-                              <td className="center" style={{ padding: '4px 16px' }}>
+                              <td className="center" style={{ padding: '8px 16px' }}>
                                 <div className="text-dark" style={{ fontSize: 13 }}>{fmt(stockPurchase)} {p.unit}</div>
                                 {ratio > 1 && <div className="muted" style={{ fontSize: 10 }}>({fmtRaw(stockRaw)} {p.smallest_unit})</div>}
                               </td>
-                              <td className="center" style={{ padding: '4px 16px' }}>
+                              <td className="center" style={{ padding: '8px 16px' }}>
                                 {isShortage ? (
                                   <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRadius: 4, background: '#fee2e2', color: '#991b1b' }}>Perlu Restock</span>
                                 ) : (
@@ -475,6 +503,64 @@ function RequestsContent() {
                 </tbody>
               </Table>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={!!selectedAggProduct} onClose={() => setSelectedAggProduct(null)} title={`Rincian Permintaan: ${selectedAggProduct?.item_name || ''}`} maxWidth={650}>
+        <div className="modal-body" style={{ padding: '20px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div>
+              <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Total Diminta:</div>
+              <div className="font-bold text-primary" style={{ fontSize: 16 }}>
+                {selectedAggProduct ? Number(selectedAggProduct.total_requested).toLocaleString('id-ID', { maximumFractionDigits: 2 }) : 0} {selectedAggProduct?.unit}
+              </div>
+            </div>
+            <div className="right">
+              <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Stok Pusat Saat Ini:</div>
+              <div className="font-bold text-dark" style={{ fontSize: 16 }}>
+                {selectedAggProduct ? (Number(selectedAggProduct.central_stock) / (Number(selectedAggProduct.conversion_ratio) || 1)).toLocaleString('id-ID', { maximumFractionDigits: 2 }) : 0} {selectedAggProduct?.unit}
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <table className="table" style={{ width: '100%', marginBottom: 0 }}>
+              <thead style={{ backgroundColor: '#f8fafc' }}>
+                <tr>
+                  <th style={{ padding: '10px 16px', fontSize: 12, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'left' }}>OUTLET</th>
+                  <th style={{ padding: '10px 16px', fontSize: 12, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'left' }}>TANGGAL</th>
+                  <th style={{ padding: '10px 16px', fontSize: 12, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'right' }}>JUMLAH</th>
+                  <th style={{ padding: '10px 16px', fontSize: 12, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'center' }}>NOMOR PO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedAggProduct?.breakdown?.map((b, i) => (
+                  <tr key={i} style={{ borderBottom: i < (selectedAggProduct.breakdown?.length || 0) - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, fontSize: 13, color: 'var(--ink)' }}>{b.outlet_name}</td>
+                    <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--ink)' }}>{formatDate(b.order_date)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--primary)', fontSize: 13 }}>
+                      {Number(b.qty).toLocaleString('id-ID', { maximumFractionDigits: 2 })} {selectedAggProduct.unit}
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      <Link href={`/requests?open_id=${b.order_id}`} style={{ color: 'var(--primary)', textDecoration: 'underline', fontWeight: 600, fontSize: 13 }}>
+                        PO-{new Date(b.order_date).getFullYear()}-{String(b.order_id).padStart(5, '0')}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+                {!selectedAggProduct?.breakdown?.length && (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)' }}>
+                      Rincian tidak ditemukan.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+            <Button variant="outline" onClick={() => setSelectedAggProduct(null)}>Tutup</Button>
           </div>
         </div>
       </Modal>

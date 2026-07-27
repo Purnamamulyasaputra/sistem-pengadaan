@@ -21,6 +21,7 @@ interface OrderItem {
 const ITEM_STATUS_LABELS: Record<string, string> = {
   DITERIMA_DARI_OUTLET: 'Diterima dari Outlet', PROSES_BELANJA: 'Proses Belanja',
   READY_DI_GUDANG: 'Siap di Gudang', DIKIRIM: 'Dikirim', SELESAI: 'Selesai',
+  DIKEMAS: 'Dikemas', PENDING: 'Pending', PROCESSING: 'Diproses'
 };
 
 export default function OutletRequestsPage() {
@@ -150,7 +151,7 @@ export default function OutletRequestsPage() {
                   {selectedOrder?.items?.map(item => (
                     <tr key={item.id}>
                       <td className="font-bold">{item.item_name}</td>
-                      <td className="muted">{item.category_name}</td>
+                      <td className="muted" style={{ textTransform: 'capitalize' }}>{item.category_name?.toLowerCase()}</td>
                       <td className="right">
                         <div className="font-bold num">{parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
                       </td>
@@ -170,7 +171,7 @@ export default function OutletRequestsPage() {
                         </Badge>
                       </td>
                       <td className="center">
-                        <Badge variant="gray">{ITEM_STATUS_LABELS[item.item_status] ?? item.item_status}</Badge>
+                        <Badge variant="gray"><span className="capitalize">{ITEM_STATUS_LABELS[item.item_status] ?? item.item_status?.toLowerCase()}</span></Badge>
                       </td>
                     </tr>
                   ))}

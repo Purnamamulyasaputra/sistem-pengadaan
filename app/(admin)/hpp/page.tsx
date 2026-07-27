@@ -291,7 +291,16 @@ function MenusTab({ categories }: { categories: Category[] }) {
 
 
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Komposisi Bahan Baku <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(Hanya Baca)</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Komposisi Bahan Baku (Resep)</div>
+                {detailData.ingredients?.length > 0 ? (
+                  <a href={`/hpp/recipe-builder/${detailData.ingredients[0].recipe_id}`} className="btn btn-sm btn-outline" style={{ textDecoration: 'none', fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Pencil size={12} /> Edit Resep
+                  </a>
+                ) : (
+                  <a href={`/hpp/recipe-builder/new?menu_id=${detailModal}`} className="btn btn-sm btn-outline" style={{ textDecoration: 'none', fontSize: 12, padding: '4px 10px' }}>Buat Resep</a>
+                )}
+              </div>
               {detailData.ingredients?.length === 0 ? (
                 <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
                   Tidak ada resep yang tertaut ke menu ini.
@@ -854,10 +863,8 @@ export default function HppPage() {
   }, []);
 
   const tabDefs = [
-    { key: 'menus', label: 'Menu POS' },
-    { key: 'recipes', label: 'Kartu Resep' },
+    { key: 'menus', label: 'Menu POS & Resep' },
     { key: 'ingredients', label: 'Bahan Baku' },
-    { key: 'kitchen', label: 'Kitchen' },
   ] as const;
 
   const marginMap = (stats?.marginBreakdown ?? []).reduce((a, b) => ({ ...a, [b.flag]: b.count }), {} as Record<string, number>);
@@ -902,9 +909,10 @@ export default function HppPage() {
         )}
 
         {/* Venue row */}
-        {stats?.byVenue && (
+        {/* Venue row */}
+        {stats?.byVenue && stats.byVenue.filter(v => v.count > 0).length > 0 && (
           <div style={{ display: 'flex', gap: 16, padding: '12px 20px', borderTop: '1px solid var(--border)', background: '#f8fafc' }}>
-            {stats.byVenue.map(v => (
+            {stats.byVenue.filter(v => v.count > 0).map(v => (
               <div key={v.venue} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
                   background: '#016e3f', color: '#ffffff',
@@ -933,9 +941,7 @@ export default function HppPage() {
         </div>
 
         {tab === 'menus' && <MenusTab categories={categories} />}
-        {tab === 'recipes' && <RecipesTab venues={venues} />}
         {tab === 'ingredients' && <IngredientsTab />}
-        {tab === 'kitchen' && <KitchenTab />}
       </div>
     </section>
   );

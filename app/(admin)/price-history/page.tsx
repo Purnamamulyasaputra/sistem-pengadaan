@@ -47,7 +47,6 @@ export default function PriceHistoryPage() {
           <a href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Grafik Keuangan</a>
           <a href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</a>
           <a href="/price-history" className="tab active" style={{ textDecoration: 'none' }}>Riwayat Harga</a>
-          <a href="/reports/profit-projection" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Simulator Laba</a>
         </div>
         <div className="card-head">
           <div>

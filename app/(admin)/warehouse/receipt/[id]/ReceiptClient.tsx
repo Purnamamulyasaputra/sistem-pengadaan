@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { Toast } from '@/components/ui/Toast';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface POItem {
   id: number;
@@ -61,7 +62,34 @@ export default function ReceiptClient({ poId }: { poId: number }) {
     }
   };
 
-  async function handleValidate() {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [pendingPayload, setPendingPayload] = useState<any>(null);
+
+  async function submitReceipt(payload: any) {
+    setSaving(true);
+    setError('');
+    
+    try {
+      const res = await fetch('/api/warehouse/receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const d = await res.json();
+      if (!d.success) throw new Error(d.message);
+      
+      setToast({ isOpen: true, message: 'Penerimaan barang berhasil!', type: 'success' });
+      setTimeout(() => {
+        router.push('/warehouse');
+      }, 1000);
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : 'Unknown error'));
+      setSaving(false);
+    }
+  }
+
+  function handleValidate() {
     if (!po) return;
     
     let hasShortfall = false;
@@ -75,9 +103,18 @@ export default function ReceiptClient({ poId }: { poId: number }) {
         // Convert comma to dot for parsing
         const rQty = Number(rawStr.replace(/,/g, '.')) || 0;
         
+        const receivedSoFar = Number(item.total_received) || 0;
+        const remainingQty = item.qty - receivedSoFar;
+        
         totalReceived += rQty;
-        if (rQty < item.qty) hasShortfall = true;
-        if (rQty > item.qty) hasExcess = true;
+        // Hanya yang diinput rQty lebih besar dari 0 yang akan divalidasi kekurangan/kelebihannya
+        if (rQty > 0) {
+          if (rQty < remainingQty) hasShortfall = true;
+          if (rQty > remainingQty) hasExcess = true;
+        } else if (remainingQty > 0) {
+          // Jika ada sisa barang yang tidak diinput sama sekali di sesi ini, berarti shortfall
+          hasShortfall = true;
+        }
         
         if (rQty > 0) {
           itemsPayload.push({
@@ -93,42 +130,30 @@ export default function ReceiptClient({ poId }: { poId: number }) {
       setError('Belum ada barang yang diterima. Isi kuantitas minimal 1.');
       return;
     }
+
+    const payload = {
+      purchase_order_id: po.id,
+      vendor_delivery_note: deliveryNote,
+      items: itemsPayload
+    };
     
-    if (hasExcess) {
-      const confirmExcess = confirm('Terdapat barang yang melebihi jumlah pesanan. Lanjutkan?');
-      if (!confirmExcess) return;
+    let msg = '';
+    if (hasExcess && hasShortfall) {
+      msg = 'Jumlah barang tidak sesuai pesanan (kurang dan berlebih). Lanjutkan?';
+    } else if (hasExcess) {
+      msg = 'Terdapat barang yang melebihi pesanan. Lanjutkan?';
+    } else if (hasShortfall) {
+      msg = 'Ada barang belum lengkap (otomatis masuk Backorder). Lanjutkan?';
     }
 
-    if (hasShortfall) {
-      const confirmBackorder = confirm('Ada pesanan yang belum datang sepenuhnya (kurang). Apakah Anda ingin membuat Backorder untuk sisanya?\n\n- OK: Buat Backorder (Status: DITERIMA SEBAGIAN)\n- Cancel: Anggap selesai (Status: SELESAI)');
-      // Backend handles automatically
+    if (msg) {
+      setConfirmMessage(msg);
+      setPendingPayload(payload);
+      setShowConfirm(true);
+      return;
     }
     
-    setSaving(true);
-    setError('');
-    
-    try {
-      const res = await fetch('/api/warehouse/receipts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          purchase_order_id: po.id,
-          vendor_delivery_note: deliveryNote,
-          items: itemsPayload
-        })
-      });
-      const d = await res.json();
-      if (!d.success) throw new Error(d.message);
-      
-      setToast({ isOpen: true, message: 'Penerimaan barang berhasil!', type: 'success' });
-      setTimeout(() => {
-        router.push('/warehouse');
-      }, 1000);
-    } catch (err: unknown) {
-      setError((err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setSaving(false);
-    }
+    submitReceipt(payload);
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat data PO...</div>;
@@ -187,16 +212,34 @@ export default function ReceiptClient({ poId }: { poId: number }) {
               <thead>
                 <tr>
                   <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'left' }}>PRODUK</th>
-                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 150 }}>DIPESAN</th>
-                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 180 }}>DITERIMA</th>
+                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 100 }}>DIPESAN</th>
+                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 120 }}>SUDAH DITERIMA</th>
+                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 120 }}>SISA (BACKORDER)</th>
+                  <th style={{ padding: '12px', fontSize: 13, color: '#64748b', textAlign: 'right', width: 150 }}>DITERIMA KALI INI</th>
                 </tr>
               </thead>
               <tbody>
-                {po.items.filter(i => i.item_id).map(item => (
+                {po.items.filter(i => i.item_id).map(item => {
+                  const receivedSoFar = Number(item.total_received) || 0;
+                  const remainingQty = item.qty - receivedSoFar;
+                  return (
                   <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '12px', fontWeight: 600, color: '#334155' }}>{item.description}</td>
+                    <td style={{ padding: '12px', fontWeight: 600, color: '#334155' }}>
+                      {item.description}
+                      {receivedSoFar > 0 && remainingQty > 0 && (
+                        <div style={{ fontSize: 11, color: '#b45309', marginTop: 4, fontWeight: 500 }}>
+                          Menunggu pengiriman sisa barang.
+                        </div>
+                      )}
+                    </td>
                     <td className="right" style={{ padding: '12px', color: '#64748b', fontWeight: 500 }}>
                       {Number(item.qty).toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{item.purchase_unit || 'pcs'}</span>
+                    </td>
+                    <td className="right" style={{ padding: '12px', color: '#0f766e', fontWeight: 600 }}>
+                      {receivedSoFar.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{item.purchase_unit || 'pcs'}</span>
+                    </td>
+                    <td className="right" style={{ padding: '12px', color: '#b45309', fontWeight: 600 }}>
+                      {remainingQty.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{item.purchase_unit || 'pcs'}</span>
                     </td>
                     <td className="right" style={{ padding: '8px 12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
@@ -207,18 +250,32 @@ export default function ReceiptClient({ poId }: { poId: number }) {
                           value={receivedQtys[item.id] !== undefined ? receivedQtys[item.id] : ''}
                           onChange={e => handleQtyChange(item.id, e.target.value)}
                           onFocus={e => e.target.select()}
-                          style={{ width: '80px', padding: '6px 10px', background: '#f8fafc', border: '1px solid #cbd5e1' }}
+                          disabled={remainingQty <= 0}
+                          style={{ width: '80px', padding: '6px 10px', background: remainingQty <= 0 ? '#f1f5f9' : '#f8fafc', border: '1px solid #cbd5e1', cursor: remainingQty <= 0 ? 'not-allowed' : 'text' }}
                         />
                         <span className="muted" style={{ fontSize: 12, minWidth: 32, textAlign: 'left' }}>{item.purchase_unit || 'pcs'}</span>
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+      
+      <ConfirmDialog
+        open={showConfirm}
+        title="Konfirmasi"
+        message={confirmMessage}
+        confirmText="Ya, Lanjut"
+        cancelText="Batal"
+        loading={saving}
+        onConfirm={() => {
+          if (pendingPayload) submitReceipt(pendingPayload);
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
     </section>
   );
 }

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, threshold_type, is_perishable, current_average_price, ingredient_id } = body;
+  const { name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, current_average_price, ingredient_id } = body;
 
   if (!name || !category_id || !purchase_unit || !smallest_unit) {
     return NextResponse.json({ success: false, message: 'Field wajib tidak lengkap', data: null }, { status: 400 });
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       name, category_id: Number(category_id), purchase_unit, smallest_unit,
       conversion_ratio: Number(conversion_ratio ?? 1),
       minimum_threshold: Number(minimum_threshold ?? 0),
+      target_stock: Number(target_stock ?? 0),
       threshold_type: threshold_type ?? 'ABSOLUT',
       is_perishable: Boolean(is_perishable),
       current_average_price: Number(current_average_price ?? 0),

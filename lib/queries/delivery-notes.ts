@@ -1,5 +1,6 @@
 import { query, withTransaction } from '@/lib/db';
 import { outboundStock } from './inventory';
+import { checkAndCreateAlert } from './alerts';
 
 export interface DeliveryNote {
   id: number;
@@ -64,8 +65,19 @@ export async function createDeliveryNote(data: {
       const centralRatio = (smallestUnit === 'ml' || smallestUnit === 'gr' || smallestUnit === 'g') ? 1000 : 1;
       const actualQtyShipped = item.qty_shipped * centralRatio;
 
-      if (actualQtyShipped > currentStock) {
-        throw new Error(`Stok ${itemName} tidak mencukupi. Dikirim: ${item.qty_shipped} (= ${actualQtyShipped} ${balRes.rows[0]?.smallest_unit}), Tersedia: ${(currentStock / centralRatio).toFixed(2)} ${centralRatio === 1000 ? (smallestUnit === 'ml' ? 'Liter' : 'Kg') : smallestUnit}`);
+      // Check reserved qty for pending/draft DOs
+      const reservedRes = await client.query(
+        `SELECT SUM(dni.qty_shipped) as reserved_qty
+         FROM delivery_note_items dni
+         JOIN delivery_notes dn ON dn.id = dni.delivery_note_id
+         WHERE dni.item_id = $1 AND dn.status IN ('DRAFT', 'PENDING') AND dni.scanned_out_at IS NULL`,
+        [item.item_id]
+      );
+      const reservedStock = parseFloat(reservedRes.rows[0]?.reserved_qty ?? '0');
+      const availableStock = currentStock - reservedStock;
+
+      if (actualQtyShipped > availableStock) {
+        throw new Error(`Stok ${itemName} tidak mencukupi. Dikirim: ${item.qty_shipped} (= ${actualQtyShipped} ${balRes.rows[0]?.smallest_unit}), Tersedia: ${(availableStock / centralRatio).toFixed(2)} ${centralRatio === 1000 ? (smallestUnit === 'ml' ? 'Liter' : 'Kg') : smallestUnit} (Tereservasi: ${reservedStock})`);
       }
 
       let finalOrderItemId: number | null = item.order_item_id;
@@ -97,40 +109,58 @@ export async function createDeliveryNote(data: {
   });
 }
 
-export async function getDeliveryNotes(opts?: { outletId?: number; status?: string; orderId?: number }) {
+export async function getDeliveryNotes(opts?: { outletId?: number; status?: string; orderId?: number; limit?: number; offset?: number; search?: string }) {
   const conditions: string[] = [];
   const params: unknown[] = [];
   let i = 1;
   if (opts?.outletId) { conditions.push(`dn.outlet_id = $${i++}`); params.push(opts.outletId); }
   if (opts?.status) { conditions.push(`dn.status = $${i++}`); params.push(opts.status); }
   if (opts?.orderId) { conditions.push(`dn.order_id = $${i++}`); params.push(opts.orderId); }
+  if (opts?.search) { conditions.push(`dn.delivery_note_number ILIKE $${i++}`); params.push(`%${opts.search}%`); }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const countRes = await query<{ cnt: string }>(`SELECT count(*) as cnt FROM delivery_notes dn ${where}`, params);
+  const total = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
+
+  let limitClause = '';
+  if (opts?.limit !== undefined) {
+    limitClause += ` LIMIT $${i++}`;
+    params.push(opts.limit);
+  }
+  if (opts?.offset !== undefined) {
+    limitClause += ` OFFSET $${i++}`;
+    params.push(opts.offset);
+  }
 
   const result = await query<DeliveryNote>(
     `SELECT dn.*, o.name AS outlet_name, 
-            'PO-' || EXTRACT(YEAR FROM ord.order_date) || '-' || LPAD(ord.id::text, 5, '0') AS order_number
+            CASE WHEN ord.id IS NOT NULL THEN 'PO-' || EXTRACT(YEAR FROM ord.order_date) || '-' || LPAD(ord.id::text, 5, '0') ELSE NULL END AS order_number
      FROM delivery_notes dn
      LEFT JOIN outlets o ON o.id = dn.outlet_id
      LEFT JOIN orders ord ON ord.id = dn.order_id
      ${where}
-     ORDER BY dn.created_at DESC`,
+     ORDER BY dn.created_at DESC
+     ${limitClause}`,
     params
   );
-  return result.rows;
+  return { data: result.rows, total };
 }
 
-export async function getShippedDeliveryNoteCount(outletId: number) {
-  const result = await query<{ count: string }>(
-    `SELECT count(*) FROM delivery_notes WHERE outlet_id = $1 AND status = 'DIKIRIM'`,
-    [outletId]
-  );
+export async function getShippedDeliveryNoteCount(outletId: number, since?: string | null) {
+  let sql = `SELECT count(*) FROM delivery_notes WHERE outlet_id = $1 AND status = 'DIKIRIM'`;
+  const params: any[] = [outletId];
+  if (since) {
+    sql += ` AND created_at > $2`;
+    params.push(new Date(Number(since)).toISOString());
+  }
+  const result = await query<{ count: string }>(sql, params);
   return parseInt(result.rows[0]?.count ?? '0', 10);
 }
 
 export async function getDeliveryNoteById(id: number) {
   const dnRes = await query<DeliveryNote>(
     `SELECT dn.*, o.name AS outlet_name, 
-            'PO-' || EXTRACT(YEAR FROM ord.order_date) || '-' || LPAD(ord.id::text, 5, '0') AS order_number
+            CASE WHEN ord.id IS NOT NULL THEN 'PO-' || EXTRACT(YEAR FROM ord.order_date) || '-' || LPAD(ord.id::text, 5, '0') ELSE NULL END AS order_number
      FROM delivery_notes dn
      LEFT JOIN outlets o ON o.id = dn.outlet_id
      LEFT JOIN orders ord ON ord.id = dn.order_id
@@ -200,6 +230,16 @@ export async function processPublicReceive(data: {
 
     // Update Delivery Note Items
     for (const item of data.items) {
+      const unitRes = await client.query(
+        `SELECT i.smallest_unit FROM delivery_note_items dni 
+         JOIN items i ON i.id = dni.item_id 
+         WHERE dni.id = $1`, [item.delivery_note_item_id]
+      );
+      const smallestUnit = (unitRes.rows[0]?.smallest_unit || '').toLowerCase();
+      const centralRatio = (smallestUnit === 'ml' || smallestUnit === 'gr' || smallestUnit === 'g') ? 1000 : 1;
+      const actualQtyReceived = item.qty_received * centralRatio;
+      const actualQtyIssue = (item.qty_issue || 0) * centralRatio;
+
       const updateRes = await client.query(
         `UPDATE delivery_note_items 
          SET scanned_in_at = NOW(), 
@@ -207,17 +247,17 @@ export async function processPublicReceive(data: {
              receive_notes = $2 
          WHERE delivery_note_id = $3 AND id = $4
          RETURNING id`,
-        [item.qty_received, item.receive_notes || null, data.delivery_note_id, item.delivery_note_item_id]
+        [actualQtyReceived, item.receive_notes || null, data.delivery_note_id, item.delivery_note_item_id]
       );
 
       const dniId = updateRes.rows[0]?.id;
 
-      if (dniId && item.has_issue && item.qty_issue && item.qty_issue > 0) {
+      if (dniId && item.has_issue && actualQtyIssue > 0) {
         await client.query(
           `INSERT INTO delivery_note_issues 
            (delivery_note_item_id, qty_issue, reason, photo_url, status) 
            VALUES ($1, $2, $3, $4, 'PENDING')`,
-          [dniId, item.qty_issue, item.issue_reason || '', item.issue_photo_url || '']
+          [dniId, actualQtyIssue, item.issue_reason || '', item.issue_photo_url || '']
         );
       }
     }
@@ -264,14 +304,15 @@ export async function processPublicReceive(data: {
     // Update outlet stock for each received item
     if (outletId) {
       for (const item of data.items) {
-        // Get item_id from delivery_note_items
+        // Get item_id and actual received quantity from delivery_note_items
         const itemRes = await client.query(
-          `SELECT item_id FROM delivery_note_items 
+          `SELECT item_id, qty_received FROM delivery_note_items 
            WHERE delivery_note_id = $1 AND id = $2`,
           [data.delivery_note_id, item.delivery_note_item_id]
         );
         const itemId = itemRes.rows[0]?.item_id;
-        if (!itemId || item.qty_received <= 0) continue;
+        const actualQtyReceived = itemRes.rows[0]?.qty_received || 0;
+        if (!itemId || actualQtyReceived <= 0) continue;
 
         const stockRes = await client.query(
           `SELECT current_balance FROM outlet_stocks 
@@ -280,7 +321,7 @@ export async function processPublicReceive(data: {
         );
 
         if (stockRes.rows.length > 0) {
-          const newBalance = parseFloat(stockRes.rows[0].current_balance) + item.qty_received;
+          const newBalance = parseFloat(stockRes.rows[0].current_balance) + actualQtyReceived;
           await client.query(
             `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() 
              WHERE outlet_id = $2 AND item_id = $3`,
@@ -289,17 +330,17 @@ export async function processPublicReceive(data: {
           await client.query(
             `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
              VALUES ($1, $2, 'IN', $3, $4, 'PUBLIC_RECEIVE', $5)`,
-            [outletId, itemId, item.qty_received, newBalance, data.delivery_note_id]
+            [outletId, itemId, actualQtyReceived, newBalance, data.delivery_note_id]
           );
         } else {
           await client.query(
             `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
-            [outletId, itemId, item.qty_received]
+            [outletId, itemId, actualQtyReceived]
           );
           await client.query(
             `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
              VALUES ($1, $2, 'IN', $3, $3, 'PUBLIC_RECEIVE', $4)`,
-            [outletId, itemId, item.qty_received, data.delivery_note_id]
+            [outletId, itemId, actualQtyReceived, data.delivery_note_id]
           );
         }
       }
@@ -383,6 +424,8 @@ export async function recordScan(data: {
          VALUES ($1,'OUT',$2,$3,'BARCODE_SCAN',$4)`,
         [data.item_id, -dni.qty_shipped, newBalance, data.delivery_note_item_id]
       );
+
+      await checkAndCreateAlert(data.item_id, newBalance, client);
 
       // Update order item status to DIKIRIM
       await client.query(
@@ -678,8 +721,12 @@ export async function getDeliveryNoteIssues(status?: string) {
   `;
   const params: unknown[] = [];
   if (status) {
-    q += ` WHERE i.status = $1`;
-    params.push(status);
+    if (status === 'RESOLVED') {
+      q += ` WHERE i.status != 'PENDING'`;
+    } else {
+      q += ` WHERE i.status = $1`;
+      params.push(status);
+    }
   }
   q += ` ORDER BY i.reported_at DESC`;
 

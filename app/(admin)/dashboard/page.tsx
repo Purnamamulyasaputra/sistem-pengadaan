@@ -233,6 +233,11 @@ export default async function DashboardPage() {
               <div className="kpi-value">{fmt(stats.vendorOrdersPending)}</div>
               <div className="kpi-note">tunggu vendor / krm</div>
             </div>
+            <div className="kpi-card">
+              <div className="kpi-label">Nilai Inventaris</div>
+              <div className="kpi-value" style={{ fontSize: '20px' }}>{fmtCurrency(stats.stockValue).replace(',00', '')}</div>
+              <div className="kpi-note">estimasi aset pusat</div>
+            </div>
             <Link href="/alerts" style={{ textDecoration: 'none' }} className={`kpi-card ${stats.unresolvedAlerts > 0 ? 'alert' : ''}`}>
               <div className="kpi-label">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginRight:4}}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.73 21a2 2 0 0 1-3.46 0"/></svg>

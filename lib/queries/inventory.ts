@@ -70,7 +70,7 @@ export async function receiveGoods(input: {
     await client.query(
       `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
        VALUES ($1, 'IN', $2, $3, 'RECEIPT', $4)`,
-      [item_id, actualQty, newBalance, null]
+      [item_id, actualQty, newBalance, input.purchase_order_item_id || null]
     );
 
     // Auto fulfill pending outlet requests if stock arrived
@@ -88,10 +88,16 @@ export async function receiveGoods(input: {
 }
 
 export async function getInventoryCard(itemId: number, limit = 50, offset = 0) {
-  const result = await query<InventoryLog>(
-    `SELECT il.*, i.name AS item_name
+  const result = await query(
+    `SELECT il.*, i.name AS item_name,
+            dn.id AS do_id, dn.delivery_note_number AS do_number,
+            po.id AS po_id, po.po_number AS po_number
      FROM inventory_logs il
      LEFT JOIN items i ON i.id = il.item_id
+     LEFT JOIN delivery_note_items dni ON (il.reference_type = 'BARCODE_SCAN' OR il.reference_type = 'BULK_SHIP') AND il.reference_id = dni.id
+     LEFT JOIN delivery_notes dn ON dn.id = dni.delivery_note_id
+     LEFT JOIN goods_receipts gr ON il.reference_type = 'RECEIPT' AND il.reference_id = gr.id
+     LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
      WHERE il.item_id = $1
      ORDER BY il.created_at DESC
      LIMIT $2 OFFSET $3`,
@@ -187,7 +193,7 @@ export async function getInventoryReport(month: number, year: number) {
        i.name AS item_name,
        c.name AS category_name,
        SUM(CASE WHEN il.movement_type = 'IN' THEN il.qty_change ELSE 0 END) AS total_in_qty,
-       SUM(CASE WHEN il.movement_type = 'OUT' AND il.reference_type = 'BARCODE_SCAN' THEN ABS(il.qty_change) ELSE 0 END) AS total_distribution_qty,
+       SUM(CASE WHEN il.movement_type = 'OUT' AND il.reference_type IN ('BARCODE_SCAN', 'BULK_SHIP') THEN ABS(il.qty_change) ELSE 0 END) AS total_distribution_qty,
        SUM(CASE WHEN il.movement_type = 'ADJ' THEN il.qty_change ELSE 0 END) AS total_adj_qty,
        i.current_average_price,
        (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_balance

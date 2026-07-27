@@ -64,7 +64,8 @@ export async function getPurchaseOrderById(id: number) {
   if (!po) return null;
 
   const itemsRes = await query(
-    `SELECT poi.*, i.name AS item_name, i.purchase_unit, i.smallest_unit
+    `SELECT poi.*, i.name AS item_name, i.purchase_unit, i.smallest_unit,
+            COALESCE((SELECT SUM(qty_received) FROM goods_receipt_items WHERE purchase_order_item_id = poi.id), 0) as total_received
      FROM purchase_order_items poi
      LEFT JOIN items i ON i.id = poi.item_id
      WHERE poi.purchase_order_id = $1

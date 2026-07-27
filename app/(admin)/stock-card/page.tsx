@@ -16,6 +16,10 @@ interface LogEntry {
   ending_balance: number;
   reference_type: string;
   reference_id: number;
+  do_id?: number;
+  do_number?: string;
+  po_id?: number;
+  po_number?: string;
 }
 
 export default function StockCardPage() {
@@ -243,13 +247,14 @@ export default function StockCardPage() {
               Tidak ada pergerakan inventaris yang tercatat untuk barang ini.
             </div>
           ) : (
-            <div className="table-responsive">
+            <div className="table-responsive" style={{ maxHeight: '450px', overflowY: 'auto' }}>
             <Table>
               <thead>
                 <tr>
                   <th>Tanggal & Waktu</th>
                   <th>Jenis Mutasi</th>
                   <th className="right">Perubahan (Jml)</th>
+                  <th className="right">Nilai (Rp)</th>
                   <th className="right">Saldo Akhir</th>
                   <th>Referensi</th>
                 </tr>
@@ -281,6 +286,9 @@ export default function StockCardPage() {
                         </div>
                       )}
                     </td>
+                    <td className="right font-mono font-bold" style={{ color: log.movement_type === 'OUT' || log.qty_change < 0 ? '#dc2626' : 'inherit' }}>
+                      Rp {(Math.abs(log.qty_change) * Number(selectedItem?.current_average_price || 0)).toLocaleString('id-ID')}
+                    </td>
                     <td className="right">
                       <div className="font-mono font-bold">
                         {Number(convertedEndingBalance).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)' }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
@@ -294,12 +302,14 @@ export default function StockCardPage() {
                     <td>
                       <div className="font-bold">{log.reference_type}</div>
                       <div className="muted font-mono" style={{ fontSize: 12 }}>
-                        {log.reference_type === 'DO' ? (
-                          <Link href={`/delivery-orders/${log.reference_id}`} className="text-blue-600 hover:underline">Ref ID: {log.reference_id}</Link>
-                        ) : log.reference_type === 'PO' ? (
-                          <Link href={`/purchase-orders/${log.reference_id}`} className="text-blue-600 hover:underline">Ref ID: {log.reference_id}</Link>
+                        {(log.reference_type === 'BARCODE_SCAN' || log.reference_type === 'BULK_SHIP') && log.do_id ? (
+                          <Link href={`/delivery-orders/${log.do_id}`} className="text-blue-600 hover:underline">{log.do_number}</Link>
+                        ) : log.reference_type === 'RECEIPT' && log.po_id ? (
+                          <Link href={`/purchase-orders/${log.po_id}`} className="text-blue-600 hover:underline">{log.po_number}</Link>
+                        ) : log.reference_type === 'OPNAME_ADJUSTMENT' ? (
+                          <Link href={`/opname/central/${log.reference_id}`} className="text-blue-600 hover:underline">Ref ID: {log.reference_id}</Link>
                         ) : (
-                          <span>Ref ID: {log.reference_id}</span>
+                          <span>Ref ID: {log.reference_id ?? '-'}</span>
                         )}
                       </div>
                     </td>

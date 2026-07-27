@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     const serializedData = data.map(d => ({
       ...d,
       current_balance: Number(d.current_balance),
+      target_stock: Number(d.target_stock ?? 0),
       minimum_threshold: d.minimum_threshold ? Number(d.minimum_threshold) : null
     }));
 

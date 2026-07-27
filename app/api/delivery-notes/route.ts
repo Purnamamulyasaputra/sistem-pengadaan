@@ -5,13 +5,22 @@ import { getDeliveryNotes, createDeliveryNote } from '@/lib/queries/delivery-not
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ success: false, message: 'Unauthorized', data: null }, { status: 401 });
+  
   const { searchParams } = new URL(req.url);
+  const page = Number(searchParams.get('page') || '1');
+  const limit = Number(searchParams.get('limit') || '20');
+  const offset = (page - 1) * limit;
+
   const notes = await getDeliveryNotes({
     outletId: session.role === 'ADMIN_OUTLET' ? session.outletId! : (searchParams.get('outlet_id') ? Number(searchParams.get('outlet_id')) : undefined),
     status: searchParams.get('status') ?? undefined,
     orderId: searchParams.get('order_id') ? Number(searchParams.get('order_id')) : undefined,
+    search: searchParams.get('search') ?? undefined,
+    limit,
+    offset
   });
-  return NextResponse.json({ success: true, message: 'OK', data: notes });
+
+  return NextResponse.json({ success: true, message: 'OK', data: notes.data, total: notes.total, page, limit });
 }
 
 export async function POST(req: NextRequest) {

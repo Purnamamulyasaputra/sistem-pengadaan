@@ -9,6 +9,16 @@ import { Badge } from '@/components/ui/Badge';
 import { HelpCircle } from 'lucide-react';
 import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
+import { Toast } from '@/components/ui/Toast';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+const REASON_CATEGORIES = [
+  { value: 'RUSAK', label: 'Rusak' },
+  { value: 'KADALUARSA', label: 'Kadaluarsa' },
+  { value: 'SALAH_CATAT', label: 'Salah Catat' },
+  { value: 'HILANG_SUSUT', label: 'Hilang / Susut' },
+  { value: 'LAINNYA', label: 'Lainnya' },
+];
 
 export default function OutletOpnameDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -21,6 +31,10 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   const [isLocked, setIsLocked] = useState(false);
   const [limit, setLimit] = useState<number | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' as 'success' | 'error' });
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => setToast({ isOpen: true, message, type });
 
   const fetchOpname = useCallback(async () => {
     setLoading(true);
@@ -63,6 +77,16 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
     }
   };
 
+  const handleReasonChange = (itemId: number, field: 'reason_category' | 'reason_notes', value: string) => {
+    if (isLocked) return;
+    const existing = details.find(d => d.item_id === itemId);
+    if (existing) {
+      setDetails(details.map(d => d.item_id === itemId ? { ...d, [field]: value } : d));
+    } else {
+      setDetails([...details, { item_id: itemId, system_balance: 0, actual_physical_qty: 0, variance: 0, [field]: value }]);
+    }
+  };
+
   const handleSave = async (submit: boolean = false) => {
     setSaving(true);
     try {
@@ -84,16 +108,16 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
         const res = await fetch(`/api/opname/${id}/lock`, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-          alert('Stock Opname berhasil dikunci.');
+          showToast('Stock Opname berhasil dikunci.', 'success');
           fetchOpname();
         } else {
-          alert(data.message || 'Gagal mengunci opname.');
+          showToast(data.message || 'Gagal mengunci opname.', 'error');
         }
       } else {
-        alert('Draft berhasil disimpan.');
+        showToast('Draft berhasil disimpan.', 'success');
       }
     } catch (err: unknown) {
-      alert((err instanceof Error ? err.message : 'Unknown error'));
+      showToast((err instanceof Error ? err.message : 'Unknown error'), 'error');
     } finally {
       setSaving(false);
     }
@@ -107,6 +131,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
 
   return (
     <section className="screen">
+      <Toast isOpen={toast.isOpen} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, isOpen: false })} />
       <div className="card">
         <div className="card-head">
           <div>
@@ -136,11 +161,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
             {!isLocked && (
               <>
                 <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving}>Simpan Draft</Button>
-                <Button variant="primary" size="sm" onClick={() => {
-                  if (confirm('Apakah Anda yakin ingin mengunci sesi ini? Data tidak dapat diubah setelah dikunci.')) {
-                    handleSave(true);
-                  }
-                }} disabled={saving}>
+                <Button variant="primary" size="sm" onClick={() => setShowConfirm(true)} disabled={saving}>
                   Kunci & Submit
                 </Button>
               </>
@@ -168,6 +189,8 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                 </th>
                 <th className="right">Selisih</th>
                 <th className="right">Est. Biaya Pemakaian</th>
+                <th style={{ width: 180 }}>Alasan</th>
+                <th style={{ width: 220 }}>Catatan</th>
               </tr>
             </thead>
             <tbody>
@@ -204,6 +227,35 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                     <td className="right num font-mono muted">
                       Rp {cost.toLocaleString('id-ID', { maximumFractionDigits: 0 })}
                     </td>
+                    <td>
+                      {variance !== 0 ? (
+                        <Select
+                          value={String(detail?.reason_category || '')}
+                          onChange={val => handleReasonChange(item.item_id, 'reason_category', String(val))}
+                          disabled={isLocked}
+                          options={[
+                            { value: '', label: '-- Pilih Alasan --' },
+                            ...REASON_CATEGORIES
+                          ]}
+                          inputStyle={{ height: 32, padding: '0px 8px', fontSize: 13, borderColor: !detail?.reason_category ? '#fca5a5' : 'var(--border)' }}
+                        />
+                      ) : (
+                        <span className="muted italic" style={{ fontSize: 13 }}>Tidak ada selisih</span>
+                      )}
+                    </td>
+                    <td>
+                      {variance !== 0 && detail?.reason_category ? (
+                        <input
+                          type="text"
+                          className="input"
+                          value={String(detail?.reason_notes || '')}
+                          onChange={e => handleReasonChange(item.item_id, 'reason_notes', e.target.value)}
+                          disabled={isLocked}
+                          placeholder={detail?.reason_category === 'LAINNYA' ? 'Wajib diisi...' : 'Opsional...'}
+                          style={{ height: 32, padding: '4px 8px', fontSize: 13, width: '100%', borderColor: (detail?.reason_category === 'LAINNYA' && !String(detail?.reason_notes || '').trim()) ? '#fca5a5' : 'var(--border)' }}
+                        />
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}
@@ -219,9 +271,22 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
               onPageChange={setCurrentPage}
             />
           )}
-          
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showConfirm}
+        title="Kunci Sesi Opname"
+        message="Apakah Anda yakin ingin mengunci sesi ini? Data tidak dapat diubah setelah dikunci."
+        confirmText="Kunci Sesi"
+        cancelText="Batal"
+        loading={saving}
+        onConfirm={() => {
+          setShowConfirm(false);
+          handleSave(true);
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
     </section>
   );
 }

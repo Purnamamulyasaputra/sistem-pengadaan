@@ -15,7 +15,7 @@ import { Select } from '@/components/ui/Select';
 interface Item {
   id: number; name: string; category_id: number; category_name: string; barcode?: string;
   purchase_unit: string; smallest_unit: string; conversion_ratio: number;
-  minimum_threshold: number; threshold_type: string; is_perishable: boolean;
+  minimum_threshold: number; target_stock: number; threshold_type: string; is_perishable: boolean;
   is_active: boolean; current_average_price: number; current_stock?: number;
   is_hpp?: boolean;
   ingredient_id?: number | null;
@@ -39,13 +39,13 @@ export default function ItemsPage() {
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
+  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
 
   // Stock Card
-  const [confirmToggleActive, setConfirmToggleActive] = useState<Item | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Item | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,7 +76,7 @@ export default function ItemsPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
+    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
     setError('');
     setShowModal(true);
   }
@@ -87,7 +87,7 @@ export default function ItemsPage() {
     setForm({
       name: item.name, barcode: item.barcode || '', category_id: String(item.category_id ?? ''), purchase_unit: item.purchase_unit, package_inner_size: '',
       smallest_unit: item.smallest_unit, conversion_ratio: String(Number(item.conversion_ratio)),
-      minimum_threshold: String(Number(item.minimum_threshold)), threshold_type: item.threshold_type,
+      minimum_threshold: String(Number(item.minimum_threshold)), target_stock: String(Number(item.target_stock ?? 0)), threshold_type: item.threshold_type,
       is_perishable: item.is_perishable, is_active: item.is_active,
       purchase_price: String(Number(item.current_average_price ?? 0) * Number(item.conversion_ratio || 1)),
       has_conversion: hasConv,
@@ -118,6 +118,7 @@ export default function ItemsPage() {
         smallest_unit: finalSmallestUnit,
         conversion_ratio: finalRatio,
         minimum_threshold: Number(form.minimum_threshold),
+        target_stock: Number(form.target_stock),
         current_average_price: finalAvgPrice,
         ingredient_id: form.ingredient_id ? Number(form.ingredient_id) : null
       };
@@ -135,9 +136,9 @@ export default function ItemsPage() {
     } finally { setSaving(false); }
   }
 
-  async function executeToggleActive() {
-    if (!confirmToggleActive) return;
-    const item = confirmToggleActive;
+  async function handleDelete() {
+    if (!confirmDelete) return;
+    const item = confirmDelete;
     setIsDeleting(true);
     try {
       const res = await fetch(`/api/items/${item.id}`, { method: 'DELETE' });
@@ -151,7 +152,7 @@ export default function ItemsPage() {
       setToastInfo({ show: true, msg: 'Gagal menghubungi server', type: 'error' });
     } finally {
       setIsDeleting(false);
-      setConfirmToggleActive(null);
+      setConfirmDelete(null);
       fetchItems();
     }
   }
@@ -227,8 +228,7 @@ export default function ItemsPage() {
                     <tr>
                       <th style={{ width: 100 }}>Kode</th>
                       <th style={{ width: 300 }}>Barang</th>
-                      <th style={{ width: 120 }}>Satuan Beli</th>
-                      <th style={{ width: 120 }}>Satuan Terkecil</th>
+                      <th style={{ width: 140 }}>Satuan (Beli / Ecer)</th>
                       <th className="center" style={{ width: 80 }}>Rasio</th>
                       <th className="right" style={{ width: 120 }}>Rata Harga</th>
                       <th className="center" style={{ width: 100 }}>Status</th>
@@ -249,8 +249,12 @@ export default function ItemsPage() {
                           </div>
                           {item.is_perishable && <span style={{ fontSize: 10, color: '#d97706', fontWeight: 600 }}>CEPAT BASI</span>}
                         </td>
-                        <td>{item.purchase_unit}</td>
-                        <td>{item.smallest_unit}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span className="font-bold">{item.purchase_unit}</span>
+                            <span className="muted" style={{ fontSize: 12 }}>/ {item.smallest_unit}</span>
+                          </div>
+                        </td>
                         <td className="center num muted">{Math.round(Number(item.conversion_ratio)).toLocaleString('id-ID')}</td>
                         <td className="right num">{fmtCurrency(item.current_average_price).replace(',00', '')}</td>
                         <td className="center">
@@ -263,8 +267,8 @@ export default function ItemsPage() {
                             <Button size="sm" onClick={(e) => { e.stopPropagation(); openEdit(item); }} title="Edit Barang" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                             </Button>
-                            <Button size="sm" style={{ background: item.is_active ? '#fef2f2' : '#ecfdf5', color: item.is_active ? '#dc2626' : '#059669', border: '1px solid', borderColor: item.is_active ? '#fecaca' : '#a7f3d0' }} onClick={(e) => { e.stopPropagation(); setConfirmToggleActive(item); }} title={item.is_active ? 'Nonaktifkan' : 'Aktifkan'}>
-                              {item.is_active ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>}
+                            <Button size="sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={(e) => { e.stopPropagation(); setConfirmDelete(item); }} title="Hapus Barang">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                             </Button>
                           </div>
                         </td>
@@ -384,6 +388,9 @@ export default function ItemsPage() {
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Batas Min.</label>
                   <input className="input" type="number" min="0" value={form.minimum_threshold} onChange={e => setForm(f => ({ ...f, minimum_threshold: e.target.value }))} />
                 </div>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Target Stok.</label>
+                  <input className="input" type="number" min="0" value={form.target_stock} onChange={e => setForm(f => ({ ...f, target_stock: e.target.value }))} />
+                </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Jenis Peringatan</label>
                   <Select
                     value={form.threshold_type}
@@ -431,11 +438,11 @@ export default function ItemsPage() {
       </Modal>
 
       <ConfirmDialog
-        open={!!confirmToggleActive}
+        open={!!confirmDelete}
         title="Hapus Barang Secara Permanen"
-        message={`Apakah Anda yakin ingin menghapus "${confirmToggleActive?.name}"?`}
-        onCancel={() => setConfirmToggleActive(null)}
-        onConfirm={executeToggleActive}
+        message={`Apakah Anda yakin ingin menghapus "${confirmDelete?.name}"?`}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={handleDelete}
         confirmText="Ya"
         danger={true}
         loading={isDeleting}

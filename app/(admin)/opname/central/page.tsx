@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Toast } from '@/components/ui/Toast';
 
 interface OpnameSession {
   id: number;
@@ -21,9 +22,11 @@ export default function CentralOpnamePage() {
   const [sessions, setSessions] = useState<OpnameSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
 
-  // Hardcoded for Phase 1 demo
-  const PIC_ID = 1; // Assuming Central Admin ID is 1
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type, isOpen: true });
+  };
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -41,7 +44,6 @@ export default function CentralOpnamePage() {
       const payload = {
         location_type: 'PUSAT',
         count_date: new Date().toISOString().split('T')[0],
-        pic_id: PIC_ID,
         general_notes: 'Central Warehouse Stock Opname'
       };
       
@@ -54,11 +56,11 @@ export default function CentralOpnamePage() {
       if (data.success && data.data?.id) {
         router.push(`/opname/central/${data.data.id}`);
       } else {
-        alert(data.message || 'Failed to start opname');
+        showToast(data.message || 'Failed to start opname', 'error');
         setCreating(false);
       }
     } catch (err: unknown) {
-      alert((err instanceof Error ? err.message : 'Unknown error'));
+      showToast((err instanceof Error ? err.message : 'Unknown error'), 'error');
       setCreating(false);
     }
   };
@@ -123,6 +125,12 @@ export default function CentralOpnamePage() {
           )}
         </div>
       </div>
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, isOpen: false }))}
+      />
     </section>
   );
 }

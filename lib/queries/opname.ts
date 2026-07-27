@@ -37,6 +37,18 @@ export async function getStockCountHeaders(opts?: { locationType?: string; locat
   return result.rows;
 }
 
+export async function getStockCountHeaderById(id: number) {
+  const result = await query(
+    `SELECT sch.*, o.name AS location_name, u.name AS pic_name
+     FROM stock_count_headers sch
+     LEFT JOIN outlets o ON o.id = sch.location_id
+     LEFT JOIN users u ON u.id = sch.pic_id
+     WHERE sch.id = $1`,
+    [id]
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function getStockCountDetails(headerId: number) {
   const result = await query(
     `SELECT scd.*, i.name AS item_name, c.name AS category_name, i.smallest_unit, i.current_average_price
@@ -94,12 +106,14 @@ export async function upsertStockCountDetail(data: {
   return result.rows[0];
 }
 
-export async function lockStockCount(headerId: number, locationType: string) {
+export async function lockStockCount(headerId: number) {
   return withTransaction(async (client) => {
     const headerRes = await client.query(`SELECT * FROM stock_count_headers WHERE id = $1 FOR UPDATE`, [headerId]);
     const header = headerRes.rows[0];
     if (!header) throw new Error('Stock count session not found');
     if (header.status === 'LOCKED') throw new Error('Already locked');
+
+    const locationType = header.location_type;
 
     const detailsRes = await client.query(
       `SELECT * FROM stock_count_details WHERE header_id = $1`, [headerId]
@@ -108,23 +122,33 @@ export async function lockStockCount(headerId: number, locationType: string) {
     let totalValue = 0;
 
     for (const detail of detailsRes.rows) {
-      if (detail.variance !== 0) {
+      const variance = parseFloat(detail.variance ?? '0');
+      if (variance !== 0) {
         if (locationType === 'PUSAT') {
           // Create ADJ mutation in inventory_logs
           await adjustStock({
             item_id: detail.item_id,
-            qty_change: detail.variance,
+            qty_change: variance,
             reference_id: headerId,
             client,
           });
         } else if (locationType === 'OUTLET' && header.location_id) {
           // Update outlet_stocks directly
-          await client.query(`
+          const updateRes = await client.query(`
             INSERT INTO outlet_stocks (outlet_id, item_id, current_balance)
             VALUES ($1, $2, $3)
             ON CONFLICT (outlet_id, item_id)
-            DO UPDATE SET current_balance = outlet_stocks.current_balance + EXCLUDED.current_balance
-          `, [header.location_id, detail.item_id, detail.variance]);
+            DO UPDATE SET current_balance = EXCLUDED.current_balance
+            RETURNING current_balance
+          `, [header.location_id, detail.item_id, detail.actual_physical_qty]);
+
+          const newBalance = updateRes.rows[0].current_balance;
+
+          // Insert log for traceability
+          await client.query(`
+            INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+            VALUES ($1, $2, 'ADJ', $3, $4, 'OPNAME_ADJUSTMENT', $5)
+          `, [header.location_id, detail.item_id, variance, newBalance, headerId]);
         }
         totalValue += Math.abs(parseFloat(detail.value_amount ?? '0'));
       }

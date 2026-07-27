@@ -14,6 +14,7 @@ type DraftRow = {
   purchase_unit: string;
   smallest_unit: string;
   minimum_threshold: number;
+  target_stock: number;
   conversion_ratio: number;
   
   // UI States
@@ -44,8 +45,8 @@ export default function AutoRestockDraftPage() {
             })
             .map((d: any) => {
               const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
-              let shortageSmall = d.minimum_threshold - effectiveBalance;
-              if (shortageSmall <= 0) shortageSmall = d.minimum_threshold;
+              let shortageSmall = (d.target_stock || d.minimum_threshold) - effectiveBalance;
+              if (shortageSmall <= 0) shortageSmall = (d.target_stock || d.minimum_threshold);
               
               const ratio = Number(d.conversion_ratio) || 1;
               const shortageLarge = Math.ceil(shortageSmall / ratio);

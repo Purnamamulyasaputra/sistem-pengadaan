@@ -274,10 +274,19 @@ export async function getAggregatedRequestsByProduct(opts?: { status?: string; s
       i.smallest_unit,
       i.conversion_ratio,
       SUM(COALESCE(oi.qty_approved, oi.qty_request)) AS total_requested,
-      COALESCE(latest.ending_balance, 0) AS central_stock
+      COALESCE(latest.ending_balance, 0) AS central_stock,
+      JSON_AGG(
+        JSON_BUILD_OBJECT(
+          'outlet_name', outlet.name,
+          'qty', COALESCE(oi.qty_approved, oi.qty_request),
+          'order_id', o.id,
+          'order_date', o.order_date
+        )
+      ) AS breakdown
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      JOIN items i ON i.id = oi.item_id
+     LEFT JOIN outlets outlet ON outlet.id = o.outlet_id
      LEFT JOIN LATERAL (
        SELECT ending_balance
        FROM inventory_logs

@@ -27,7 +27,7 @@ function formatUnit(unit: string | null | undefined): string {
 }
 
 
-export default function CentralOpnameDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function OutletOpnameDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [header, setHeader] = useState<any>(null);
@@ -54,12 +54,14 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
       const hData = await hRes.json();
       setHeader(hData.data);
       setIsLocked(hData.data?.status === 'LOCKED');
+      
+      if (hData.data?.location_id) {
+        // Fetch all items for input
+        const iRes = await fetch(`/api/opname/items?location_type=OUTLET&location_id=${hData.data.location_id}`);
+        const iData = await iRes.json();
+        setItems(iData.data ?? []);
+      }
     }
-
-    // Fetch all items for input
-    const iRes = await fetch(`/api/opname/items?location_type=PUSAT`);
-    const iData = await iRes.json();
-    setItems(iData.data ?? []);
 
     // Fetch existing details for this session
     const dRes = await fetch(`/api/opname/${id}/detail`);
@@ -134,11 +136,11 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
         const res = await fetch(`/api/opname/${id}/lock`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ location_type: 'PUSAT' })
+          body: JSON.stringify({ location_type: 'OUTLET', location_id: header.location_id })
         });
         const data = await res.json();
         if (data.success) {
-          showToast('Opname Stok berhasil dikunci. Penyesuaian telah dicatat pada Log Inventaris.', 'success');
+          showToast('Opname Stok berhasil dikunci. Penyesuaian telah dicatat pada Log Inventaris Outlet.', 'success');
           fetchOpname();
         } else {
           showToast(data.message || 'Failed to lock opname.', 'error');
@@ -160,11 +162,11 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
   const totalPages = limit === 'all' ? 1 : Math.ceil(items.length / limit);
 
   return (
-    <section style={{ margin: '-16px -20px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)' }}>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff' }}>
+    <section className="screen">
+      <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Detail Opname Pusat — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
+            <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Detail Opname Outlet — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
             <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
               <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
               <span className="muted" style={{ fontSize: 13 }}>
@@ -205,7 +207,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                 </Button>
               </>
             )}
-            <Link href="/opname/central">
+            <Link href="/opname/outlet">
               <Button variant="outline" size="sm">Kembali</Button>
             </Link>
           </div>

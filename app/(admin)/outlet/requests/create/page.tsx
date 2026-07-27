@@ -30,28 +30,30 @@ export default function CreateRequestPage() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const itemsRes = await fetch('/api/items');
-        const itemsJson = await itemsRes.json();
+        const [itemsRes, activeRes, invRes] = await Promise.all([
+          fetch('/api/items'),
+          fetch('/api/outlet/active-requests'),
+          fetch('/api/outlet/inventory')
+        ]);
+        
+        const [itemsJson, activeJson, invJson] = await Promise.all([
+          itemsRes.json(),
+          activeRes.json(),
+          invRes.json()
+        ]);
+        
         const itemsList = itemsJson.data ?? [];
         setItems(itemsList);
 
-        // Fetch active item requests
-        const activeRes = await fetch('/api/outlet/active-requests');
-        const activeJson = await activeRes.json();
         const activeItemsSet = new Set(activeJson.success ? activeJson.data : []);
         setActiveItemIds(Array.from(activeItemsSet) as number[]);
 
-        const invRes = await fetch('/api/outlet/inventory');
-        const invJson = await invRes.json();
-        
         if (invJson.success && invJson.data) {
           const lowStockItems = invJson.data
             .filter((d: any) => {
               if (d.minimum_threshold === null) return false;
-              if (activeItemsSet.has(d.item_id)) return false; // Exclude already ordered items
               const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
-              // Only auto-add if effective balance is completely below minimum (don't auto add if they already ordered)
-              return effectiveBalance <= d.minimum_threshold && Number(d.incoming_balance || 0) === 0;
+              return effectiveBalance <= d.minimum_threshold;
             })
             .map((d: any, index: number) => {
               const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
@@ -213,6 +215,9 @@ export default function CreateRequestPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h4 style={{ margin: 0 }}>Barang ({cart.length})</h4>
             <div style={{ display: 'flex', gap: 12 }}>
+              <Button variant="outline" size="sm" onClick={() => setCart([])} style={{ borderColor: '#fca5a5', color: '#ef4444', background: '#fef2f2' }} disabled={cart.length === 0}>
+                Bersihkan Semua
+              </Button>
               <Button variant="outline" size="sm" onClick={addEmptyRow} style={{ borderColor: '#86efac', background: '#f0fdf4' }}>
                 + Tambah Barang
               </Button>

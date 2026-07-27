@@ -79,6 +79,9 @@ export async function getOutletHppCategories(outletId: number) {
   const venueIds = venuesRes.rows.map(r => r.venue_id);
   if (!venueIds.length) return [];
   
+  const outletRes = await query(`SELECT name FROM outlets WHERE id = $1`, [outletId]);
+  const outletName = outletRes.rows[0]?.name || '';
+
   const res = await query(`
     SELECT DISTINCT c.id, c.name
     FROM menu_categories c
@@ -86,6 +89,7 @@ export async function getOutletHppCategories(outletId: number) {
     JOIN recipes r ON r.menu_id = m.id
     WHERE r.venue_id = ANY($1)
       AND EXISTS (SELECT 1 FROM moka_items mi WHERE mi.outlet_id = $2 AND mi.name = m.name AND mi.is_deleted IS NOT TRUE)
+      ${!outletName.toLowerCase().includes('cafetaria') ? `AND c.name NOT ILIKE '%cafetaria%'` : ''}
     ORDER BY c.name
   `, [venueIds, outletId]);
   
@@ -105,6 +109,9 @@ export async function getOutletHppVenues(outletId: number) {
 }
 
 export async function getOutletHppMenus(outletId: number, opts?: { categoryId?: number; marginFlag?: string; search?: string; limit?: number; offset?: number }) {
+  const outletRes = await query(`SELECT name FROM outlets WHERE id = $1`, [outletId]);
+  const outletName = outletRes.rows[0]?.name || '';
+
   const venuesRes = await query(`SELECT venue_id FROM outlet_venues WHERE outlet_id = $1`, [outletId]);
   const venueIds = venuesRes.rows.map(r => r.venue_id);
   if (!venueIds.length) return { data: [], total: 0 };
@@ -114,6 +121,11 @@ export async function getOutletHppMenus(outletId: number, opts?: { categoryId?: 
     `r.venue_id = ANY($2)`,
     `EXISTS (SELECT 1 FROM moka_items mi WHERE mi.outlet_id = $1 AND mi.name = m.name AND mi.is_deleted IS NOT TRUE)`
   ];
+  
+  if (!outletName.toLowerCase().includes('cafetaria')) {
+    conditions.push(`c.name NOT ILIKE '%cafetaria%'`);
+  }
+  
   let idx = 3;
 
   if (opts?.categoryId) {
@@ -144,6 +156,7 @@ export async function getOutletHppMenus(outletId: number, opts?: { categoryId?: 
     SELECT COUNT(DISTINCT m.id)::int AS cnt
     FROM menus m
     JOIN recipes r ON r.menu_id = m.id
+    LEFT JOIN menu_categories c ON c.id = m.category_id
     LEFT JOIN outlet_menu_prices omp ON omp.menu_id = m.id AND omp.outlet_id = $1
     ${where}
   `, params);
