@@ -12,7 +12,7 @@ interface Order {
 
 export default function OutletDashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [criticalMenus, setCriticalMenus] = useState<any[]>([]);
+  const [criticalMenus, setCriticalMenus] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = useCallback(async () => {
@@ -99,7 +99,7 @@ export default function OutletDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {criticalMenus.map(m => {
+                  {criticalMenus.map((m: any) => {
                     const portions = Math.max(0, m.estimated_portions || 0);
                     return (
                       <tr key={m.moka_item_id}>

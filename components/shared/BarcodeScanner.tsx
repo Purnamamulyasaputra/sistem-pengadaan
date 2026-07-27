@@ -15,11 +15,11 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    let controls: any = null;
+    let controls: { stop: () => void } | null = null;
     const codeReader = new BrowserMultiFormatReader();
 
     if (videoRef.current) {
-      codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result: any, err: any, ctrl: any) => {
+      codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result: { getText: () => string } | null | undefined, err: Error & { name?: string } | null | undefined, ctrl: { stop: () => void }) => {
         if (ctrl) controls = ctrl;
         if (result) {
           if (controls) controls.stop();

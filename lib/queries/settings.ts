@@ -21,3 +21,9 @@ export async function updateSettings(settings: Record<string, string>) {
     await updateSetting(key, value);
   }
 }
+
+export async function isBarcodeScanRequired() {
+  const res = await query("SELECT value FROM system_settings WHERE key = 'require_barcode_scan'");
+  if (res.rows.length === 0) return true; // default true
+  return res.rows[0].value !== 'false';
+}

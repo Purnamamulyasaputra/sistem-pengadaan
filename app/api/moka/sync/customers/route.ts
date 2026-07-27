@@ -12,7 +12,7 @@ export async function POST(req: Request) {
 
         let totalCount = 0;
         const results = await Promise.allSettled(
-            tokens.map(token => syncCustomers(token, String(token.business_id)))
+            tokens.map((token: any) => syncCustomers(token, String(token.business_id)))
         );
 
         let successful = 0;
@@ -35,10 +35,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'Failed to sync customers for all connected accounts.' }, { status: 500 });
         }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Sync customers API error:", error);
         return NextResponse.json(
-            { message: error.message || "Internal server error" },
+            { message: (error instanceof Error ? error.message : 'Unknown error') || "Internal server error" },
             { status: 500 }
         );
     }

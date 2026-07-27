@@ -14,8 +14,8 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   const { id } = use(params);
   const router = useRouter();
   const [header, setHeader] = useState<any>(null);
-  const [items, setItems] = useState<any[]>([]);
-  const [details, setDetails] = useState<any[]>([]);
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [details, setDetails] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
@@ -70,7 +70,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
       for (const detail of details) {
         const payload = {
           ...detail,
-          actual_physical_qty: detail.actual_physical_qty === '' ? detail.system_balance : parseFloat(detail.actual_physical_qty)
+          actual_physical_qty: detail.actual_physical_qty === '' ? detail.system_balance : parseFloat(String(detail.actual_physical_qty))
         };
         await fetch(`/api/opname/${id}/detail`, {
           method: 'POST',
@@ -92,8 +92,8 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
       } else {
         alert('Draft berhasil disimpan.');
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert((err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -124,7 +124,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <Select 
               value={limit}
-              onChange={(val) => { setLimit(val); setCurrentPage(1); }}
+              onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
               options={[
                 { value: 'all', label: 'Semua' },
                 { value: 8, label: '8' },
@@ -171,12 +171,12 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
               </tr>
             </thead>
             <tbody>
-              {paginatedItems.map(item => {
+              {paginatedItems.map((item: any) => {
                 const detail = getDetail(item.item_id);
                 const actual = detail ? detail.actual_physical_qty : '';
-                const variance = detail ? detail.variance : 0;
+                const variance = Number(detail ? detail.variance : 0);
                 // Cost calculation: absolute variance * current average price
-                const cost = Math.abs(variance) * Number(item.current_average_price);
+                const cost = Math.abs(Number(variance)) * Number(item.current_average_price);
                 
                 return (
                   <tr key={item.item_id}>
@@ -187,11 +187,11 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                       <input 
                         type="text" 
                         className="input right" 
-                        value={actual} 
+                        value={String(actual ?? '')} 
                         onChange={(e) => handleQtyChange(item.item_id, item.system_balance, e.target.value)} 
                         disabled={isLocked}
                         placeholder="0"
-                        style={{ height: 32, width: '100%', borderColor: actual === '' ? '#fca5a5' : 'var(--border)' }} 
+                        style={{ height: 32, width: '100%', borderColor: String(actual ?? '') === '' ? '#fca5a5' : 'var(--border)' }} 
                       />
                     </td>
                     <td className="right num">

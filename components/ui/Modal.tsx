@@ -1,4 +1,5 @@
 import React from 'react';
+import { X } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -15,11 +16,14 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 600, footer
   return (
     <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box" style={{ maxWidth }}>
-        {title && (
-          <div className="modal-header">
+        <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: title ? undefined : '16px 20px 0 20px', borderBottom: title ? undefined : 'none' }}>
+          {title ? (
             <h3 style={{ margin: 0, fontSize: 'inherit' }}>{title}</h3>
-          </div>
-        )}
+          ) : <div />}
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', margin: '-4px', display: 'flex', alignItems: 'center', color: '#64748b', borderRadius: '4px' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'} title="Tutup" aria-label="Tutup">
+            <X size={20} />
+          </button>
+        </div>
         <div className="modal-body">
           {children}
         </div>

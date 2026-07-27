@@ -145,7 +145,7 @@ export function SyncMasterButton() {
             showToast(`Master sync successful! Profiles & ${itemData.message}`, 'success');
             router.refresh();
         } catch (error: any) {
-            console.error(error);
+            console.error('Error handling tokens:', error);
             showToast(error.message || 'Network error occurred', 'error');
         } finally {
             setIsSyncing(false);

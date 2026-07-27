@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { PackageMinus, ShieldAlert, FileQuestion } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
@@ -8,11 +9,25 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Toast } from '@/components/ui/Toast';
+import { Select } from '@/components/ui/Select';
 
 interface DeliveryNote {
   id: number; delivery_note_number: string; status: string;
   order_id: number; delivery_date: string; driver_name: string;
   proof_image_url?: string;
+}
+
+interface DeliveryNoteItem {
+  id: number;
+  item_id: number;
+  item_name: string;
+  qty_shipped: string | number;
+  qty_received?: string | number | null;
+  smallest_unit: string;
+  scanned_in_at?: string | null;
+  unique_barcode?: string | null;
+  barcode?: string | null;
+  discrepancy_reason?: string | null;
 }
 
 function getDisplayFormat(qty: number, unit: string) {
@@ -33,39 +48,52 @@ export default function ReceiveGoodsPage() {
   const [scanModal, setScanModal] = useState<DeliveryNote | null>(null);
 
   const [toast, setToast] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isOpen: false, message: '', type: 'info' });
-  const [itemsList, setItemsList] = useState<any[]>([]);
+  const [itemsList, setItemsList] = useState<DeliveryNoteItem[]>([]);
 
   // Row states
   const [qtys, setQtys] = useState<Record<number, number | ''>>({});
   const [reasons, setReasons] = useState<Record<number, string>>({});
   const [discNotes, setDiscNotes] = useState<Record<number, string>>({});
-
-  // Global barcode scanner
-  const [globalBarcode, setGlobalBarcode] = useState('');
-  const [scanning, setScanning] = useState(false);
+  const [discCategories, setDiscCategories] = useState<Record<number, string>>({});
 
   // Finalization states
+  const [processing, setProcessing] = useState(false);
   const [proofImage, setProofImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   function handlePhotoChange(file: File | undefined) {
     if (!file) return;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      setToast({ isOpen: true, message: 'Ukuran foto terlalu besar. Maksimal 5 MB.', type: 'error' });
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    
     setProofImage(file);
     setPreviewUrl(URL.createObjectURL(file));
   }
 
+  const [requireBarcode, setRequireBarcode] = useState(true);
+
   const fetchNotes = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/delivery-notes`);
+    const [res, setRes] = await Promise.all([
+      fetch(`/api/delivery-notes`),
+      fetch('/api/settings')
+    ]);
     const data = await res.json();
-    // Show DIKIRIM and DITERIMA, hide DRAFT and CANCELED
-    const allowed = (data.data ?? []).filter((d: any) => d.status === 'DIKIRIM' || d.status === 'DITERIMA');
+    const allowed = (data.data ?? []).filter((d: DeliveryNote) => d.status === 'DIKIRIM' || d.status === 'DITERIMA' || d.status === 'DRAFT');
     setDeliveryNotes(allowed);
+
+    if (setRes.ok) {
+      const setData = await setRes.json();
+      setRequireBarcode(setData.data?.require_barcode_scan !== 'false');
+    }
+    
     setLoading(false);
   }, []);
 
@@ -86,29 +114,31 @@ export default function ReceiveGoodsPage() {
   }, [deliveryNotes, scanParam, initialScanHandled, router]);
 
   async function openScan(dn: DeliveryNote) {
+    if (dn.status === 'DRAFT') {
+      setToast({ isOpen: true, message: 'Surat Jalan ini masih disiapkan oleh Pusat dan belum dikirim. Silakan tunggu statusnya menjadi DIKIRIM.', type: 'info' });
+      return;
+    }
+
     setScanModal(dn);
     setToast({ ...toast, isOpen: false });
     setProofImage(null);
     setPreviewUrl(dn.proof_image_url || null);
-    setGlobalBarcode('');
     setQtys({});
     setReasons({});
     setDiscNotes({});
+    setDiscCategories({});
 
     const res = await fetch(`/api/delivery-notes/${dn.id}`);
     const data = await res.json();
     setItemsList(data.data?.items ?? []);
   }
 
-  async function handleGlobalScan(e: React.FormEvent) {
+  async function handleCompleteReceipt(e: React.FormEvent) {
     e.preventDefault();
-    if (!scanModal || !globalBarcode.trim()) return;
+    if (!scanModal) return;
 
-    const barcode = globalBarcode.trim();
-
-    if (barcode !== scanModal.delivery_note_number) {
-      setToast({ isOpen: true, message: `Harap scan Kode Tracking dari Surat Jalan (${scanModal.delivery_note_number}) untuk memvalidasi seluruh pengiriman.`, type: 'error' });
-      setGlobalBarcode('');
+    if (requireBarcode && !proofImage && !previewUrl) {
+      setToast({ isOpen: true, message: 'Foto bukti penerimaan wajib diunggah.', type: 'error' });
       return;
     }
 
@@ -125,15 +155,22 @@ export default function ReceiveGoodsPage() {
       const shippedFmt = getDisplayFormat(Number(item.qty_shipped), item.smallest_unit);
       const actualQtyReceivedBase = Number(inputQty) * shippedFmt.mult;
       const isDiscrepancy = actualQtyReceivedBase !== Number(item.qty_shipped);
+      const categoryStr = discCategories[item.id] || '';
       const notesStr = discNotes[item.id] || '';
 
-      if (isDiscrepancy && !notesStr.trim()) {
-        setToast({ isOpen: true, message: `Alasan selisih wajib diisi untuk ${item.item_name}.`, type: 'error' });
-        return;
+      if (isDiscrepancy) {
+        if (!categoryStr) {
+          setToast({ isOpen: true, message: `Jenis masalah wajib dipilih untuk ${item.item_name}.`, type: 'error' });
+          return;
+        }
+        if (categoryStr === 'Lainnya' && !notesStr.trim()) {
+          setToast({ isOpen: true, message: `Alasan selisih wajib diisi untuk ${item.item_name} jika memilih 'Lainnya'.`, type: 'error' });
+          return;
+        }
       }
     }
 
-    setScanning(true);
+    setProcessing(true);
     setToast({ ...toast, isOpen: false });
     try {
       // Process all items
@@ -156,7 +193,7 @@ export default function ReceiveGoodsPage() {
             scan_type: 'IN',
             device_info: 'Web Dashboard Outlet',
             qty_received: actualQtyReceivedBase,
-            discrepancy_reason: isDiscrepancy ? notesStr.trim() : undefined,
+            discrepancy_reason: isDiscrepancy ? (discCategories[item.id] === 'Lainnya' ? notesStr.trim() : discCategories[item.id]) : undefined,
           }),
         });
         const data = await res.json();
@@ -165,49 +202,42 @@ export default function ReceiveGoodsPage() {
         }
       }
 
-      setToast({ isOpen: true, message: `Semua barang terverifikasi! Menyelesaikan Penerimaan...`, type: 'info' });
-      setGlobalBarcode('');
-
-      await doFinalize(scanModal.id, proofImage);
-    } catch (e: any) {
-      setToast({ isOpen: true, message: e.message, type: 'error' });
-    } finally {
-      setScanning(false);
-    }
-  }
-
-  async function doFinalize(dnId: number, photo: File | null) {
-    if (!photo) {
-      setToast({ isOpen: true, message: 'Foto bukti pengiriman wajib diunggah.', type: 'error' });
-      return;
-    }
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', photo);
-      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-      const uploadData = await uploadRes.json();
-      if (!uploadData.success) {
-        setToast({ isOpen: true, message: `Error mengunggah foto: ${uploadData.message}`, type: 'error' });
-        return;
+      let uploadedUrl = '';
+      // Upload photo
+      if (proofImage) {
+        const formData = new FormData();
+        formData.append('file', proofImage);
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success) {
+          throw new Error('Gagal mengupload foto bukti.');
+        }
+        uploadedUrl = uploadData.url;
       }
-      const confirmRes = await fetch(`/api/delivery-notes/${dnId}/confirm`, {
+
+      // Finalize the DO
+      const confirmRes = await fetch(`/api/delivery-notes/${scanModal.id}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proof_image_url: uploadData.url }),
+        body: JSON.stringify({ proof_image_url: uploadedUrl }),
       });
       const confirmData = await confirmRes.json();
       if (!confirmData.success) {
         setToast({ isOpen: true, message: `Error menyelesaikan: ${confirmData.message}`, type: 'error' });
         return;
       }
+
       setScanModal(null);
       setToast({ isOpen: true, message: 'Surat Jalan diterima dan diselesaikan!', type: 'success' });
       fetchNotes();
-    } catch (e: any) {
-      setToast({ isOpen: true, message: e.message, type: 'error' });
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setToast({ isOpen: true, message: e.message, type: 'error' });
+      } else {
+        setToast({ isOpen: true, message: 'An unknown error occurred', type: 'error' });
+      }
     } finally {
-      setUploading(false);
+      setProcessing(false);
     }
   }
 
@@ -221,7 +251,6 @@ export default function ReceiveGoodsPage() {
             <h3>Terima Barang (Scan IN)</h3>
           </div>
         </div>
-
         <div className="card-body flush">
           {loading ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Memuat Surat Jalan...</div> : deliveryNotes.length === 0 ? (
             <div className="empty-state">
@@ -250,8 +279,8 @@ export default function ReceiveGoodsPage() {
                     <td>{new Date(dn.delivery_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                     <td className="muted">{dn.driver_name || '-'}</td>
                     <td className="center">
-                      <Badge variant={dn.status === 'DITERIMA' ? 'green' : 'amber'}>
-                        {dn.status === 'DITERIMA' ? 'Diterima' : dn.status === 'DIKIRIM' ? 'Dikirim' : dn.status}
+                      <Badge variant={dn.status === 'DITERIMA' ? 'green' : dn.status === 'DRAFT' ? 'gray' : 'amber'}>
+                        {dn.status === 'DITERIMA' ? 'Diterima' : dn.status === 'DIKIRIM' ? 'Dikirim' : dn.status === 'DRAFT' ? 'Diproses Pusat' : dn.status}
                       </Badge>
                     </td>
                   </tr>
@@ -333,13 +362,27 @@ export default function ReceiveGoodsPage() {
                       </td>
                       <td style={{ verticalAlign: 'top', paddingTop: 12, paddingBottom: 16 }}>
                         {isDiscrepancy ? (
-                          <div style={{ width: 160 }}>
-                            <Input
-                              value={discNotes[item.id] || ''}
-                              onChange={e => setDiscNotes({ ...discNotes, [item.id]: e.target.value })}
-                              placeholder="Tulis alasan..."
-                              style={{ fontSize: 12, padding: '4px 8px', marginTop: 4, width: '100%' }}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 220 }}>
+                            <Select
+                              value={discCategories[item.id] || ''}
+                              onChange={val => setDiscCategories({ ...discCategories, [item.id]: String(val) })}
+                              options={[
+                                { value: 'Barang Kurang / Hilang', label: 'Barang Kurang / Hilang' },
+                                { value: 'Barang Rusak / Cacat', label: 'Barang Rusak / Cacat' },
+                                { value: 'Lainnya', label: 'Lainnya' }
+                              ]}
+                              placeholder="Pilih alasan..."
+                              inputStyle={{ height: 32, padding: '6px 10px', fontSize: 13 }}
                             />
+
+                            {discCategories[item.id] === 'Lainnya' && (
+                              <Input
+                                value={discNotes[item.id] || ''}
+                                onChange={e => setDiscNotes({ ...discNotes, [item.id]: e.target.value })}
+                                placeholder="Ketik detail alasan..."
+                                style={{ fontSize: 12, padding: '6px 10px', width: '100%', height: 32 }}
+                              />
+                            )}
                           </div>
                         ) : (
                           <span className="muted" style={{ fontSize: 12, marginTop: 4, display: 'inline-block' }}>-</span>
@@ -355,10 +398,10 @@ export default function ReceiveGoodsPage() {
             </Table>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {scanModal?.status !== 'DITERIMA' && (
-                <Button variant="outline" onClick={() => fileInputRef.current?.click()} style={{ whiteSpace: 'nowrap' }}>
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} style={{ whiteSpace: 'nowrap' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                   {proofImage || previewUrl ? 'Ubah Foto' : 'Unggah Foto'}
                 </Button>
@@ -379,33 +422,10 @@ export default function ReceiveGoodsPage() {
               )}
             </div>
 
-            {allScannedIn ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {scanModal?.status !== 'DITERIMA' && (
-                  <Button
-                    variant="primary"
-                    type="button"
-                    onClick={() => { if (scanModal) doFinalize(scanModal.id, proofImage); }}
-                    disabled={uploading || !proofImage}
-                    style={{ flex: 1 }}
-                  >
-                    {uploading ? 'Menyelesaikan...' : 'Selesaikan Penerimaan'}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <form onSubmit={handleGlobalScan} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                <Input
-                  ref={barcodeInputRef}
-                  value={globalBarcode}
-                  onChange={e => setGlobalBarcode(e.target.value)}
-                  placeholder={!proofImage ? 'Unggah foto dulu...' : 'Scan barcode...'}
-                  disabled={scanning || !proofImage || uploading}
-                  autoFocus
-                  style={{ flex: 1 }}
-                />
-                <Button variant="primary" type="submit" disabled={scanning || !globalBarcode.trim() || !proofImage || uploading}>
-                  {uploading ? 'Menyelesaikan...' : scanning ? 'Memverifikasi...' : 'Kirim Scan'}
+            {!allScannedIn && scanModal?.status !== 'DITERIMA' && (
+              <form onSubmit={handleCompleteReceipt} style={{ display: 'flex', alignItems: 'center' }}>
+                <Button variant="primary" type="submit" disabled={processing || (requireBarcode && !proofImage && !previewUrl)}>
+                  {processing ? 'Menyelesaikan...' : 'Selesaikan Penerimaan'}
                 </Button>
               </form>
             )}

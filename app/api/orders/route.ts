@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       [session.outletId]
     );
     const activeIds = activeRes.rows.map(r => Number(r.item_id));
-    const duplicateItems = items.filter((i: any) => activeIds.includes(Number(i.item_id)));
+    const duplicateItems = items.filter((i: { item_id: string | number }) => activeIds.includes(Number(i.item_id)));
 
     if (duplicateItems.length > 0) {
       return NextResponse.json({ 

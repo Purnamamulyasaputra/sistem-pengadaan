@@ -34,7 +34,7 @@ export default function PurchaseOrdersPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,7 +44,7 @@ export default function PurchaseOrdersPage() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
-  const [lines, setLines] = useState<any[]>([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
+  const [lines, setLines] = useState<{ type: string; item_id: string | number; description: string; qty: string | number; unit_price: string | number; tax_percent: string | number; disc_percent: string | number }[]>([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
   const [draftPO, setDraftPO] = useState<PO | null>(null);
   const [activeTab, setActiveTab] = useState('Ingredients');
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
@@ -115,8 +115,8 @@ export default function PurchaseOrdersPage() {
         setLines(current => {
           const valid = current.filter(l => l.description || l.item_id || (l.type === 'note' && l.description));
           const newLines = suggestions.map((a: any) => {
-            const item = items.find(i => String(i.id) === String(a.item_id));
-            const conversion = item && item.conversion_ratio > 0 ? item.conversion_ratio : 1;
+            const item = items.find((i: any) => String(i.id) === String(a.item_id));
+            const conversion = Number(item && item.conversion_ratio > 0 ? item.conversion_ratio : 1) || 1;
             const deficit = a.minimum_threshold - Number(a.current_balance);
             const suggestedPurchaseQty = deficit > 0 ? Math.ceil(deficit / conversion) : 1;
 
@@ -186,7 +186,7 @@ export default function PurchaseOrdersPage() {
         body: JSON.stringify({
           ...form,
           vendor_id: Number(form.vendor_id),
-          items: validLines.map((l: any, idx) => ({
+          items: validLines.map((l: any, idx: number) => ({
             line_type: l.type === 'note' ? 'CATATAN' : 'PRODUK',
             item_id: l.type === 'product' ? Number(l.item_id) : null,
             description: l.description,
@@ -240,7 +240,7 @@ export default function PurchaseOrdersPage() {
       internal_notes: fetchedPO.internal_notes || ''
     } as any);
 
-    const fetchedLines = (fetchedPO.items || []).map((i: any) => ({
+    const fetchedLines = (fetchedPO.items || []).map((i: { line_type?: string; item_id?: number; item_name?: string; description?: string; qty?: number; unit_price?: number; tax_percent?: number; discount_percent?: number; purchase_unit?: string; package_qty?: number; package_inner_size?: number; conversion_ratio?: number; }) => ({
       type: i.line_type === 'CATATAN' ? 'note' : 'product',
       item_id: i.item_id ? String(i.item_id) : '',
       description: i.description || '',
@@ -299,7 +299,7 @@ export default function PurchaseOrdersPage() {
         i + 1,
         l.description,
         l.qty,
-        l.purchase_unit || '-',
+        (l as any).purchase_unit || (items.find((it: any) => String(it.id) === String(l.item_id)) as any)?.purchase_unit || '-',
         fmtCurrency(Number(l.unit_price)).replace(',00', ''),
         fmtCurrency(Number(l.qty) * Number(l.unit_price) * (1 - Number(l.disc_percent) / 100)).replace(',00', '')
       ];
@@ -359,8 +359,8 @@ export default function PurchaseOrdersPage() {
           handleUpdateStatus(draftPO.id, 'RFQ_TERKIRIM');
         }
       }
-    } catch (err: any) {
-      setError('Gagal mengirim email: ' + err.message);
+    } catch (err: unknown) {
+      setError('Gagal mengirim email: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setSendingEmail(false);
     }
@@ -469,7 +469,7 @@ export default function PurchaseOrdersPage() {
               setError('');
               setDraftPO(null);
               setForm({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
-              setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
+              setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' } as any]);
               setShowModal(true);
               // otomatis masukkan saran reorder
               setTimeout(() => autoFillLowStock(), 100);
@@ -685,7 +685,7 @@ export default function PurchaseOrdersPage() {
                       <label className="req">Vendor</label>
                       <Select
                         value={form.vendor_id}
-                        onChange={val => setForm(f => ({ ...f, vendor_id: val }))}
+                        onChange={val => setForm(f => ({ ...f, vendor_id: String(val) }))}
                         options={[
                           { value: '', label: 'Pilih vendor...' },
                           ...vendors.map(v => ({ value: String(v.id), label: v.name }))
@@ -824,7 +824,7 @@ export default function PurchaseOrdersPage() {
                                   </td>
                                   <td className="center" style={{ padding: '8px 12px', minWidth: 150 }}>
                                     <div style={{ color: '#334155', fontWeight: 600, fontSize: 14 }}>
-                                      {line.item_id ? (items.find(i => String(i.id) === line.item_id)?.purchase_unit || line.purchase_unit || '-') : (line.purchase_unit || '-')}
+                                      {line.item_id ? ((items.find((i: any) => String(i.id) === line.item_id) as any)?.purchase_unit || (line as any).purchase_unit || '-') : ((line as any).purchase_unit || '-')}
                                     </div>
                                     {line.item_id && items.find(i => String(i.id) === line.item_id) && Number(items.find(i => String(i.id) === line.item_id)?.conversion_ratio) > 1 && (
                                       <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>

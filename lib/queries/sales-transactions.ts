@@ -52,7 +52,7 @@ export async function getProductSalesMatrix(dateFrom: string, dateTo: string, ca
     LEFT JOIN menu_categories c ON c.id = m.category_id
     WHERE st.transaction_date >= $1 AND st.transaction_date <= $2
   `;
-  const params: any[] = [dateFrom, dateTo];
+  const params: unknown[] = [dateFrom, dateTo];
   let paramIndex = 3;
 
   if (categoryId) {

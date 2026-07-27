@@ -20,7 +20,7 @@ export async function POST(req: Request) {
         // Before inserting new data for the same period, we should probably delete the old data
         // for this exact period and outlet to prevent duplicates
         let deleteQuery = 'DELETE FROM moka_item_sales WHERE period_start = $1 AND period_end = $2';
-        let deleteParams: any[] = [start_date, end_date];
+        let deleteParams: unknown[] = [start_date, end_date];
         if (outlet_id) {
             deleteQuery += ' AND outlet_id = $3';
             deleteParams.push(outlet_id);
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
         let totalCount = 0;
         const results = await Promise.allSettled(
-            tokens.map(token => syncSales(token, start_date, end_date, outlet_id))
+            tokens.map((token: any) => syncSales(token, start_date, end_date, outlet_id))
         );
 
         let successful = 0;
@@ -55,10 +55,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'Failed to sync sales for all connected accounts.' }, { status: 500 });
         }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Sync sales API error:", error);
         return NextResponse.json(
-            { message: error.message || "Internal server error" },
+            { message: (error instanceof Error ? error.message : 'Unknown error') || "Internal server error" },
             { status: 500 }
         );
     }

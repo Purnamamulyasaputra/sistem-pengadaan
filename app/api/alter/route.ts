@@ -6,7 +6,7 @@ export async function GET() {
     await query(`ALTER TABLE items ADD COLUMN package_unit VARCHAR(50)`);
     await query(`ALTER TABLE items ADD COLUMN package_qty INT`);
     return NextResponse.json({ success: true, message: 'Columns added' });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, message: err.message });
+  } catch (err: unknown) {
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') });
   }
 }

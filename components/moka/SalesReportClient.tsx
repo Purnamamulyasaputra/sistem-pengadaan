@@ -266,7 +266,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                             <Select
                                 value={selectedOutlet}
                                 onChange={(val) => {
-                                    setSelectedOutlet(val);
+                                    setSelectedOutlet(String(val));
                                     setIsFiltering(true);
                                     router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${val}`);
                                     setTimeout(() => setIsFiltering(false), 1000);
@@ -308,7 +308,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                                     />
                                     <Tooltip
                                         cursor={{ fill: 'rgba(1, 110, 63, 0.05)' }}
-                                        formatter={(value: any) => [formatRp(Number(value || 0)), 'Net Sales']}
+                                        formatter={(value: any) => [formatRp(Number(value || 0)), 'Total Penjualan']}
                                         labelStyle={{ fontSize: 12, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}
                                         contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                         itemStyle={{ fontSize: 12, color: '#016e3f', fontWeight: 600 }}
@@ -384,7 +384,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                             <Select
                                 value={selectedOutlet}
                                 onChange={(val) => {
-                                    setSelectedOutlet(val);
+                                    setSelectedOutlet(String(val));
                                     setIsFiltering(true);
                                     router.push(`/sales-report?startDate=${startDate}&endDate=${endDate}&outletId=${val}`);
                                     setTimeout(() => setIsFiltering(false), 1000);

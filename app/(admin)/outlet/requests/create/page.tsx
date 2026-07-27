@@ -58,7 +58,7 @@ export default function CreateRequestPage() {
               let shortageSmall = d.minimum_threshold - effectiveBalance;
               if (shortageSmall <= 0) shortageSmall = d.minimum_threshold;
               
-              const matchedMaster = itemsList.find((i: any) => i.id === d.item_id);
+              const matchedMaster = itemsList.find((i: { id: number, item_name: string, unit: string }) => i.id === d.item_id);
               if (!matchedMaster) return null;
 
               const ratio = Number(matchedMaster.conversion_ratio) || 1;
@@ -161,8 +161,8 @@ export default function CreateRequestPage() {
       const data = await res.json();
       if (!res.ok || !data.success) { setError(data.message || 'Gagal mengirim permintaan'); return; }
       router.push('/outlet/requests');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setSubmitting(false);
       setShowConfirm(false);

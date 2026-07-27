@@ -124,9 +124,9 @@ export default function SalesAnalyticsPage() {
         setToastMsg('Gagal: ' + json.message);
         setIsToastOpen(true);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setToastType('error');
-      setToastMsg('Error: ' + err.message);
+      setToastMsg('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
       setIsToastOpen(true);
     } finally {
       setSyncing(false);
@@ -314,7 +314,7 @@ export default function SalesAnalyticsPage() {
               <>
                 <Select
                   value={selectedCategory}
-                  onChange={setSelectedCategory}
+                  onChange={(val) => setSelectedCategory(String(val))}
                   options={[
                     { value: '', label: 'Semua Kategori' },
                     ...categories.map(c => ({ value: c, label: c }))
@@ -324,7 +324,7 @@ export default function SalesAnalyticsPage() {
                 />
                 <Select
                   value={sortBy}
-                  onChange={setSortBy}
+                  onChange={(val) => setSortBy(String(val))}
                   options={[
                     { value: 'revenue_desc', label: 'Pendapatan Tertinggi' },
                     { value: 'qty_desc', label: 'Paling Banyak Terjual' },
@@ -338,7 +338,7 @@ export default function SalesAnalyticsPage() {
 
             <Select
               value={limit}
-              onChange={setLimit}
+              onChange={(val) => setLimit(Number(val))}
               options={[
                 { value: 8, label: '8' },
                 { value: 15, label: '15' },

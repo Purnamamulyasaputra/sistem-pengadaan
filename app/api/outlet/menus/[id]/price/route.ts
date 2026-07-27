@@ -27,8 +27,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     `, [session.outletId, menuId, salePrice]);
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error overriding menu price:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

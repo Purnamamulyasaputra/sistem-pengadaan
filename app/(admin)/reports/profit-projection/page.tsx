@@ -27,10 +27,10 @@ export default function ProfitProjectionPage() {
       .then(d => {
         const raw = d.data || [];
         // Hanya ambil barang yang stoknya ada untuk diproyeksikan
-        const init = raw.filter((i: any) => i.current_stock > 0).map((i: any) => ({
+        const init = raw.filter((i: any) => Number(i.current_stock || i.current_balance) > 0).map((i: any) => ({
           ...i,
           // Secara bawaan kita kasih contoh estimasi jual = modal x 2 (100% margin)
-          estimated_sale_price: i.current_average_price * 2 
+          estimated_sale_price: Number(i.current_average_price || i.average_price || 0) * 2 
         }));
         setItems(init);
         setLoading(false);
@@ -88,7 +88,7 @@ export default function ProfitProjectionPage() {
             />
             <Select
               value={categoryFilter}
-              onChange={val => setCategoryFilter(val)}
+              onChange={val => setCategoryFilter(String(val))}
               options={[
                 { value: '', label: 'Semua Kategori' },
                 ...categories.map(c => ({ value: c, label: c }))

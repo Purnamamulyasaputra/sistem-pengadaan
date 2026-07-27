@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function ReceivePage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: '100vh', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Albert Sans, sans-serif' }}>
+      <div style={{ height: '100vh', overflowY: 'auto', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Albert Sans, sans-serif' }}>
         <p style={{ color: '#64748b' }}>Memuat...</p>
       </div>
     }>

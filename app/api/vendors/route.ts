@@ -33,9 +33,9 @@ export async function POST(req: NextRequest) {
       is_active: body.is_active
     });
     return NextResponse.json({ success: true, message: 'Vendor berhasil ditambahkan', data: vendor }, { status: 201 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Create Vendor Error:', err);
-    return NextResponse.json({ success: false, message: err.message || 'Terjadi kesalahan internal' }, { status: 500 });
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') || 'Terjadi kesalahan internal' }, { status: 500 });
   }
 }
 
@@ -63,9 +63,9 @@ export async function PATCH(req: NextRequest) {
       is_active: body.is_active
     });
     return NextResponse.json({ success: true, message: 'Vendor berhasil diperbarui', data: vendor });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Update Vendor Error:', err);
-    return NextResponse.json({ success: false, message: err.message || 'Terjadi kesalahan internal' }, { status: 500 });
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') || 'Terjadi kesalahan internal' }, { status: 500 });
   }
 }
 

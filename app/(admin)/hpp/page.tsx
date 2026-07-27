@@ -49,12 +49,12 @@ import { CheckCircle2, AlertCircle, XCircle, Calculator, PackageSearch, FileText
 
 function MarginBadge({ flag }: { flag: string | null }) {
   if (!flag) return <span style={{ color: 'var(--muted)', fontSize: 11 }}>—</span>;
-  const colors: Record<string, { bg: string; text: string; border: string; icon: any }> = {
+  const HppStatusStyle: Record<string, { bg: string; text: string; border: string; icon: any }> = {
     GREEN: { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', icon: CheckCircle2 },
     YELLOW: { bg: '#fefce8', text: '#a16207', border: '#fef08a', icon: AlertCircle },
     RED: { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca', icon: XCircle },
   };
-  const c = colors[flag] ?? { bg: '#f8fafc', text: '#475569', border: '#e2e8f0', icon: CheckCircle2 };
+  const c = HppStatusStyle[flag] ?? { bg: '#f8fafc', text: '#475569', border: '#e2e8f0', icon: CheckCircle2 };
   const Icon = c.icon;
   return (
     <span style={{
@@ -130,8 +130,8 @@ function MenusTab({ categories }: { categories: Category[] }) {
         const err = await res.json();
         alert('Gagal: ' + (err.error || 'Unknown error'));
       }
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert((e instanceof Error ? e.message : 'Unknown error'));
     }
   };
 
@@ -152,7 +152,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
         />
         <Select
           value={catId}
-          onChange={val => { setCatId(val); setPage(1); }}
+          onChange={val => { setCatId(String(val)); setPage(1); }}
           options={[
             { value: '', label: 'Semua Kategori' },
             ...categories.map(c => ({ value: String(c.id), label: c.name }))
@@ -162,7 +162,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
         />
         <Select
           value={marginFlag}
-          onChange={val => { setMarginFlag(val); setPage(1); }}
+          onChange={val => { setMarginFlag(String(val)); setPage(1); }}
           options={[
             { value: '', label: 'Semua Margin' },
             { value: 'GREEN', label: 'Hijau (<35%)' },
@@ -324,7 +324,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                         <td colSpan={3} style={{ padding: '10px 14px', fontSize: 13 }}></td>
                         <td className="right" style={{ fontWeight: 600, fontSize: 13, padding: '10px 14px' }}>Total Biaya Bahan Baku</td>
                         <td className="right" style={{ fontWeight: 700, color: '#0f172a', fontSize: 14, padding: '10px 14px' }}>
-                          {Math.round(detailData.ingredients.reduce((sum: number, i: any) => sum + Number(i.cost || 0), 0)).toLocaleString('id-ID')}
+                          {Math.round(detailData.ingredients.reduce((sum: number, i: { cost: number | string }) => sum + Number(i.cost || 0), 0)).toLocaleString('id-ID')}
                         </td>
                       </tr>
                     </tfoot>
@@ -393,8 +393,8 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
       if (!res.ok) throw new Error('Failed to delete recipe');
       setDeleteConfirm(null);
       load();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert((e instanceof Error ? e.message : 'Unknown error'));
     } finally {
       setDeleting(false);
     }
@@ -409,7 +409,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 220 }} />
         <Select
           value={venueId}
-          onChange={val => { setVenueId(val); setPage(1); }}
+          onChange={val => { setVenueId(String(val)); setPage(1); }}
           options={[
             { value: '', label: 'Semua Venue' },
             ...venues.map(v => ({ value: String(v.id), label: v.name }))
@@ -419,7 +419,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
         />
         <Select
           value={sheet}
-          onChange={val => { setSheet(val); setPage(1); }}
+          onChange={val => { setSheet(String(val)); setPage(1); }}
           options={[
             { value: '', label: 'Semua Sheet' },
             ...SHEETS.map(s => ({ value: s, label: s }))
@@ -613,8 +613,8 @@ function IngredientsTab() {
       if (!res.ok) throw new Error('Failed to save');
       setModalOpen(false);
       load();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert((e instanceof Error ? e.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -631,8 +631,8 @@ function IngredientsTab() {
       }
       setDeleteConfirm(null);
       load();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert((e instanceof Error ? e.message : 'Unknown error'));
     } finally {
       setDeleting(false);
     }
@@ -786,7 +786,7 @@ function KitchenTab() {
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
         <Select
           value={filter}
-          onChange={val => setFilter(val)}
+          onChange={val => setFilter(String(val))}
           options={[
             { value: '', label: 'Semua Kitchen' },
             { value: 'Kitchen 2025', label: 'Kitchen 2025' }

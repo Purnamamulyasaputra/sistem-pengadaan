@@ -1,6 +1,6 @@
 import { getMokaToken, saveMokaToken } from '@/lib/queries/moka';
 
-export async function refreshMokaToken(tokenObj: any) {
+export async function refreshMokaToken(tokenObj: { access_token: string; refresh_token: string; expires_at?: Date | string; [key: string]: unknown }) {
     if (!tokenObj || !tokenObj.business_id) {
         throw new Error("Cannot refresh token without business_id");
     }
@@ -37,17 +37,17 @@ export async function refreshMokaToken(tokenObj: any) {
         data.expires_in,
         data.scope,
         data.created_at,
-        tokenObj.business_id,
-        tokenObj.account_name,
-        tokenObj.account_email,
-        clientId,
-        clientSecret
+        Number(tokenObj.business_id),
+        String(tokenObj.account_name || ''),
+        String(tokenObj.account_email || ''),
+        String(clientId),
+        String(clientSecret)
     );
     return data;
 }
 
 // BARU: Fungsi fetch menggunakan token spesifik (Untuk Sync Engine Multi-Akun)
-export async function fetchMokaAPIWithToken(token: any, endpoint: string, method: string = 'GET', body?: unknown) {
+export async function fetchMokaAPIWithToken(token: { access_token: string; refresh_token: string; expires_at?: Date | string; [key: string]: unknown }, endpoint: string, method: string = 'GET', body?: unknown) {
     if (!token) throw new Error("Token is required for fetchMokaAPIWithToken");
 
     // Proactive token refresh (5 minutes buffer)
@@ -119,5 +119,5 @@ export async function fetchMokaAPI(endpoint: string, method: string = 'GET', bod
     let token = await getMokaToken();
     if (!token) throw new Error("Not connected to Moka");
     
-    return fetchMokaAPIWithToken(token, endpoint, method, body);
+    return fetchMokaAPIWithToken(token as any, endpoint, method, body);
 }

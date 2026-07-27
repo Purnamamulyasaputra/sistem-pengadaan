@@ -16,7 +16,8 @@ export default function SettingsPage() {
     company_tax_id: '',
     company_website: '',
     bank_account_info: '',
-    warehouse_address: ''
+    warehouse_address: '',
+    require_barcode_scan: 'true'
   });
 
   useEffect(() => {
@@ -31,7 +32,8 @@ export default function SettingsPage() {
             company_tax_id: data.data.company_tax_id || '',
             company_website: data.data.company_website || '',
             bank_account_info: data.data.bank_account_info || '',
-            warehouse_address: data.data.warehouse_address || ''
+            warehouse_address: data.data.warehouse_address || '',
+            require_barcode_scan: data.data.require_barcode_scan !== undefined ? data.data.require_barcode_scan : 'true'
           });
         }
         setLoading(false);
@@ -158,7 +160,39 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="flex justify-start">
+            {/* Pengaturan Operasional */}
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+              <h2 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">PENGATURAN OPERASIONAL</h2>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: 8, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', position: 'relative', flexShrink: 0, marginTop: 2 }}>
+                  <input 
+                    type="checkbox" 
+                    id="require_barcode_scan"
+                    checked={settings.require_barcode_scan === 'true'}
+                    onChange={e => setSettings({...settings, require_barcode_scan: e.target.checked ? 'true' : 'false'})}
+                    style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }}
+                  />
+                  <div style={{
+                    width: 40, height: 22, background: settings.require_barcode_scan === 'true' ? 'var(--primary)' : '#cbd5e1',
+                    borderRadius: 22, position: 'relative', transition: 'background-color 0.3s'
+                  }}>
+                    <div style={{
+                      width: 18, height: 18, background: '#fff', borderRadius: '50%',
+                      position: 'absolute', top: 2, left: settings.require_barcode_scan === 'true' ? 20 : 2, transition: 'left 0.3s',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                    }}/>
+                  </div>
+                </label>
+                <div>
+                  <label htmlFor="require_barcode_scan" className="text-[13px] font-bold text-gray-800 mb-1 cursor-pointer block">Wajibkan Scan Barcode (Pengiriman & Penerimaan)</label>
+                  <p className="text-muted" style={{ fontSize: '12px', marginTop: '2px', marginBottom: 0, lineHeight: 1.5, color: '#64748b' }}>
+                    Jika dimatikan, staf Pusat dan Outlet dapat mengklik tombol "Kirim Semua Barang" atau "Terima Semua Barang" untuk mempercepat operasional tanpa harus *scan* barcode satu per satu. Fitur unggah bukti foto juga akan menjadi opsional.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
                 <Button variant="primary" type="submit" disabled={saving} style={{ padding: '0 16px', height: 28, fontSize: 11 }}>
                   {saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
                 </Button>

@@ -49,8 +49,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       menu,
       ingredients: ingredientsRes.rows
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error fetching menu detail:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

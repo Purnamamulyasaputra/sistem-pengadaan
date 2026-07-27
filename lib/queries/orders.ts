@@ -28,6 +28,7 @@ export interface OrderItem {
   qty_approved?: number;
   approved_smallest_qty?: number;
   additional_notes?: string;
+  center_notes?: string;
   smallest_unit_qty?: number;
   fulfillment_status: string;
   distribution_price?: number;
@@ -155,8 +156,8 @@ export async function getOrderRecap(opts?: { status?: string; outletId?: number 
 
   const result = await query(
     `SELECT o.id AS order_id, o.outlet_id, outlet.name AS outlet_name, o.order_date, o.delivery_date, o.status,
-            oi.id AS order_item_id, oi.item_id, i.name AS item_name, i.purchase_unit, i.smallest_unit, i.conversion_ratio,
-            oi.qty_request, oi.qty_approved, oi.smallest_unit_qty, oi.approved_smallest_qty, oi.additional_notes, oi.fulfillment_status, oi.item_status, oi.distribution_price,
+            oi.id AS order_item_id, oi.item_id, i.name AS item_name, i.barcode, i.purchase_unit, i.smallest_unit, i.conversion_ratio,
+            oi.qty_request, oi.qty_approved, oi.smallest_unit_qty, oi.approved_smallest_qty, oi.additional_notes, oi.center_notes, oi.fulfillment_status, oi.item_status, oi.distribution_price,
             c.name AS category_name, i.current_average_price,
             (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_stock
      FROM orders o
@@ -173,7 +174,7 @@ export async function getOrderRecap(opts?: { status?: string; outletId?: number 
 
 export async function updateOrderItemStatus(
   orderItemId: number,
-  updates: Partial<{ item_status: string; fulfillment_status: string; distribution_price: number; qty_approved: number; approved_smallest_qty: number }>
+  updates: Partial<{ item_status: string; fulfillment_status: string; distribution_price: number; qty_approved: number; approved_smallest_qty: number; center_notes: string }>
 ) {
   return withTransaction(async (client) => {
     const fields = Object.keys(updates);

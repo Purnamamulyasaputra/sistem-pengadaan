@@ -19,7 +19,7 @@ type OutletStockRow = {
 function formatUnit(unit: string | null | undefined): string {
   if (!unit) return '';
   const u = unit.toLowerCase().trim();
-  if (u === 'l') return 'liter';
+  if (u === 'l') return 'Liter';
   if (u === 'g' || u === 'gr') return 'gram';
   return unit;
 }
@@ -125,7 +125,7 @@ export default function OutletInventoryStockPage() {
               </div>
               <Select
                 value={categoryFilter}
-                onChange={val => { setCategoryFilter(val); setPage(1); }}
+                onChange={val => { setCategoryFilter(String(val)); setPage(1); }}
                 options={[
                   { value: '', label: 'All Categories' },
                   ...categories.map(c => ({ value: c, label: c }))
@@ -135,7 +135,7 @@ export default function OutletInventoryStockPage() {
               />
               <Select
                 value={statusFilter}
-                onChange={val => { setStatusFilter(val); setPage(1); }}
+                onChange={val => { setStatusFilter(String(val)); setPage(1); }}
                 options={[
                   { value: '', label: 'All Statuses' },
                   { value: 'AVAILABLE', label: 'Available' },

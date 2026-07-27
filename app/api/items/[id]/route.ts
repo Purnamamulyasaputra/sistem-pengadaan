@@ -47,7 +47,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     await deleteItem(Number(id));
     return NextResponse.json({ success: true, message: 'Item berhasil dihapus permanen', data: null });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: 'Gagal menghapus: ' + error.message, data: null }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, message: 'Gagal menghapus: ' + (error instanceof Error ? error.message : 'Unknown error'), data: null }, { status: 400 });
   }
 }

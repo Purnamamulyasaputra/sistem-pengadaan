@@ -120,8 +120,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: results });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in sales estimation:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }

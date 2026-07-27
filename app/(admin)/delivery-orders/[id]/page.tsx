@@ -7,7 +7,43 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Toast } from '@/components/ui/Toast';
+import { FileText, Printer } from 'lucide-react';
 import bwipjs from 'bwip-js';
+
+interface DeliveryNoteItem {
+  id: number;
+  item_id: number;
+  item_name: string;
+  qty_shipped: string | number;
+  qty_received?: string | number | null;
+  conversion_ratio?: string | number | null;
+  purchase_unit: string;
+  smallest_unit: string;
+  unique_barcode?: string | null;
+  barcode?: string | null;
+  scanned_out_at?: string | null;
+  scanned_in_at?: string | null;
+  additional_notes?: string;
+  keterangan?: string;
+  receive_notes?: string;
+  discrepancy_reason?: string;
+  price_at_shipment?: string | number;
+}
+
+interface DeliveryNote {
+  id: number;
+  delivery_note_number: string;
+  status: string;
+  order_id: number;
+  order_number?: string;
+  delivery_date: string;
+  driver_name: string;
+  proof_image_url?: string;
+  items: DeliveryNoteItem[];
+  outlet_name: string;
+  recipient_name?: string;
+  created_at: string;
+}
 
 const QrCodeRender = ({ text, size = 44 }: { text: string, size?: number }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,21 +87,32 @@ function CopyButton({ text }: { text: string }) {
 
 export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [dn, setDn] = useState<any>(null);
+  const [dn, setDn] = useState<DeliveryNote | null>(null);
   const [loading, setLoading] = useState(true);
   const [barcodeInput, setBarcodeInput] = useState('');
   const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState<{ open: boolean; type: 'OUT' | 'IN' | null }>({ open: false, type: null });
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmShipAll, setConfirmShipAll] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState(false);
+  const [requireBarcode, setRequireBarcode] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const fetchDn = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/delivery-notes/${id}`);
+    const [res, setRes] = await Promise.all([
+      fetch(`/api/delivery-notes/${id}`),
+      fetch('/api/settings')
+    ]);
+
     if (res.ok) {
       const data = await res.json();
       setDn(data.data);
+    }
+    if (setRes.ok) {
+      const setData = await setRes.json();
+      setRequireBarcode(setData.data?.require_barcode_scan !== 'false');
     }
     setLoading(false);
   }, [id]);
@@ -81,6 +128,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!dn) return;
     const inputTrimmed = barcodeInput.trim();
     if (inputTrimmed === dn.delivery_note_number) {
       setConfirmBulk({ open: true, type: 'OUT' });
@@ -89,10 +137,10 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
     }
 
     // Find the item matching this barcode that hasn't been scanned OUT yet
-    const targetItem = dn.items.find((i: any) => (i.unique_barcode === inputTrimmed || i.barcode === inputTrimmed) && !i.scanned_out_at);
+    const targetItem = dn.items.find((i: DeliveryNoteItem) => (i.unique_barcode === inputTrimmed || i.barcode === inputTrimmed) && !i.scanned_out_at);
 
     if (!targetItem) {
-      const alreadyScanned = dn.items.find((i: any) => (i.unique_barcode === barcodeInput.trim() || i.barcode === barcodeInput.trim()) && i.scanned_out_at);
+      const alreadyScanned = dn.items.find((i: DeliveryNoteItem) => (i.unique_barcode === barcodeInput.trim() || i.barcode === barcodeInput.trim()) && i.scanned_out_at);
       if (alreadyScanned) {
         setScanMessage({ type: 'error', text: `Barang dengan barcode ${barcodeInput} sudah di-scan OUT.` });
       } else {
@@ -122,8 +170,8 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
       setScanMessage({ type: 'success', text: `Berhasil scan OUT: ${targetItem.item_name}` });
       await fetchDn(); // Refresh list to update scanned status
-    } catch (err: any) {
-      setScanMessage({ type: 'error', text: err.message });
+    } catch (err: unknown) {
+      setScanMessage({ type: 'error', text: (err instanceof Error ? err.message : 'Unknown error') });
     } finally {
       setScanning(false);
       setBarcodeInput('');
@@ -149,8 +197,24 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
       setScanMessage({ type: 'success', text: data.message });
       await fetchDn();
       setConfirmBulk({ open: false, type: null });
-    } catch (err: any) {
-      setScanMessage({ type: 'error', text: err.message });
+    } catch (err: unknown) {
+      setScanMessage({ type: 'error', text: (err instanceof Error ? err.message : 'Unknown error') });
+    } finally {
+      setScanning(false);
+    }
+  };
+  const handleShipAll = async () => {
+    setConfirmShipAll(false);
+    setScanning(true);
+    try {
+      const res = await fetch(`/api/delivery-notes/${id}/ship-all`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+
+      setScanMessage({ type: 'success', text: data.message });
+      await fetchDn();
+    } catch (err: unknown) {
+      setScanMessage({ type: 'error', text: (err instanceof Error ? err.message : 'Unknown error') });
     } finally {
       setScanning(false);
     }
@@ -165,8 +229,8 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
       await fetchDn();
       setConfirmCancel(false);
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert((err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setScanning(false);
     }
@@ -176,7 +240,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
   if (!dn) return <div style={{ padding: 40, textAlign: 'center' }}>Surat Jalan tidak ditemukan.</div>;
 
   const totalItems = dn.items.length;
-  const scannedOutItems = dn.items.filter((i: any) => i.scanned_out_at).length;
+  const scannedOutItems = dn.items.filter((i: DeliveryNoteItem) => i.scanned_out_at).length;
   const isFullyScannedOut = scannedOutItems === totalItems && totalItems > 0;
 
   return (
@@ -188,12 +252,18 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
               <h3 style={{ fontSize: 24 }}>{dn.delivery_note_number}</h3>
               <div style={{ marginTop: 8, display: 'flex', gap: 12, alignItems: 'center' }}>
                 <Badge variant={dn.status === 'DITERIMA' ? 'green' : dn.status === 'DIKIRIM' ? 'blue' : dn.status === 'CANCELED' ? 'red' : 'gray'}>
-                  {dn.status === 'CANCELED' ? 'Dibatalkan' : 
-                   dn.status === 'DITERIMA' ? 'Diterima' : 
-                   dn.status === 'DIKIRIM' ? 'Dikirim' : 
-                   dn.status === 'DRAFT' ? 'Draft' : dn.status}
+                  {dn.status === 'CANCELED' ? 'Dibatalkan' :
+                    dn.status === 'DITERIMA' ? 'Diterima' :
+                      dn.status === 'DIKIRIM' ? 'Dikirim' :
+                        dn.status === 'DRAFT' ? 'Draft' : dn.status}
                 </Badge>
                 <span className="muted">Ke: {dn.outlet_name}</span>
+                {dn.order_number && (
+                  <>
+                    <span className="muted">&bull;</span>
+                    <span className="muted">PO: {dn.order_number}</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -207,7 +277,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
               </Button>
             )}
             <Button variant="primary" size="sm" onClick={() => window.open(`/api/delivery-notes/${id}/pdf`, '_blank')} style={{ display: 'flex', alignItems: 'center' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect width="12" height="8" x="6" y="14"></rect></svg>
+              <Printer size={14} style={{ marginRight: 6 }} />
               Cetak PDF
             </Button>
           </div>
@@ -216,35 +286,39 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
         <div className="card-body flush">
           {dn.status === 'DRAFT' && (
             <div style={{ padding: 24, background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-              <h4 style={{ marginBottom: 12 }}>Pemindai Barcode (OUT)</h4>
-
-
-              <form onSubmit={handleScan} style={{ display: 'flex', gap: 12, maxWidth: 600 }}>
-                <Input
-                  ref={inputRef}
-                  type="text"
-                  placeholder="Pindai barcode di sini..."
-                  value={barcodeInput}
-                  onChange={e => setBarcodeInput(e.target.value)}
-                  disabled={scanning}
-                  autoFocus
-                />
-                <Button variant="primary" onClick={handleScan} disabled={scanning || !barcodeInput.trim()}>
-                  Pindai Manual
-                </Button>
-                {dn.status === 'DRAFT' && (
-                  <Button variant="outline" onClick={() => setConfirmBulk({ open: true, type: 'OUT' })} disabled={scanning} style={{ color: 'var(--primary)', borderColor: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
-                    Validasi Semua
+              {!requireBarcode ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ marginBottom: 4 }}>Pengiriman Langsung</h4>
+                    <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>Fitur wajib scan barcode sedang dinonaktifkan di Pengaturan. Anda dapat langsung mengirim semua barang dalam Surat Jalan ini.</p>
+                  </div>
+                  <Button variant="primary" onClick={() => setConfirmShipAll(true)} disabled={scanning} style={{ padding: '0 24px', height: 40 }}>
+                    {scanning ? 'Memproses...' : 'Kirim Semua Barang'}
                   </Button>
-                )}
-              </form>
-
-              {isFullyScannedOut && (
-                <div style={{ marginTop: 16, padding: '12px 16px', background: '#dcfce7', color: '#166534', borderRadius: 6, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                  Semua barang telah di-scan OUT. Status Surat Jalan otomatis berubah menjadi DIKIRIM (Menunggu penerimaan Outlet).
                 </div>
+              ) : (
+                <>
+                  <h4 style={{ marginBottom: 12 }}>Pemindai Barcode (OUT)</h4>
+                  <form onSubmit={handleScan} style={{ display: 'flex', gap: 12, maxWidth: 600 }}>
+                    <Input
+                      ref={inputRef}
+                      type="text"
+                      placeholder="Pindai barcode di sini..."
+                      value={barcodeInput}
+                      onChange={e => setBarcodeInput(e.target.value)}
+                      disabled={scanning}
+                      autoFocus
+                    />
+                    <Button variant="primary" onClick={handleScan} disabled={scanning || !barcodeInput.trim()}>
+                      Pindai Manual
+                    </Button>
+                    <Button variant="outline" onClick={() => setConfirmBulk({ open: true, type: 'OUT' })} disabled={scanning} style={{ color: 'var(--primary)', borderColor: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+                      Validasi Semua
+                    </Button>
+                  </form>
+                  <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>Pastikan kursor berada di kotak input saat menggunakan mesin scanner fisik.</p>
+                </>
               )}
             </div>
           )}
@@ -290,10 +364,10 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
             {dn.proof_image_url && (
               <div>
                 <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Bukti Penerimaan</p>
-                <a href={dn.proof_image_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}>
+                <button type="button" onClick={() => setViewingPhoto(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                   Lihat Foto
-                </a>
+                </button>
               </div>
             )}
             <div>
@@ -319,16 +393,17 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
               </tr>
             </thead>
             <tbody>
-              {dn.items.map((item: any) => (
+              {dn.items.map((item: DeliveryNoteItem) => (
                 <tr key={item.id}>
                   <td className="font-bold">
                     {item.item_name}
                   </td>
                   <td>
-                    {item.additional_notes && <div style={{ fontSize: 12, marginBottom: 4 }}><span className="muted">PO:</span> {item.additional_notes}</div>}
+                    {item.additional_notes && <div style={{ fontSize: 12, marginBottom: 4 }}><span className="muted"></span> {item.additional_notes}</div>}
                     {item.keterangan && <div style={{ fontSize: 12, marginBottom: 4 }}><span className="muted">SJ:</span> {item.keterangan}</div>}
                     {item.receive_notes && <div style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}><span className="muted">Penerima:</span> {item.receive_notes}</div>}
-                    {!item.additional_notes && !item.keterangan && !item.receive_notes && <span className="muted italic" style={{ fontSize: 13 }}>-</span>}
+                    {item.discrepancy_reason && <div style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}><span className="muted">Selisih:</span> {item.discrepancy_reason}</div>}
+                    {!item.additional_notes && !item.keterangan && !item.receive_notes && !item.discrepancy_reason && <span className="muted italic" style={{ fontSize: 13 }}>-</span>}
                   </td>
                   <td className="right font-bold num">
                     {parseFloat((Number(item.qty_shipped) / (Number(item.conversion_ratio) || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
@@ -341,10 +416,10 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
                     )}
                   </td>
                   <td className="right font-bold num">
-                    Rp {(Number(item.price_at_shipment || 0) * (Number(item.conversion_ratio) || 1)).toLocaleString('id-ID')}
+                    Rp {Math.round(Number(item.price_at_shipment || 0) * (Number(item.conversion_ratio) || 1)).toLocaleString('id-ID')}
                   </td>
                   <td className="right font-bold num" style={{ color: 'var(--primary)' }}>
-                    Rp {(parseFloat((Number(item.qty_shipped) / (Number(item.conversion_ratio) || 1)).toFixed(3)) * (Number(item.price_at_shipment || 0) * (Number(item.conversion_ratio) || 1))).toLocaleString('id-ID')}
+                    Rp {Math.round((Number(item.qty_shipped) / (Number(item.conversion_ratio) || 1)) * (Number(item.price_at_shipment || 0) * (Number(item.conversion_ratio) || 1))).toLocaleString('id-ID')}
                   </td>
                   <td className="center">
                     {item.scanned_out_at ? (
@@ -392,12 +467,50 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
         loading={scanning}
       />
 
+      <ConfirmDialog
+        open={confirmShipAll}
+        title="Pengiriman Langsung"
+        message="Apakah Anda yakin ingin langsung mengirim?"
+        onConfirm={handleShipAll}
+        onCancel={() => setConfirmShipAll(false)}
+        loading={scanning}
+      />
+
       <Toast
         isOpen={!!scanMessage}
         message={scanMessage?.text || ''}
         type={scanMessage?.type || 'info'}
         onClose={() => setScanMessage(null)}
       />
+
+      {/* Inline Photo Viewer Overlay */}
+      {viewingPhoto && dn.proof_image_url && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 99999,
+            background: 'rgba(0,0,0,0.92)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <button
+            onClick={() => setViewingPhoto(false)}
+            style={{
+              position: 'absolute', top: 20, left: 20,
+              background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8,
+              color: '#fff', cursor: 'pointer', padding: '8px 16px',
+              fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
+            Kembali
+          </button>
+          <img
+            src={dn.proof_image_url}
+            alt="Proof of delivery"
+            style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
+          />
+        </div>
+      )}
     </section>
   );
 }

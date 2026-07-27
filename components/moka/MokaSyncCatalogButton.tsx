@@ -39,7 +39,7 @@ export default function MokaSyncCatalogButton() {
             showToast(`Sinkronisasi berhasil! ${itemData.message || 'Produk diperbarui.'}`, 'success');
             router.refresh();
         } catch (error: any) {
-            console.error(error);
+            console.error('Sync items error:', error);
             showToast(error.message || 'Terjadi kesalahan jaringan', 'error');
         } finally {
             setIsSyncing(false);

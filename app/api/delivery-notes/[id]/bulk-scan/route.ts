@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
 
     return NextResponse.json({ success: true, message: `Berhasil validasi massal (${result.processed_count} item)`, data: result });
-  } catch (e: any) {
-    return NextResponse.json({ success: false, message: e.message || 'Gagal validasi massal', data: null }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ success: false, message: (e instanceof Error ? e.message : 'Unknown error') || 'Gagal validasi massal', data: null }, { status: 500 });
   }
 }

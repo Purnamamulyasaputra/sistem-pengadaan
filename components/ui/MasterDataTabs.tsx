@@ -11,7 +11,7 @@ export function MasterDataTabs({ activeTab }: { activeTab: 'items' | 'categories
       .then(res => res.json())
       .then(data => {
         if (data.success && data.data) {
-          const count = data.data.filter((i: any) => Number(i.current_stock ?? 0) < Number(i.minimum_threshold)).length;
+          const count = data.data.filter((i: { current_stock?: number; minimum_threshold: number }) => Number(i.current_stock ?? 0) < Number(i.minimum_threshold)).length;
           setLowStockCount(count);
         }
       })

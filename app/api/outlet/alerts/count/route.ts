@@ -11,7 +11,7 @@ export async function GET() {
 
     const stocks = await getOutletStocks(session.outletId);
     // Count items where stock is less than or equal to minimum threshold
-    const count = stocks.filter(s => s.minimum_threshold !== null && s.current_balance <= s.minimum_threshold).length;
+    const count = stocks.filter(s => s.minimum_threshold !== null && Number(s.current_balance) <= Number(s.minimum_threshold)).length;
 
     return NextResponse.json({ count });
   } catch (error) {

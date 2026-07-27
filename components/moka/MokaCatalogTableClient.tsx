@@ -90,8 +90,8 @@ export default function MokaCatalogTableClient({
     totalPages,
     syncButton
 }: { 
-    items: any[], 
-    recipes: any[],
+    items: Record<string, unknown>[], 
+    recipes: Record<string, unknown>[],
     stats?: {
         total_items: number;
         ready_items: number;
@@ -99,7 +99,7 @@ export default function MokaCatalogTableClient({
         unmapped_items: number;
     },
     totalCount?: number,
-    outletsGrouped?: Record<string, any[]>,
+    outletsGrouped?: Record<string, { id: number; name: string }[]>,
     activeOutletId?: string,
     activeSearch?: string,
     activeStatus?: string,
@@ -230,12 +230,12 @@ export default function MokaCatalogTableClient({
                     {outletsGrouped && Object.keys(outletsGrouped).length > 0 && (
                         <Select
                             value={activeOutletId || ''}
-                            onChange={(val) => updateFilters(val, activeSearch || '', activeStatus || 'all')}
+                            onChange={(val) => updateFilters(String(val), activeSearch || '', activeStatus || 'all')}
                             options={[
                                 { value: '', label: 'Semua Outlet' },
                                 ...Object.entries(outletsGrouped).flatMap(([bizName, outlets]) => [
                                     { value: '', label: bizName, isGroup: true },
-                                    ...outlets.map((o: any) => ({ value: o.id, label: o.name }))
+                                    ...outlets.map((o: { id: number; name: string }) => ({ value: o.id, label: o.name }))
                                 ])
                             ]}
                             style={{ width: 190 }}
@@ -389,7 +389,7 @@ export default function MokaCatalogTableClient({
                     setSelectedItem(null);
                 }}
                 mokaItem={selectedItem}
-                recipes={recipes}
+                recipes={recipes as any}
             />
         </>
     );

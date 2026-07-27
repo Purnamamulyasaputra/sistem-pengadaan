@@ -11,11 +11,15 @@ export const pool =
   globalForPg.pgPool ??
   new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 3, // small, because primary pooling is handled by PgBouncer on Neon's side
+    max: 10, // increased to handle parallel requests in local dev safely
     ssl: { rejectUnauthorized: false },
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 15000,
   });
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+});
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPg.pgPool = pool;

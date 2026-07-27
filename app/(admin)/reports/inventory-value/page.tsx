@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 export default function InventoryValueTablePage() {
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
   const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportData, setReportData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -50,10 +50,10 @@ export default function InventoryValueTablePage() {
     XLSX.writeFile(wb, `Laporan_Persediaan_${year}_${month}.xlsx`);
   };
 
-  const categories = Array.from(new Set(reportData.map(r => r.category_name || 'Tidak Berkategori'))).sort();
+  const categories = Array.from(new Set(reportData.map((r: any) => String(r.category_name || 'Tidak Berkategori')))).sort();
 
-  const filteredData = reportData.filter(r => {
-    const matchSearch = r.item_name.toLowerCase().includes(search.toLowerCase());
+  const filteredData = reportData.filter((r: any) => {
+    const matchSearch = String(r.item_name || '').toLowerCase().includes(search.toLowerCase());
     const matchCat = categoryFilter ? (r.category_name || 'Tidak Berkategori') === categoryFilter : true;
     return matchSearch && matchCat;
   });
@@ -96,7 +96,7 @@ export default function InventoryValueTablePage() {
             />
             <Select
               value={categoryFilter}
-              onChange={val => setCategoryFilter(val)}
+              onChange={val => setCategoryFilter(String(val))}
               options={[
                 { value: '', label: 'Semua Kategori' },
                 ...categories.map(c => ({ value: c, label: c }))
@@ -142,7 +142,7 @@ export default function InventoryValueTablePage() {
                 </tr>
               </thead>
               <tbody style={{ fontSize: 12 }}>
-                {filteredData.map((r, i) => {
+                {filteredData.map((r: any, i: number) => {
                   const ma = Number(r.current_average_price);
                   const valIn = Number(r.total_in_qty) * ma;
                   const valDist = Number(r.total_distribution_qty) * ma;

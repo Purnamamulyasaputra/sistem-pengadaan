@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
     });
     
     return NextResponse.json({ success: true, message: 'Penerimaan berhasil', data: receipt });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Goods Receipt Error:', error);
-    return NextResponse.json({ success: false, message: error.message || 'Terjadi kesalahan server', data: null }, { status: 500 });
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') || 'Terjadi kesalahan server', data: null }, { status: 500 });
   }
 }

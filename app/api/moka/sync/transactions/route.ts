@@ -28,7 +28,7 @@ export async function POST(req: Request) {
         let totalItemsCount = 0;
 
         const results = await Promise.allSettled(
-            tokens.map(token => syncTransactions(token, sinceEpoch, untilEpoch, outlet_id))
+            tokens.map((token: any) => syncTransactions(token, sinceEpoch, untilEpoch, outlet_id))
         );
 
         let successful = 0;
@@ -52,10 +52,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'Failed to sync transactions for all connected accounts.' }, { status: 500 });
         }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Sync transactions API error:", error);
         return NextResponse.json(
-            { message: error.message || "Internal server error" },
+            { message: (error instanceof Error ? error.message : 'Unknown error') || "Internal server error" },
             { status: 500 }
         );
     }

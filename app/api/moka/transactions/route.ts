@@ -29,7 +29,7 @@ export async function GET(req: Request) {
             WHERE 1=1
         `;
         
-        const params: any[] = [];
+        const params: unknown[] = [];
         let paramCount = 1;
 
         if (outlet_id) {
@@ -77,10 +77,10 @@ export async function GET(req: Request) {
             limit
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching transactions:", error);
         return NextResponse.json(
-            { message: error.message || "Internal server error" },
+            { message: (error instanceof Error ? error.message : 'Unknown error') || "Internal server error" },
             { status: 500 }
         );
     }

@@ -28,8 +28,8 @@ export async function GET() {
     `, [venueIds]);
 
     return NextResponse.json({ recipes: recipes.rows });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching outlet menus:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }

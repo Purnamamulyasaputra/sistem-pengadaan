@@ -120,8 +120,8 @@ export default function AutoRestockDraftPage() {
       } else {
         throw new Error(resJson.error || 'Gagal mengirim draft');
       }
-    } catch (e: any) {
-      setToast({ open: true, message: e.message, type: 'error' });
+    } catch (e: unknown) {
+      setToast({ open: true, message: (e instanceof Error ? e.message : 'Unknown error'), type: 'error' });
       setSubmitting(false);
     }
   };

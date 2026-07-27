@@ -202,3 +202,51 @@ export async function getInventoryReport(month: number, year: number) {
   );
   return result.rows;
 }
+
+export async function getInventoryValueTrend(currentTotalValue: number) {
+  // Get net value change per day for the last 7 days
+  const res = await query(
+    `SELECT 
+       DATE(created_at) as date,
+       SUM(qty_change * (SELECT current_average_price FROM items WHERE id = item_id)) as daily_value_change,
+       SUM(CASE WHEN movement_type = 'OUT' THEN ABS(qty_change) * (SELECT current_average_price FROM items WHERE id = item_id) ELSE 0 END) as daily_outbound_value
+     FROM inventory_logs
+     WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
+     GROUP BY DATE(created_at)
+     ORDER BY date ASC`
+  );
+
+  const changesByDate: Record<string, { change: number, outbound: number }> = {};
+  for (const row of res.rows) {
+    // Force format YYYY-MM-DD
+    const d = new Date(row.date);
+    const dateStr = d.toISOString().split('T')[0];
+    changesByDate[dateStr] = {
+      change: parseFloat(row.daily_value_change || '0'),
+      outbound: parseFloat(row.daily_outbound_value || '0')
+    };
+  }
+
+  const trend = [];
+  let runningValue = currentTotalValue;
+
+  // We work backwards from today to 6 days ago (total 7 days)
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    
+    trend.unshift({
+      date: dateStr,
+      value: runningValue,
+      outboundValue: changesByDate[dateStr]?.outbound || 0
+    });
+    
+    // To get yesterday's value, we subtract today's net change
+    const todaysChange = changesByDate[dateStr]?.change || 0;
+    runningValue -= todaysChange;
+  }
+
+  return trend;
+}
+

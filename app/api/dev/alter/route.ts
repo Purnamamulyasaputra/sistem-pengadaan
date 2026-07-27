@@ -9,7 +9,7 @@ export async function GET() {
     await query(`ALTER TABLE delivery_note_items ADD COLUMN IF NOT EXISTS discrepancy_notes TEXT;`);
     await query(`ALTER TABLE delivery_note_items ADD COLUMN IF NOT EXISTS unique_barcode VARCHAR;`);
     return NextResponse.json({ success: true, message: 'Altered successfully' });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : 'Unknown error') });
   }
 }

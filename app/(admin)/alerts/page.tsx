@@ -42,8 +42,8 @@ export default function AlertsPage() {
       } else {
         fetchAlerts(); // refresh
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert((err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setResolvingId(null);
     }

@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
       is_active: body.is_active
     });
     return NextResponse.json({ success: true, message: 'Outlet berhasil ditambahkan', data: outlet }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, message: err.message || 'Error' }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') || 'Error' }, { status: 500 });
   }
 }
 
@@ -58,8 +58,8 @@ export async function PATCH(req: NextRequest) {
       is_active: body.is_active
     });
     return NextResponse.json({ success: true, message: 'Outlet berhasil diperbarui', data: outlet });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, message: err.message || 'Error' }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') || 'Error' }, { status: 500 });
   }
 }
 

@@ -30,7 +30,7 @@ export default async function SalesReportPage({ searchParams }: { searchParams: 
         FROM moka_item_sales
         WHERE period_start >= $1 AND period_end <= $2
     `;
-    let salesParams: any[] = [startDate, endDate];
+    let salesParams: unknown[] = [startDate, endDate];
     
     if (outletId) {
         salesQuery += ` AND outlet_id = $3`;

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { LayoutGrid, AlertOctagon } from 'lucide-react';
 
 interface NavItem {
   href?: string;
@@ -46,21 +47,21 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: <Icon name="dashboard" /> },
   { href: '/alerts', label: 'Peringatan Stok', icon: <Icon name="bell" />, badge: 0 },
 
-  { section: 'TRANSAKSI OUTLET' },
-  { href: '/requests', label: 'Permintaan Outlet', icon: <Icon name="list" /> },
-  { href: '/delivery-orders', label: 'Pengiriman (Surat Jalan)', icon: <Icon name="truck" /> },
-
-  { section: 'TRANSAKSI SUPPLIER' },
-  { href: '/purchase-orders', label: 'Pembelian (PO)', icon: <Icon name="cart" /> },
-  { href: '/warehouse', label: 'Penerimaan Barang', icon: <Icon name="box" /> },
-
-  { section: 'MANAJEMEN STOK' },
-  { href: '/stock-card', label: 'Stok Pusat', icon: <Icon name="clipboard" /> },
-  { href: '/opname/central', label: 'Stock Opname', icon: <Icon name="package" /> },
-
-  { section: 'DATA MASTER' },
+  { section: 'INVENTORI & BARANG' },
   { href: '/master-data/items', label: 'Master Barang', icon: <Icon name="db" /> },
   { href: '/hpp', label: 'Master Menu & HPP', icon: <Icon name="hpp" /> },
+  { href: '/stock-card', label: 'Stok Pusat', icon: <Icon name="clipboard" /> },
+  { href: '/warehouse', label: 'Penerimaan Barang', icon: <Icon name="box" /> },
+  { href: '/opname/central', label: 'Stock Opname', icon: <Icon name="package" /> },
+
+  { section: 'DISTRIBUSI KE OUTLET' },
+  { href: '/requests', label: 'Permintaan Outlet', icon: <Icon name="list" /> },
+  { href: '/delivery-orders', label: 'Pengiriman (Surat Jalan)', icon: <Icon name="truck" /> },
+  { href: '/returns', label: 'Tiket Masalah / Retur', icon: <AlertOctagon size={15} /> },
+  { href: '/stock-monitoring', label: 'Stok Seluruh Outlet', icon: <LayoutGrid size={15} /> },
+
+  { section: 'PEMBELIAN (PURCHASING)' },
+  { href: '/purchase-orders', label: 'Pembelian (PO)', icon: <Icon name="cart" /> },
 
   { section: 'INTEGRASI MOKA POS' },
   { href: '/master-data/moka-catalog', label: 'Katalog Moka', icon: <Icon name="package" /> },
@@ -102,19 +103,10 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [liveAlertCount, setLiveAlertCount] = useState(alertCount ?? 0);
   const [liveRequestCount, setLiveRequestCount] = useState(0);
+  const [liveReturnsCount, setLiveReturnsCount] = useState(0);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [snoozeMap, setSnoozeMap] = useState<Record<string, { expiresAt: number, count: number }>>({});
-
   const menu = role === 'ADMIN_PUSAT' ? CENTRAL_MENU : OUTLET_MENU;
-
-  // Load snooze data on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('sidebar_snooze');
-      if (stored) setSnoozeMap(JSON.parse(stored));
-    } catch (e) { }
-  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -139,12 +131,22 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
   }
 
   useEffect(() => {
+    if (pathname === '/returns' && role === 'ADMIN_PUSAT') {
+      localStorage.setItem('lastSeenReturns', Date.now().toString());
+      setLiveReturnsCount(0);
+    }
+  }, [pathname, role]);
+
+  useEffect(() => {
     const fetchBadges = async () => {
       try {
         if (role === 'ADMIN_PUSAT') {
-          const [alertsRes, reqRes] = await Promise.all([
+          const lastSeenReturns = localStorage.getItem('lastSeenReturns') || '';
+          const returnsUrl = lastSeenReturns ? `/api/returns/pending-count?since=${lastSeenReturns}` : '/api/returns/pending-count';
+          const [alertsRes, reqRes, returnsRes] = await Promise.all([
             fetch('/api/alerts/count', { cache: 'no-store' }),
-            fetch('/api/orders/pending-count', { cache: 'no-store' })
+            fetch('/api/orders/pending-count', { cache: 'no-store' }),
+            fetch(returnsUrl, { cache: 'no-store' })
           ]);
           if (alertsRes.ok) {
             const data = await alertsRes.json();
@@ -153,6 +155,10 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
           if (reqRes.ok) {
             const data = await reqRes.json();
             setLiveRequestCount(data.count ?? 0);
+          }
+          if (returnsRes.ok) {
+            const data = await returnsRes.json();
+            setLiveReturnsCount(data.count ?? 0);
           }
         } else if (role === 'ADMIN_OUTLET') {
           const [reqRes, alertsRes] = await Promise.all([
@@ -178,52 +184,15 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
     return () => clearInterval(interval);
   }, [role]);
 
-  // Update snooze state when visiting a page with active notifications
-  useEffect(() => {
-    let currentPathCount = 0;
-    if (role === 'ADMIN_PUSAT') {
-      if (pathname === '/alerts') currentPathCount = liveAlertCount;
-      if (pathname === '/requests') currentPathCount = liveRequestCount;
-    } else {
-      if (pathname === '/outlet/inventory/stock') currentPathCount = liveAlertCount;
-      if (pathname === '/outlet/receive-goods') currentPathCount = liveRequestCount;
-    }
-
-    if (currentPathCount > 0 && pathname) {
-      const now = new Date();
-      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
-
-      setSnoozeMap(prev => {
-        const existing = prev[pathname];
-        // Snooze if it's new, count is different (to catch updates), or previous snooze expired
-        if (!existing || existing.count !== currentPathCount || existing.expiresAt < now.getTime()) {
-          const next = { ...prev, [pathname]: { expiresAt: midnight, count: currentPathCount } };
-          localStorage.setItem('sidebar_snooze', JSON.stringify(next));
-          return next;
-        }
-        return prev;
-      });
-    }
-  }, [pathname, liveAlertCount, liveRequestCount, role]);
-
   const getEffectiveBadge = (href: string, actualCount: number) => {
     if (pathname === href) return 0; // Hide if currently on the page
-    if (actualCount === 0) return 0;
-
-    const snooze = snoozeMap[href];
-    if (snooze) {
-      const now = Date.now();
-      // Hide if still snoozed AND count hasn't increased (no new items)
-      if (now < snooze.expiresAt && actualCount <= snooze.count) {
-        return 0;
-      }
-    }
     return actualCount;
   };
 
   const menuWithBadge = menu.map(item => {
     if (item.href === '/alerts' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveAlertCount) };
     if (item.href === '/requests' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) };
+    if (item.href === '/returns' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveReturnsCount) };
     if (item.href === '/outlet/inventory/stock' && role === 'ADMIN_OUTLET') return { ...item, badge: getEffectiveBadge(item.href, liveAlertCount) };
     if (item.href === '/outlet/receive-goods' && role === 'ADMIN_OUTLET') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) };
     return item;

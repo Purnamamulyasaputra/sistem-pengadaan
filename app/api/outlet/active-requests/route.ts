@@ -21,8 +21,8 @@ export async function GET(req: NextRequest) {
     const activeItemIds = result.rows.map(r => r.item_id);
 
     return NextResponse.json({ success: true, data: activeItemIds });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error fetching active requested items:', err);
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

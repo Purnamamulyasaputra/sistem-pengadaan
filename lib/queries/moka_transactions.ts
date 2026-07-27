@@ -1,7 +1,7 @@
 import { query } from "@/lib/db";
 import { fetchMokaAPIWithToken } from "@/lib/moka/api";
 
-export async function syncTransactions(token: any, sinceEpoch: number, untilEpoch: number, outletId?: string) {
+export async function syncTransactions(token: { access_token: string; refresh_token: string; expires_at?: Date | string; [key: string]: unknown }, sinceEpoch: number, untilEpoch: number, outletId?: string) {
     try {
         if (!token) throw new Error("No token provided");
 

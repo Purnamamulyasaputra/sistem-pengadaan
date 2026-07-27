@@ -179,7 +179,7 @@ export default function ItemsPage() {
               <input className="input" placeholder="Cari nama barang..." style={{ width: '200px' }} value={search} onChange={e => setSearch(e.target.value)} />
               <Select
                 value={catFilter}
-                onChange={val => setCatFilter(val)}
+                onChange={val => setCatFilter(String(val))}
                 options={[
                   { value: '', label: 'Semua Kategori' },
                   ...categories.map(c => ({ value: String(c.id), label: c.name }))
@@ -189,7 +189,7 @@ export default function ItemsPage() {
               />
               <Select
                 value={filterUnit}
-                onChange={val => setFilterUnit(val)}
+                onChange={val => setFilterUnit(String(val))}
                 options={[
                   { value: '', label: 'Semua Satuan' },
                   ...uniqueUnits.map(u => ({ value: u, label: u }))
@@ -199,7 +199,7 @@ export default function ItemsPage() {
               />
               <Select
                 value={filterExpiry}
-                onChange={val => setFilterExpiry(val)}
+                onChange={val => setFilterExpiry(String(val))}
                 options={[
                   { value: '', label: 'Semua Kedaluwarsa' },
                   { value: 'SHORT', label: 'Hanya Cepat Basi' }
@@ -329,7 +329,7 @@ export default function ItemsPage() {
                   <label className="req">Kategori</label>
                   <Select
                     value={form.category_id}
-                    onChange={val => setForm(f => ({ ...f, category_id: val }))}
+                    onChange={val => setForm(f => ({ ...f, category_id: String(val) }))}
                     options={[
                       { value: '', label: 'Pilih kategori...' },
                       ...categories.map(c => ({ value: String(c.id), label: c.name }))
@@ -343,7 +343,7 @@ export default function ItemsPage() {
                   <label className="req">Satuan Beli (Terbesar)</label>
                   <Select
                     value={form.purchase_unit}
-                    onChange={val => setForm(f => ({ ...f, purchase_unit: val }))}
+                    onChange={val => setForm(f => ({ ...f, purchase_unit: String(val) }))}
                     options={[
                       { value: '', label: 'Pilih...' },
                       ...['Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Roll', 'Pcs'].map(u => ({ value: u, label: u }))
@@ -355,7 +355,7 @@ export default function ItemsPage() {
                   <label className="req">Satuan Terkecil (Outlet)</label>
                   <Select
                     value={form.smallest_unit}
-                    onChange={val => setForm(f => ({ ...f, smallest_unit: val }))}
+                    onChange={val => setForm(f => ({ ...f, smallest_unit: String(val) }))}
                     disabled={!form.has_conversion}
                     options={[
                       { value: '', label: 'Pilih...' },
@@ -387,7 +387,7 @@ export default function ItemsPage() {
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Jenis Peringatan</label>
                   <Select
                     value={form.threshold_type}
-                    onChange={val => setForm(f => ({ ...f, threshold_type: val }))}
+                    onChange={val => setForm(f => ({ ...f, threshold_type: String(val) }))}
                     options={[
                       { value: 'ABSOLUT', label: 'Absolut' },
                       { value: 'PERSENTASE', label: 'Persentase (%)' }

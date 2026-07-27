@@ -124,8 +124,8 @@ export default function ReceiptClient({ poId }: { poId: number }) {
       setTimeout(() => {
         router.push('/warehouse');
       }, 1000);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }

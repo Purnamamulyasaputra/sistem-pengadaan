@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const result = await confirmReceipt(Number(id), recipient_name || session.name, proof_image_url);
     return NextResponse.json({ success: true, message: 'Receipt confirmed successfully', data: result });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message || 'Server error' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') || 'Server error' }, { status: 500 });
   }
 }

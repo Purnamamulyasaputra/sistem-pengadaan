@@ -14,7 +14,7 @@ export async function createOutlet(data: { name: string; type: string; address?:
   return result.rows[0];
 }
 
-export async function updateOutlet(id: number, data: any) {
+export async function updateOutlet(id: number, data: Record<string, unknown>) {
   const fields = Object.keys(data).map((f, i) => `${f} = $${i + 2}`).join(', ');
   const values = Object.values(data);
   const result = await query(
@@ -41,7 +41,7 @@ export async function createVendor(data: { name: string; type?: string; email?: 
   return result.rows[0];
 }
 
-export async function updateVendor(id: number, data: any) {
+export async function updateVendor(id: number, data: Record<string, unknown>) {
   const fields = Object.keys(data).map((f, i) => `${f} = $${i + 2}`).join(', ');
   const values = Object.values(data);
   const result = await query(

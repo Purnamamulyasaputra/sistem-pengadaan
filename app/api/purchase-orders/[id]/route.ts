@@ -29,7 +29,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const po = await updatePurchaseOrder(Number(id), body);
     return NextResponse.json({ success: true, message: 'PO diperbarui', data: po });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message, data: null }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error'), data: null }, { status: 500 });
   }
 }

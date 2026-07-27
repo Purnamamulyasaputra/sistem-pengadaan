@@ -30,7 +30,7 @@ export default function ProcurementEstimationPage() {
   const [outletId, setOutletId] = useState<number | null>(null);
 
   const [data, setData] = useState<EstimationRow[]>([]);
-  const [allMasterItems, setAllMasterItems] = useState<any[]>([]);
+  const [allMasterItems, setAllMasterItems] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success'|'error'|'info' });
@@ -72,7 +72,7 @@ export default function ProcurementEstimationPage() {
       if (jsonEst.success) {
         // Prepare data with buffer and selection state
         const enriched = jsonEst.data.map((item: any) => {
-          const buffered = Math.ceil(item.total_raw_qty * 1.10); // +10% buffer
+          const buffered = Math.ceil(Number(item.total_raw_qty || item.suggested_qty || 0) * 1.10); // +10% buffer
           return {
             ...item,
             suggested_qty: buffered,
@@ -110,9 +110,9 @@ export default function ProcurementEstimationPage() {
   };
 
   const getAvailableItems = () => {
-    const usedIds = new Set(data.map(d => d.item_id).filter(id => id !== null));
-    const additionalUsedIds = new Set(additionalItems.map(a => a.item_id).filter(id => id !== null));
-    return allMasterItems.filter(item => !usedIds.has(item.id) && !additionalUsedIds.has(item.id));
+    const usedIds = new Set(data.map((d: any) => Number(d.item_id)).filter(Boolean));
+    const additionalUsedIds = new Set(additionalItems.map((a: any) => Number(a.item_id)).filter(Boolean));
+    return allMasterItems.filter((item: any) => !usedIds.has(Number(item.id)) && !additionalUsedIds.has(Number(item.id)));
   };
 
   const handleSubmit = async () => {
@@ -130,12 +130,12 @@ export default function ProcurementEstimationPage() {
       // Note: This matches the structure expected by POST /api/orders
       
       const itemsPayload = [
-        ...selectedData.map(d => {
-          const itemMaster = allMasterItems.find(i => i.id === d.item_id);
-          const ratio = itemMaster?.conversion_ratio || 1;
+        ...selectedData.map((d: any) => {
+          const itemMaster = allMasterItems.find((i: any) => i.id === d.item_id);
+          const ratio = Number(itemMaster?.conversion_ratio || 1) || 1;
           return {
             item_id: d.item_id,
-            qty_request: d.final_qty / ratio,
+            qty_request: Number(d.final_qty) / ratio,
             additional_notes: 'Sales Estimation Buffer +10%'
           };
         }),
@@ -169,8 +169,8 @@ export default function ProcurementEstimationPage() {
         router.push('/outlet/requests');
       }, 1500);
       
-    } catch (err: any) {
-      setToast({ open: true, message: err.message, type: 'error' });
+    } catch (err: unknown) {
+      setToast({ open: true, message: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -331,10 +331,10 @@ export default function ProcurementEstimationPage() {
                         />
                         {activeDropdownId === item.id && (
                           <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', zIndex: 9999, maxHeight: 250, overflowY: 'auto', borderRadius: '4px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05)' }}>
-                            {getAvailableItems().filter(i => i.name.toLowerCase().includes(item.name.toLowerCase())).length === 0 ? (
+                            {getAvailableItems().filter((i: any) => String(i.name || '').toLowerCase().includes(String(item.name || '').toLowerCase())).length === 0 ? (
                               <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--muted)' }}>Barang tidak ditemukan (Tetap bisa kirim teks ini).</div>
                             ) : (
-                              getAvailableItems().filter(i => i.name.toLowerCase().includes(item.name.toLowerCase())).map(filteredItem => (
+                              getAvailableItems().filter((i: any) => String(i.name || '').toLowerCase().includes(String(item.name || '').toLowerCase())).map((filteredItem: any) => (
                                 <div 
                                   key={filteredItem.id}
                                   style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}

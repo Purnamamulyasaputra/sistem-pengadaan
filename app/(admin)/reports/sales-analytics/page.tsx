@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 export default function SalesAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [matrix, setMatrix] = useState<any[]>([]);
-  const [outletColumns, setOutletColumns] = useState<any[]>([]);
+  const [outletColumns, setOutletColumns] = useState<{ id: number; name: string }[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
 
   // Filters

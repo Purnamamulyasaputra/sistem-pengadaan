@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDeliveryNoteByCode, processPublicReceive } from '@/lib/queries/delivery-notes';
+import { isBarcodeScanRequired } from '@/lib/queries/settings';
 import { put } from '@vercel/blob';
 
 // GET: Fetch delivery note info (public, no auth)
@@ -14,9 +15,10 @@ export async function GET(req: NextRequest) {
     if (!dn) {
       return NextResponse.json({ success: false, message: 'Surat Jalan tidak ditemukan.' }, { status: 404 });
     }
-    return NextResponse.json({ success: true, dn });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    const requireBarcode = await isBarcodeScanRequired();
+    return NextResponse.json({ success: true, dn, requireBarcode });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }
 
@@ -33,7 +35,8 @@ export async function POST(req: NextRequest) {
     const recipient_name = formData.get('recipient_name') as string;
     const itemsJson = formData.get('items') as string;
 
-    if (!photo) {
+    const requireBarcode = await isBarcodeScanRequired();
+    if (requireBarcode && !photo) {
       return NextResponse.json({ success: false, message: 'Foto bukti penerimaan wajib diunggah.' }, { status: 400 });
     }
     if (!recipient_name || recipient_name.trim() === '') {
@@ -43,7 +46,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Data barang tidak valid.' }, { status: 400 });
     }
 
-    let items: { order_item_id: number; qty_received: number; receive_notes: string }[] = [];
+    let items: { 
+      delivery_note_item_id: number;
+      order_item_id?: number; 
+      qty_received: number; 
+      receive_notes: string;
+      has_issue?: boolean;
+      qty_issue?: number;
+      issue_reason?: string;
+      issue_photo_url?: string;
+    }[] = [];
     try {
       items = JSON.parse(itemsJson);
     } catch {
@@ -59,24 +71,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: `Surat Jalan ini tidak bisa diterima karena statusnya sudah ${dn.status}.` }, { status: 400 });
     }
 
-    // Upload photo to Vercel Blob
-    const safeName = photo.name.replace(/[^a-zA-Z0-9.]/g, '') || 'photo.jpg';
-    const blob = await put(`proofs/${Date.now()}-${safeName}`, photo, {
-      access: 'public',
-      contentType: photo.type || 'image/jpeg',
-    });
+    // Upload main DO photo to Vercel Blob
+    let proofUrl: string | undefined = undefined;
+    if (photo) {
+      const safeName = photo.name.replace(/[^a-zA-Z0-9.]/g, '') || 'photo.jpg';
+      const blob = await put(`proofs/${Date.now()}-${safeName}`, photo, {
+        access: 'public',
+        contentType: photo.type || 'image/jpeg',
+      });
+      proofUrl = blob.url;
+    }
+
+    // Upload issue photos
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].has_issue) {
+        const issuePhoto = formData.get(`issue_photo_${i}`) as File | null;
+        if (issuePhoto) {
+          const issueSafeName = issuePhoto.name.replace(/[^a-zA-Z0-9.]/g, '') || 'issue.jpg';
+          const issueBlob = await put(`issues/${Date.now()}-${issueSafeName}`, issuePhoto, {
+            access: 'public',
+            contentType: issuePhoto.type || 'image/jpeg',
+          });
+          items[i].issue_photo_url = issueBlob.url;
+        }
+      }
+    }
 
     // Update database
     await processPublicReceive({
       delivery_note_id: dn.id,
       recipient_name: recipient_name.trim(),
-      proof_image_url: blob.url,
+      proof_image_url: proofUrl,
       items,
     });
 
     return NextResponse.json({ success: true, message: 'Penerimaan berhasil disimpan.' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error receiving delivery:', error);
-    return NextResponse.json({ success: false, message: 'Gagal memproses: ' + error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Gagal memproses: ' + (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }

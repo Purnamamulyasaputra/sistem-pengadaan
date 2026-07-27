@@ -24,6 +24,14 @@ export function SettingsTabs() {
       >
         Manajemen Pengguna
       </Link>
+
+      <Link 
+        href="/settings/opening-balance" 
+        className={`tab ${pathname.startsWith('/settings/opening-balance') ? 'active' : ''}`} 
+        style={{ textDecoration: 'none', color: pathname.startsWith('/settings/opening-balance') ? undefined : 'inherit' }}
+      >
+        Migrasi Database
+      </Link>
     </div>
   );
 }

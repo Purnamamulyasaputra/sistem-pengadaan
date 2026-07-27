@@ -8,9 +8,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const data = await request.json();
     await updateIngredient(id, data);
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[PUT /api/hpp/ingredients/${resolvedParams.id}] Error:`, err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 
@@ -20,8 +20,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const id = parseInt(resolvedParams.id, 10);
     await deleteIngredient(id);
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[DELETE /api/hpp/ingredients/${resolvedParams.id}] Error:`, err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

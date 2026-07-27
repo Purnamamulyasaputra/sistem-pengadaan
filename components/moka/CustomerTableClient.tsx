@@ -4,14 +4,14 @@ import React, { useState, useEffect } from 'react';
 import { Search, RefreshCw, Users, Mail, Phone, ChevronDown, ChevronRight } from 'lucide-react';
 import { Toast } from '@/components/ui/Toast';
 
-export default function CustomerTableClient({ outletsGrouped, activeOutletId }: { outletsGrouped?: Record<string, any[]>, activeOutletId?: string }) {
+export default function CustomerTableClient({ outletsGrouped, activeOutletId }: { outletsGrouped?: Record<string, { id: number; name: string }[]>, activeOutletId?: string }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchInput, setSearchInput] = useState('');
     const [sort, setSort] = useState('newest');
     const [hasEmail, setHasEmail] = useState('all');
     const [outletId, setOutletId] = useState(activeOutletId || '');
     const [page, setPage] = useState(1);
-    const [data, setData] = useState<any[]>([]);
+    const [data, setData] = useState<Record<string, unknown>[]>([]);
     const [total, setTotal] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -67,8 +67,8 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
             showToast(json.message || 'Sync successful', 'success');
             setPage(1);
             fetchData();
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        } catch (error: unknown) {
+            showToast(error instanceof Error ? error.message : String(error), 'error');
         } finally {
             setIsSyncing(false);
         }
@@ -138,7 +138,7 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                                 <option value="">All Outlets</option>
                                 {Object.entries(outletsGrouped).map(([bizName, outlets]) => (
                                     <optgroup key={bizName} label={`--- ${bizName} ---`}>
-                                        {outlets.map((o: any) => (
+                                        {outlets.map((o: { id: number; name: string }) => (
                                             <option key={o.id} value={o.id}>
                                                 {o.name}
                                             </option>
@@ -201,8 +201,8 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-[12px]">
-                                {data.map((item, idx) => {
-                                    const rowId = item.id || String(idx);
+                                {data.map((item: any, idx: number) => {
+                                    const rowId = String(item.id || idx);
                                     const isExpanded = !!expandedRows[rowId];
                                     const hasName = item.name && item.name !== '-';
                                     

@@ -14,7 +14,7 @@ async function getOutletsWithBusiness() {
     `);
     
     // Group outlets by business
-    const grouped: Record<string, any[]> = {};
+    const grouped: Record<string, { id: number; name: string }[]> = {};
     for (const row of res.rows) {
         const bName = row.business_name || 'Unknown Business';
         if (!grouped[bName]) grouped[bName] = [];

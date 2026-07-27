@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { FileText } from 'lucide-react';
 
 interface DeliveryNote {
   id: number;
@@ -12,6 +13,7 @@ interface DeliveryNote {
   outlet_name: string;
   delivery_date: string;
   status: string;
+  order_number?: string;
 }
 
 export default function DeliveryOrdersPage() {
@@ -58,6 +60,7 @@ export default function DeliveryOrdersPage() {
               <thead>
                 <tr>
                   <th>No. SJ</th>
+                  <th>No. PO</th>
                   <th>Outlet Tujuan</th>
                   <th>Tanggal Kirim</th>
                   <th className="center">Status</th>
@@ -71,7 +74,10 @@ export default function DeliveryOrdersPage() {
                     style={{ cursor: 'pointer' }}
                     className="hover-bg-muted"
                   >
-                    <td className="font-mono text-primary font-bold">{n.delivery_note_number}</td>
+                    <td className="font-mono text-primary font-bold">
+                      {n.delivery_note_number}
+                    </td>
+                    <td className="font-mono">{n.order_number || '-'}</td>
                     <td className="font-bold">{n.outlet_name}</td>
                     <td>{new Date(n.delivery_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
                     <td className="center">

@@ -4,7 +4,7 @@ import { outboundStock } from './inventory';
 export interface DeliveryNote {
   id: number;
   delivery_note_number: string;
-  order_id: number;
+  order_id: number | null;
   outlet_id: number;
   outlet_name?: string;
   delivery_date: string;
@@ -34,7 +34,7 @@ export async function createDeliveryNote(data: {
   outlet_id: number;
   driver_name?: string;
   delivery_date: string;
-  items: Array<{ order_item_id: number; item_id: number; qty_shipped: number; price_at_shipment: number; keterangan?: string }>;
+  items: Array<{ order_item_id: number; item_id: number; qty_shipped: number; price_at_shipment: number; keterangan?: string; is_additional?: boolean }>;
 }) {
   return withTransaction(async (client) => {
     const noteNumber = await generateDeliveryNoteNumber();
@@ -59,25 +59,39 @@ export async function createDeliveryNote(data: {
       const currentStock = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
       const itemName = balRes.rows[0]?.item_name ?? 'Unknown Item';
       const smallestUnit = (balRes.rows[0]?.smallest_unit || '').toLowerCase();
-      
+
       // Auto-detect central ratio: ml->Liter (÷1000), gr->Kg (÷1000), others->no conversion
       const centralRatio = (smallestUnit === 'ml' || smallestUnit === 'gr' || smallestUnit === 'g') ? 1000 : 1;
       const actualQtyShipped = item.qty_shipped * centralRatio;
-      
+
       if (actualQtyShipped > currentStock) {
         throw new Error(`Stok ${itemName} tidak mencukupi. Dikirim: ${item.qty_shipped} (= ${actualQtyShipped} ${balRes.rows[0]?.smallest_unit}), Tersedia: ${(currentStock / centralRatio).toFixed(2)} ${centralRatio === 1000 ? (smallestUnit === 'ml' ? 'Liter' : 'Kg') : smallestUnit}`);
+      }
+
+      let finalOrderItemId: number | null = item.order_item_id;
+      if (data.order_id && (item.is_additional || item.order_item_id < 0)) {
+        const orderItemRes = await client.query(
+          `INSERT INTO order_items (order_id, item_id, qty_request, item_status, fulfillment_status)
+           VALUES ($1, $2, 0, 'COMPLETED', 'COMPLETELY_FULFILLED') RETURNING id`,
+          [data.order_id, item.item_id]
+        );
+        finalOrderItemId = orderItemRes.rows[0].id;
+      } else if (!data.order_id) {
+        finalOrderItemId = null;
       }
 
       const uniqueBarcode = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000).toString();
       await client.query(
         `INSERT INTO delivery_note_items (delivery_note_id, order_item_id, item_id, qty_shipped, price_at_shipment, keterangan, unique_barcode)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [dn.id, item.order_item_id, item.item_id, actualQtyShipped, item.price_at_shipment, item.keterangan || null, uniqueBarcode]
+        [dn.id, finalOrderItemId, item.item_id, actualQtyShipped, item.price_at_shipment, item.keterangan || null, uniqueBarcode]
       );
     }
 
-    // Update order status to SHIPPED
-    await client.query(`UPDATE orders SET status = 'SHIPPED', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status != 'COMPLETED'`, [data.order_id]);
+    if (data.order_id) {
+      // Update order status to SHIPPED
+      await client.query(`UPDATE orders SET status = 'SHIPPED', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status != 'COMPLETED'`, [data.order_id]);
+    }
 
     return dn;
   });
@@ -93,9 +107,11 @@ export async function getDeliveryNotes(opts?: { outletId?: number; status?: stri
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const result = await query<DeliveryNote>(
-    `SELECT dn.*, o.name AS outlet_name
+    `SELECT dn.*, o.name AS outlet_name, 
+            'PO-' || EXTRACT(YEAR FROM ord.order_date) || '-' || LPAD(ord.id::text, 5, '0') AS order_number
      FROM delivery_notes dn
      LEFT JOIN outlets o ON o.id = dn.outlet_id
+     LEFT JOIN orders ord ON ord.id = dn.order_id
      ${where}
      ORDER BY dn.created_at DESC`,
     params
@@ -113,9 +129,11 @@ export async function getShippedDeliveryNoteCount(outletId: number) {
 
 export async function getDeliveryNoteById(id: number) {
   const dnRes = await query<DeliveryNote>(
-    `SELECT dn.*, o.name AS outlet_name
+    `SELECT dn.*, o.name AS outlet_name, 
+            'PO-' || EXTRACT(YEAR FROM ord.order_date) || '-' || LPAD(ord.id::text, 5, '0') AS order_number
      FROM delivery_notes dn
      LEFT JOIN outlets o ON o.id = dn.outlet_id
+     LEFT JOIN orders ord ON ord.id = dn.order_id
      WHERE dn.id = $1`,
     [id]
   );
@@ -162,34 +180,133 @@ export async function getDeliveryNoteByCode(code: string) {
 export async function processPublicReceive(data: {
   delivery_note_id: number;
   recipient_name: string;
-  proof_image_url: string;
-  items: Array<{ order_item_id: number; qty_received: number; receive_notes: string }>;
+  proof_image_url?: string;
+  items: Array<{
+    delivery_note_item_id: number;
+    qty_received: number;
+    receive_notes: string;
+    has_issue?: boolean;
+    qty_issue?: number;
+    issue_reason?: string;
+    issue_photo_url?: string;
+  }>;
 }) {
   return withTransaction(async (client) => {
-    // Update Delivery Note
+    // Update delivery note to DITERIMA
     await client.query(
-      `UPDATE delivery_notes 
-       SET status = 'DITERIMA', 
-           recipient_name = $1, 
-           proof_image_url = $2, 
-           updated_at = NOW() 
-       WHERE id = $3`,
-      [data.recipient_name, data.proof_image_url, data.delivery_note_id]
+      `UPDATE delivery_notes SET status = 'DITERIMA', recipient_name = $1, proof_image_url = $2, updated_at = now() WHERE id = $3`,
+      [data.recipient_name, data.proof_image_url || null, data.delivery_note_id]
     );
 
     // Update Delivery Note Items
     for (const item of data.items) {
-      await client.query(
+      const updateRes = await client.query(
         `UPDATE delivery_note_items 
          SET scanned_in_at = NOW(), 
              qty_received = $1, 
              receive_notes = $2 
-         WHERE delivery_note_id = $3 AND order_item_id = $4`,
-        [item.qty_received, item.receive_notes || null, data.delivery_note_id, item.order_item_id]
+         WHERE delivery_note_id = $3 AND id = $4
+         RETURNING id`,
+        [item.qty_received, item.receive_notes || null, data.delivery_note_id, item.delivery_note_item_id]
       );
+
+      const dniId = updateRes.rows[0]?.id;
+
+      if (dniId && item.has_issue && item.qty_issue && item.qty_issue > 0) {
+        await client.query(
+          `INSERT INTO delivery_note_issues 
+           (delivery_note_item_id, qty_issue, reason, photo_url, status) 
+           VALUES ($1, $2, $3, $4, 'PENDING')`,
+          [dniId, item.qty_issue, item.issue_reason || '', item.issue_photo_url || '']
+        );
+      }
+    }
+
+    // Update order items to SELESAI and update outlet stock
+    const dnRes = await client.query(
+      `SELECT order_id, outlet_id FROM delivery_notes WHERE id = $1`,
+      [data.delivery_note_id]
+    );
+    const orderId = dnRes.rows[0]?.order_id;
+    const outletId = dnRes.rows[0]?.outlet_id;
+
+    if (orderId) {
+      // Mark all order items for this delivery as SELESAI
+      await client.query(
+        `UPDATE order_items SET item_status = 'SELESAI', updated_at = NOW()
+         WHERE order_id = $1 AND id = ANY(
+           SELECT order_item_id FROM delivery_note_items WHERE delivery_note_id = $2
+         )`,
+        [orderId, data.delivery_note_id]
+      );
+
+      // Check if ALL order items across the entire order are SELESAI
+      const pendingItemsRes = await client.query(
+        `SELECT COUNT(*)::int AS cnt FROM order_items 
+         WHERE order_id = $1 AND item_status != 'SELESAI'`,
+        [orderId]
+      );
+      if (pendingItemsRes.rows[0]?.cnt === 0) {
+        await client.query(
+          `UPDATE orders SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+          [orderId]
+        );
+      } else {
+        // Partially completed — mark as SHIPPED if still PROCESSING
+        await client.query(
+          `UPDATE orders SET status = 'SHIPPED', updated_at = NOW() 
+           WHERE id = $1 AND status = 'PROCESSING'`,
+          [orderId]
+        );
+      }
+    }
+
+    // Update outlet stock for each received item
+    if (outletId) {
+      for (const item of data.items) {
+        // Get item_id from delivery_note_items
+        const itemRes = await client.query(
+          `SELECT item_id FROM delivery_note_items 
+           WHERE delivery_note_id = $1 AND id = $2`,
+          [data.delivery_note_id, item.delivery_note_item_id]
+        );
+        const itemId = itemRes.rows[0]?.item_id;
+        if (!itemId || item.qty_received <= 0) continue;
+
+        const stockRes = await client.query(
+          `SELECT current_balance FROM outlet_stocks 
+           WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
+          [outletId, itemId]
+        );
+
+        if (stockRes.rows.length > 0) {
+          const newBalance = parseFloat(stockRes.rows[0].current_balance) + item.qty_received;
+          await client.query(
+            `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() 
+             WHERE outlet_id = $2 AND item_id = $3`,
+            [newBalance, outletId, itemId]
+          );
+          await client.query(
+            `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+             VALUES ($1, $2, 'IN', $3, $4, 'PUBLIC_RECEIVE', $5)`,
+            [outletId, itemId, item.qty_received, newBalance, data.delivery_note_id]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
+            [outletId, itemId, item.qty_received]
+          );
+          await client.query(
+            `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+             VALUES ($1, $2, 'IN', $3, $3, 'PUBLIC_RECEIVE', $4)`,
+            [outletId, itemId, item.qty_received, data.delivery_note_id]
+          );
+        }
+      }
     }
   });
 }
+
 
 export async function recordScan(data: {
   delivery_note_item_id: number;
@@ -296,6 +413,17 @@ export async function recordScan(data: {
         [data.scanned_by, qty_recv, data.discrepancy_reason || null, data.discrepancy_notes || null, data.delivery_note_item_id]
       );
 
+      // CREATE ISSUE TICKET IF DISCREPANCY EXISTS
+      if (qty_recv < dni.qty_shipped) {
+         const qty_issue = dni.qty_shipped - qty_recv;
+         await client.query(
+           `INSERT INTO delivery_note_issues 
+            (delivery_note_item_id, qty_issue, reason, photo_url, status) 
+            VALUES ($1, $2, $3, $4, 'PENDING')`,
+           [data.delivery_note_item_id, qty_issue, data.discrepancy_reason || 'Barang tidak lengkap', '']
+         );
+      }
+
       // Increase outlet stock
       const dnRes = await client.query(`SELECT outlet_id FROM delivery_notes WHERE id = $1`, [dni.delivery_note_id]);
       const outletId = dnRes.rows[0].outlet_id;
@@ -304,7 +432,7 @@ export async function recordScan(data: {
         `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
         [outletId, data.item_id]
       );
-      
+
       let oldBalance = 0;
       if (stockRes.rows.length > 0) {
         oldBalance = parseFloat(stockRes.rows[0].current_balance);
@@ -394,6 +522,57 @@ export async function cancelDeliveryNote(deliveryNoteId: number) {
     return { success: true };
   });
 }
+export async function processShipAll(deliveryNoteId: number, adminId: number) {
+  return withTransaction(async (client) => {
+    // 1. Get all unscanned items
+    const itemsRes = await client.query(
+      `SELECT id, item_id, qty_shipped, order_item_id, price_at_shipment 
+       FROM delivery_note_items 
+       WHERE delivery_note_id = $1 AND scanned_out_at IS NULL`,
+      [deliveryNoteId]
+    );
+
+    for (const dni of itemsRes.rows) {
+      // Update scanned_out_at
+      await client.query(
+        `UPDATE delivery_note_items SET scanned_out_at = now(), scanned_out_by = $1 WHERE id = $2`,
+        [adminId, dni.id]
+      );
+
+      // Deduct central stock
+      const balRes = await client.query(
+        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [dni.item_id]
+      );
+      const oldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
+      const newBalance = oldBalance - dni.qty_shipped;
+
+      if (newBalance < 0) {
+        throw new Error(`Gagal Kirim: Stok fisik tersisa ${oldBalance}, tidak cukup untuk mengirim ${dni.qty_shipped}`);
+      }
+
+      await client.query(
+        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         VALUES ($1,'OUT',$2,$3,'BULK_SHIP',$4)`,
+        [dni.item_id, -dni.qty_shipped, newBalance, dni.id]
+      );
+
+      // Update order item status to DIKIRIM
+      await client.query(
+        `UPDATE order_items SET item_status = 'DIKIRIM', distribution_price = $1, updated_at = now() WHERE id = $2`,
+        [dni.price_at_shipment, dni.order_item_id]
+      );
+    }
+
+    // Mark DN as DIKIRIM
+    await client.query(
+      `UPDATE delivery_notes SET status = 'DIKIRIM', updated_at = now() WHERE id = $1`,
+      [deliveryNoteId]
+    );
+
+    return { success: true };
+  });
+}
 
 export async function bulkRecordScan(data: {
   delivery_note_id: number;
@@ -425,10 +604,10 @@ export async function bulkRecordScan(data: {
         // update dni
         const qty_recv = dni.qty_shipped;
         await client.query(
-          `UPDATE delivery_note_items SET scanned_in_at = now(), scanned_in_by = $1, qty_received = $2 WHERE id = $3`, 
+          `UPDATE delivery_note_items SET scanned_in_at = now(), scanned_in_by = $1, qty_received = $2 WHERE id = $3`,
           [data.scanned_by, qty_recv, dni.id]
         );
-        
+
         // Increase outlet stock
         const dnRes = await client.query(`SELECT outlet_id FROM delivery_notes WHERE id = $1`, [data.delivery_note_id]);
         const outletId = dnRes.rows[0].outlet_id;
@@ -437,7 +616,7 @@ export async function bulkRecordScan(data: {
           `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
           [outletId, dni.item_id]
         );
-        
+
         let oldBalance = 0;
         if (stockRes.rows.length > 0) {
           oldBalance = parseFloat(stockRes.rows[0].current_balance);
@@ -471,7 +650,7 @@ export async function bulkRecordScan(data: {
         await client.query(`UPDATE delivery_notes SET status = 'DIKIRIM', updated_at = now() WHERE id = $1`, [data.delivery_note_id]);
       } else if (data.scan_type === 'IN') {
         await client.query(`UPDATE delivery_notes SET status = 'DITERIMA', updated_at = now() WHERE id = $1`, [data.delivery_note_id]);
-        
+
         // Check if all items in the related order are completed
         const orderRes = await client.query(`SELECT order_id FROM delivery_notes WHERE id = $1`, [data.delivery_note_id]);
         if (orderRes.rows.length > 0) {
@@ -482,5 +661,113 @@ export async function bulkRecordScan(data: {
     }
 
     return { success: true, processed_count };
+  });
+}
+
+export async function getDeliveryNoteIssues(status?: string) {
+  let q = `
+    SELECT i.*, 
+          dni.delivery_note_id, dni.qty_shipped, dni.qty_received,
+          dn.delivery_note_number, dn.proof_image_url AS dn_proof_url, o.name AS outlet_name,
+          it.name AS item_name, it.purchase_unit, it.conversion_ratio, it.smallest_unit
+    FROM delivery_note_issues i
+    JOIN delivery_note_items dni ON i.delivery_note_item_id = dni.id
+    JOIN delivery_notes dn ON dni.delivery_note_id = dn.id
+    JOIN outlets o ON dn.outlet_id = o.id
+    JOIN items it ON dni.item_id = it.id
+  `;
+  const params: unknown[] = [];
+  if (status) {
+    q += ` WHERE i.status = $1`;
+    params.push(status);
+  }
+  q += ` ORDER BY i.reported_at DESC`;
+
+  const res = await query(q, params);
+  return res.rows;
+}
+
+export async function resolveDeliveryNoteIssue(issueId: number, action: 'REPLACE' | 'WRITE_OFF', resolvedBy: number, notes: string) {
+  return withTransaction(async (client) => {
+    // Get the issue
+    const issueRes = await client.query(
+      `SELECT i.*, dni.item_id, dni.delivery_note_id, dn.outlet_id, dn.order_id 
+       FROM delivery_note_issues i
+       JOIN delivery_note_items dni ON i.delivery_note_item_id = dni.id
+       JOIN delivery_notes dn ON dni.delivery_note_id = dn.id
+       WHERE i.id = $1 FOR UPDATE`,
+      [issueId]
+    );
+    const issue = issueRes.rows[0];
+    if (!issue) throw new Error('Issue not found');
+    if (issue.status !== 'PENDING') throw new Error('Issue is already resolved');
+
+    const newStatus = action === 'REPLACE' ? 'APPROVED_REPLACE' : 'APPROVED_WRITE_OFF';
+
+    // Update issue
+    await client.query(
+      `UPDATE delivery_note_issues 
+       SET status = $1, resolved_at = NOW(), resolved_by = $2, resolution_notes = $3
+       WHERE id = $4`,
+      [newStatus, resolvedBy, notes, issueId]
+    );
+
+    if (action === 'WRITE_OFF') {
+      // Just record a loss in central warehouse (assuming central already deducted during OUT scan, wait, we don't deduct central again, the stock is just gone. 
+      // Actually, if it was scanned out, central stock is already deducted. The outlet just didn't get it.
+      // So no inventory logs needed. The stock is simply written off from the "in-transit" state.)
+      // Wait, is there any stock adjustment needed?
+      // When it was OUT, Central stock decreased by 10.
+      // When it was IN, Outlet stock increased by 8.
+      // The remaining 2 is currently nowhere. If we WRITE_OFF, it just stays nowhere. No stock action needed.
+    } else if (action === 'REPLACE') {
+      // Create a new DO Draft for the replacement.
+      // We need to create a new DO linked to the same order.
+      // 1. Generate new DO number
+      const noRes = await client.query(`
+        SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(delivery_note_number, '^SJ/\\d{4}/', '') AS INTEGER)), 0) + 1 AS next_seq
+        FROM delivery_notes WHERE delivery_note_number LIKE 'SJ/' || to_char(now(), 'YYYY') || '/%'
+      `);
+      const nextSeq = noRes.rows[0].next_seq;
+      const year = new Date().getFullYear();
+      const dnNumber = `SJ/${year}/${String(nextSeq).padStart(5, '0')}`;
+
+      // 2. Insert new DN
+      const newDnRes = await client.query(
+        `INSERT INTO delivery_notes (delivery_note_number, outlet_id, order_id, delivery_date, status)
+         VALUES ($1, $2, $3, CURRENT_DATE, 'DRAFT') RETURNING id`,
+        [dnNumber, issue.outlet_id, issue.order_id]
+      );
+      const newDnId = newDnRes.rows[0].id;
+
+      // 3. Insert DN item
+      // We need the order_item_id. Let's get it.
+      const oiRes = await client.query(
+        `SELECT order_item_id, price_at_shipment FROM delivery_note_items WHERE id = $1`,
+        [issue.delivery_note_item_id]
+      );
+      const oi = oiRes.rows[0];
+
+      await client.query(
+        `INSERT INTO delivery_note_items (delivery_note_id, order_item_id, item_id, qty_shipped, price_at_shipment)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [newDnId, oi.order_item_id, issue.item_id, issue.qty_issue, oi.price_at_shipment]
+      );
+
+      // We should probably revert order_item_id status back to DIKEMAS or something so it can be shipped, 
+      // but since we already created a DRAFT DO, it will handle it.
+      await client.query(
+        `UPDATE order_items SET item_status = 'DIKEMAS' WHERE id = $1`,
+        [oi.order_item_id]
+      );
+      await client.query(
+        `UPDATE orders SET status = 'PROCESSING' WHERE id = $1`,
+        [issue.order_id]
+      );
+      
+      return { success: true, new_dn_id: newDnId };
+    }
+
+    return { success: true };
   });
 }

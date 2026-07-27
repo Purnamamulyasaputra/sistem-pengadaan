@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const result = await cancelDeliveryNote(Number(id));
     return NextResponse.json({ success: true, message: 'Delivery Order has been canceled', data: result });
-  } catch (e: any) {
-    return NextResponse.json({ success: false, message: e.message || 'Failed to cancel', data: null }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ success: false, message: (e instanceof Error ? e.message : 'Unknown error') || 'Failed to cancel', data: null }, { status: 500 });
   }
 }

@@ -10,7 +10,7 @@ import { SettingsTabs } from '@/components/ui/SettingsTabs';
 
 export default function UsersManagementPage() {
   const [users, setUsers] = useState<any[]>([]);
-  const [outlets, setOutlets] = useState<any[]>([]);
+  const [outlets, setOutlets] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
@@ -30,7 +30,7 @@ export default function UsersManagementPage() {
     setModalOpen(true);
   }
 
-  function openEditUser(user: any) {
+  function openEditUser(user: { id: number, name: string, email: string, role: string, outlet_id?: number | null }) {
     setEditingUserId(user.id);
     setFormData({
       name: user.name || '',

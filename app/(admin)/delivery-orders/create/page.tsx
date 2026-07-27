@@ -7,14 +7,37 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Toast } from '@/components/ui/Toast';
+import { BarcodeScannerModal } from '@/components/ui/BarcodeScannerModal';
+import { Select } from '@/components/ui/Select';
+
+interface RawOrderItem {
+  order_item_id: number;
+  item_id: number;
+  item_name: string;
+  item_status: string;
+  smallest_unit?: string;
+  conversion_ratio?: string | number;
+  qty_request: number;
+  current_stock?: string | number;
+  current_average_price?: number;
+  barcode?: string;
+}
+
+interface OrderItem extends Omit<RawOrderItem, 'current_stock'> {
+  qty_shipped: number | string;
+  selected: boolean;
+  keterangan: string;
+  current_stock: number;
+  is_additional?: boolean;
+}
 
 export default function CreateDeliveryOrderPage() {
   const router = useRouter();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [outlets, setOutlets] = useState<any[]>([]);
+  const [orders, setOrders] = useState<{ order_id: number; outlet_id: number; outlet_name: string; order_date: string; items: RawOrderItem[] }[]>([]);
+  const [outlets, setOutlets] = useState<{ id: number; name: string }[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [targetOutletId, setTargetOutletId] = useState<string>('');
-  const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
 
   const [form, setForm] = useState({
     delivery_date: new Date().toISOString().split('T')[0],
@@ -24,6 +47,10 @@ export default function CreateDeliveryOrderPage() {
   const [saving, setSaving] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState('');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [requireBarcode, setRequireBarcode] = useState(true);
+  
+  const [allItems, setAllItems] = useState<any[]>([]);
 
   useEffect(() => {
     // Fetch orders that are PROCESSING or READY
@@ -33,7 +60,7 @@ export default function CreateDeliveryOrderPage() {
 
       // Group items by order to get the orders list, filtering for ones that need shipping
       const uniqueOrders = new Map();
-      (data.data ?? []).forEach((item: any) => {
+      (data.data ?? []).forEach((item: RawOrderItem & { order_id: number; outlet_id: number; outlet_name: string; order_date: string }) => {
         if (['PROSES_BELANJA', 'READY_DI_GUDANG'].includes(item.item_status)) {
           if (!uniqueOrders.has(item.order_id)) {
             uniqueOrders.set(item.order_id, {
@@ -55,8 +82,24 @@ export default function CreateDeliveryOrderPage() {
       const data = await res.json();
       setOutlets(data.data ?? []);
     }
+    async function fetchSettings() {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        setRequireBarcode(data.data?.require_barcode_scan !== 'false');
+      }
+    }
+    async function fetchItems() {
+      const res = await fetch('/api/items');
+      if (res.ok) {
+        const data = await res.json();
+        setAllItems(data.data?.filter((i: any) => i.is_active) || []);
+      }
+    }
     fetchOrders();
     fetchOutlets();
+    fetchSettings();
+    fetchItems();
   }, []);
 
   const handleSelectOrder = (id: string) => {
@@ -67,18 +110,24 @@ export default function CreateDeliveryOrderPage() {
       return;
     }
 
+    if (id === 'DIRECT') {
+      setOrderItems([]);
+      setTargetOutletId('');
+      return;
+    }
+
     const selected = orders.find(o => String(o.order_id) === id);
     if (selected) {
       setTargetOutletId(String(selected.outlet_id));
-      setOrderItems(selected.items.map((i: any) => ({
+      setOrderItems(selected.items.map((i: RawOrderItem) => ({
         ...i,
         qty_shipped: (() => {
-          const u = (i.smallest_unit || '').toLowerCase();
+          const u = (String(i.smallest_unit || '')).toLowerCase();
           const ratio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
           const inSmallest = i.qty_request * (Number(i.conversion_ratio) || 1);
           return parseFloat(Number(inSmallest / ratio).toFixed(3));
         })(),
-        current_stock: parseFloat(i.current_stock ?? '0'),
+        current_stock: parseFloat(String(i.current_stock ?? '0')),
         selected: i.item_status === 'READY_DI_GUDANG',
         keterangan: ''
       })));
@@ -95,29 +144,95 @@ export default function CreateDeliveryOrderPage() {
     }
   }, [orders]);
 
-  const handleToggleItem = (orderItemId: number) => {
-    setOrderItems(orderItems.map(i => i.order_item_id === orderItemId ? { ...i, selected: !i.selected } : i));
+  const handleToggleItem = (orderItemId: number | string) => {
+    setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? { ...i, selected: !i.selected } : i));
   };
 
-  const handleQtyChange = (orderItemId: number, val: string) => {
-    setOrderItems(orderItems.map(i => i.order_item_id === orderItemId ? { ...i, qty_shipped: parseFloat(val) || 0 } : i));
+  const handleAddEmptyRow = () => {
+    const tempId = -(Date.now());
+    setOrderItems([{
+      order_item_id: tempId,
+      item_id: 0,
+      item_name: '',
+      item_status: 'READY_DI_GUDANG',
+      smallest_unit: '',
+      conversion_ratio: 1,
+      qty_request: 0,
+      current_average_price: 0,
+      barcode: '',
+      qty_shipped: 1,
+      selected: true,
+      keterangan: 'Tambahan dari Pusat',
+      current_stock: 0,
+      is_additional: true
+    }, ...orderItems]);
   };
 
-  const handleKeteranganChange = (orderItemId: number, val: string) => {
-    setOrderItems(orderItems.map(i => i.order_item_id === orderItemId ? { ...i, keterangan: val } : i));
+  const handleSelectAdditionalItem = (orderItemId: number, newItemId: string) => {
+    const itemData = allItems.find(i => String(i.id) === newItemId);
+    if (!itemData) return;
+
+    const exists = orderItems.find(i => String(i.item_id) === newItemId && String(i.order_item_id) !== String(orderItemId));
+    if (exists) {
+      setError('Barang ini sudah ada di dalam daftar.');
+      return;
+    }
+    setError('');
+
+    setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? {
+      ...i,
+      item_id: itemData.id,
+      item_name: itemData.name,
+      smallest_unit: itemData.smallest_unit,
+      conversion_ratio: itemData.conversion_ratio,
+      current_average_price: itemData.current_average_price,
+      barcode: itemData.barcode,
+      current_stock: parseFloat(String(itemData.current_stock)) || 0
+    } : i));
+  };
+
+  const handleRemoveAdditionalItem = (orderItemId: number | string) => {
+    setOrderItems(orderItems.filter(i => String(i.order_item_id) !== String(orderItemId)));
+  };
+
+  const handleQtyChange = (orderItemId: number | string, val: string) => {
+    // allow empty string or trailing dot for decimal typing
+    const newVal = val === '' || val.endsWith('.') ? val : (parseFloat(val) || 0);
+    setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? { ...i, qty_shipped: newVal } : i));
+  };
+
+  const handleBarcodeScan = (barcode: string) => {
+    const itemIndex = orderItems.findIndex(i => i.barcode === barcode);
+    if (itemIndex !== -1) {
+      const item = orderItems[itemIndex];
+      const newItems = [...orderItems];
+      if (!item.selected) {
+        newItems[itemIndex] = { ...item, selected: true, qty_shipped: 1 };
+      } else {
+        newItems[itemIndex] = { ...item, qty_shipped: (parseFloat(String(item.qty_shipped)) || 0) + 1 };
+      }
+      setOrderItems(newItems);
+      // Feedback to user (could add a small toast, but visual update is usually enough)
+    } else {
+      setError(`Barang dengan barcode ${barcode} tidak ada dalam daftar PO ini.`);
+    }
+  };
+
+  const handleKeteranganChange = (orderItemId: number | string, val: string) => {
+    setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? { ...i, keterangan: val } : i));
   };
 
   const handleSave = async () => {
-    const selectedItems = orderItems.filter(i => i.selected && i.qty_shipped > 0);
+    const selectedItems = orderItems.filter(i => i.selected && parseFloat(String(i.qty_shipped)) > 0 && i.item_id !== 0);
     if (selectedItems.length === 0) {
       setError('Pilih setidaknya satu barang untuk dikirim.');
       return;
     }
 
     const overStockItems = selectedItems.filter(i => {
-      const u = (i.smallest_unit || '').toLowerCase();
+      const u = (String(i.smallest_unit || '')).toLowerCase();
       const ratio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
-      return (i.qty_shipped * ratio) > i.current_stock;
+      return (parseFloat(String(i.qty_shipped)) * ratio) > i.current_stock;
     });
     if (overStockItems.length > 0) {
       const names = overStockItems.map(i => i.item_name).join(', ');
@@ -130,24 +245,27 @@ export default function CreateDeliveryOrderPage() {
       return;
     }
 
-    const orderData = orders.find(o => String(o.order_id) === selectedOrderId);
-    if (!orderData) return;
+    if (selectedOrderId !== 'DIRECT') {
+      const orderData = orders.find(o => String(o.order_id) === selectedOrderId);
+      if (!orderData) return;
+    }
 
     setSaving(true);
     setError('');
 
     try {
       const payload = {
-        order_id: orderData.order_id,
+        order_id: selectedOrderId === 'DIRECT' ? null : Number(selectedOrderId),
         outlet_id: Number(targetOutletId),
         driver_name: form.driver_name,
         delivery_date: form.delivery_date,
         items: selectedItems.map(i => ({
           order_item_id: i.order_item_id,
           item_id: i.item_id,
-          qty_shipped: i.qty_shipped,
+          qty_shipped: parseFloat(String(i.qty_shipped)) || 0,
           price_at_shipment: i.current_average_price,
-          keterangan: i.keterangan || ''
+          keterangan: i.keterangan || '',
+          is_additional: i.is_additional
         }))
       };
 
@@ -161,8 +279,8 @@ export default function CreateDeliveryOrderPage() {
       if (!data.success) throw new Error(data.message);
 
       router.push(`/delivery-orders/${data.data.id}`);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : 'Unknown error'));
       setSaving(false);
     }
   };
@@ -197,6 +315,7 @@ export default function CreateDeliveryOrderPage() {
               <label className="req">Sumber Permintaan</label>
               <select className="input" value={selectedOrderId} onChange={e => handleSelectOrder(e.target.value)}>
                 <option value="">-- Pilih Permintaan --</option>
+                <option value="DIRECT">[ Pengiriman Langsung ]</option>
                 {orders.map(o => (
                   <option key={o.order_id} value={o.order_id}>
                     PO-{new Date(o.order_date).getFullYear()}-{String(o.order_id).padStart(5, '0')}
@@ -210,8 +329,8 @@ export default function CreateDeliveryOrderPage() {
                 className="input" 
                 value={targetOutletId} 
                 onChange={(e) => setTargetOutletId(e.target.value)}
-                disabled={!selectedOrderId}
-                style={{ fontWeight: 600, background: !selectedOrderId ? '#f1f5f9' : '#fff' }}
+                disabled={!selectedOrderId || (selectedOrderId !== 'DIRECT' && !!selectedOrderId)}
+                style={{ fontWeight: 600, background: (!selectedOrderId || selectedOrderId !== 'DIRECT') ? '#f1f5f9' : '#fff' }}
               >
                 <option value="">-- Pilih Tujuan --</option>
                 {outlets.map(o => (
@@ -225,8 +344,8 @@ export default function CreateDeliveryOrderPage() {
                 type="date"
                 value={form.delivery_date}
                 min={new Date().toISOString().split('T')[0]}
-                onKeyDown={(e: any) => e.preventDefault()}
-                onClick={(e: any) => e.currentTarget.showPicker?.()}
+                onKeyDown={(e: React.KeyboardEvent) => e.preventDefault()}
+                onClick={(e: React.MouseEvent<HTMLInputElement>) => e.currentTarget.showPicker?.()}
                 onChange={e => setForm(f => ({ ...f, delivery_date: e.target.value }))}
               />
             </div>
@@ -238,7 +357,26 @@ export default function CreateDeliveryOrderPage() {
 
           {selectedOrderId ? (
             <>
-              <h4 style={{ marginBottom: 12, fontWeight: 600 }}>Daftar Barang yang Dikirim</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h4 style={{ fontWeight: 600, margin: 0 }}>Daftar Barang yang Dikirim</h4>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button variant="outline" size="sm" onClick={handleAddEmptyRow}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }}>
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Tambah Barang Lain
+                  </Button>
+                  {requireBarcode && (
+                    <Button variant="outline" size="sm" onClick={() => setIsScannerOpen(true)}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }}>
+                        <path d="M4 7V4h3m10 0h3v3M4 17v3h3m10 0h3v-3M9 12h6M12 9v6" />
+                      </svg>
+                      Scan Barcode
+                    </Button>
+                  )}
+                </div>
+              </div>
               <Table>
                 <thead>
                   <tr>
@@ -258,13 +396,13 @@ export default function CreateDeliveryOrderPage() {
                 </thead>
                 <tbody>
                   {orderItems.map(item => {
-                    const u = (item.smallest_unit || '').toLowerCase();
+                    const u = (String(item.smallest_unit || '')).toLowerCase();
                     const centralRatio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
                     const centralUnit = u === 'ml' ? 'Liter' : (u === 'gr' || u === 'g') ? 'Kg' : item.smallest_unit;
-                    const isExceeded = (item.qty_shipped * centralRatio) > item.current_stock;
+                    const isExceeded = (parseFloat(String(item.qty_shipped)) * centralRatio) > item.current_stock;
                     return (
                     <tr
-                      key={item.order_item_id}
+                      key={String(item.order_item_id)}
                       style={{
                         opacity: item.selected ? 1 : 0.6,
                         backgroundColor: item.selected ? (isExceeded ? '#fef2f2' : '#f8fafc') : '#fafafa',
@@ -280,8 +418,21 @@ export default function CreateDeliveryOrderPage() {
                         />
                       </td>
                       <td className="font-bold">
-                        <div>{item.item_name}</div>
-                        {isExceeded && item.selected && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4 }}>Stok Tidak Cukup</div>}
+                        {item.item_id === 0 ? (
+                          <div style={{ position: 'relative', width: 200, zIndex: 10 }}>
+                            <Select
+                              value={item.item_id === 0 ? '' : item.item_id}
+                              onChange={(val) => handleSelectAdditionalItem(item.order_item_id, String(val))}
+                              options={allItems.map(i => ({ value: i.id, label: i.name }))}
+                              placeholder="Cari barang..."
+                              searchable
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div>{item.item_name}</div>
+                          </>
+                        )}
                       </td>
                       <td className="center num font-bold">
                         {parseFloat(Number((item.qty_request * (Number(item.conversion_ratio) || 1)) / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
@@ -326,9 +477,24 @@ export default function CreateDeliveryOrderPage() {
                         />
                       </td>
                       <td className="center">
-                        <Badge variant={item.item_status === 'READY_DI_GUDANG' ? 'green' : 'amber'}>
-                          {item.item_status === 'READY_DI_GUDANG' ? 'Tersedia' : 'Proses Belanja'}
-                        </Badge>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                          <Badge variant={item.item_status === 'READY_DI_GUDANG' ? 'green' : 'amber'}>
+                            {item.item_status === 'READY_DI_GUDANG' ? 'Tersedia' : 'Proses Belanja'}
+                          </Badge>
+                          {item.is_additional && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAdditionalItem(item.order_item_id)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', display: 'flex', padding: 4 }}
+                              title="Hapus Barang Tambahan"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     );
@@ -338,7 +504,6 @@ export default function CreateDeliveryOrderPage() {
                   )}
                 </tbody>
               </Table>
-
             </>
           ) : (
             <div className="muted" style={{ padding: 40, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 8 }}>
@@ -347,6 +512,12 @@ export default function CreateDeliveryOrderPage() {
           )}
         </div>
       </div>
+
+      <BarcodeScannerModal 
+        isOpen={isScannerOpen} 
+        onClose={() => setIsScannerOpen(false)} 
+        onScan={handleBarcodeScan} 
+      />
     </section>
   );
 }

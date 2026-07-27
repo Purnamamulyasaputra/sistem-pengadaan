@@ -47,8 +47,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     console.log('Email sent: ' + info.response);
 
     return NextResponse.json({ success: true, message: 'Email berhasil dikirim ke ' + to });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error sending email:', error);
-    return NextResponse.json({ success: false, message: 'Gagal mengirim email: ' + error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Gagal mengirim email: ' + (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }

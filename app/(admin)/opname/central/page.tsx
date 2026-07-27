@@ -57,8 +57,8 @@ export default function CentralOpnamePage() {
         alert(data.message || 'Failed to start opname');
         setCreating(false);
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert((err instanceof Error ? err.message : 'Unknown error'));
       setCreating(false);
     }
   };

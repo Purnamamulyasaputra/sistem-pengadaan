@@ -41,9 +41,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       menu,
       ingredients: ingredientsRes.rows
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error fetching menu detail:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }
 
@@ -69,8 +69,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     `, [sale_price, menuId]);
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error updating master menu price:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

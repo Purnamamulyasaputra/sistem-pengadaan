@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       created_by: session.userId,
     });
     return NextResponse.json({ success: true, message: 'Purchase Order berhasil dibuat', data: po }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message || 'Internal Server Error', data: null }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') || 'Internal Server Error', data: null }, { status: 500 });
   }
 }

@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getDeliveryNoteById } from '@/lib/queries/delivery-notes';
 import { jsPDF } from 'jspdf';
 import bwipjs from 'bwip-js';
+import { isBarcodeScanRequired } from '@/lib/queries/settings';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -134,35 +135,41 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   doc.text(totalBelanja.toLocaleString('id-ID'), colX[7] - 1, y + 4.5, { align: 'right' });
 
   // Section for QR Code (Single Tracking Code per Delivery Order)
-  y += 15;
-  if (y > 250) {
-    doc.addPage();
-    y = 20;
-  }
+  const requireBarcode = await isBarcodeScanRequired();
 
-  const qrSize = 35; // 35x35 mm (Make it slightly larger for easy scanning)
-  const qrX = (210 - qrSize) / 2; // Centered
-  
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host') || 'localhost:3000'}`;
-    const qrUrl = `${baseUrl}/receive?kode=${encodeURIComponent(dn.delivery_note_number)}`;
+  if (requireBarcode) {
+    y += 15;
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
 
-    const barcodeBuffer = await bwipjs.toBuffer({
-      bcid: 'qrcode',
-      text: qrUrl,
-      scale: 3,
-      height: 10,
-      includetext: false,
-    });
-    const barcodeBase64 = `data:image/png;base64,${barcodeBuffer.toString('base64')}`;
-    doc.addImage(barcodeBase64, 'PNG', qrX, y, qrSize, qrSize);
+    const qrSize = 35; // 35x35 mm (Make it slightly larger for easy scanning)
+    const qrX = (210 - qrSize) / 2; // Centered
     
-    // Intentionally omitting the text label below the QR for security
-  } catch (err) {
-    doc.text("Error generating QR", 105, y + 15, { align: 'center' });
-  }
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host') || 'localhost:3000'}`;
+      const qrUrl = `${baseUrl}/receive?kode=${encodeURIComponent(dn.delivery_note_number)}`;
 
-  y += qrSize + 15;
+      const barcodeBuffer = await bwipjs.toBuffer({
+        bcid: 'qrcode',
+        text: qrUrl,
+        scale: 3,
+        height: 10,
+        includetext: false,
+      });
+      const barcodeBase64 = `data:image/png;base64,${barcodeBuffer.toString('base64')}`;
+      doc.addImage(barcodeBase64, 'PNG', qrX, y, qrSize, qrSize);
+      
+      // Intentionally omitting the text label below the QR for security
+    } catch (err) {
+      doc.text("Error generating QR", 105, y + 15, { align: 'center' });
+    }
+
+    y += qrSize + 15;
+  } else {
+    y += 20;
+  }
 
   // Signatures
   if (y > 260) {

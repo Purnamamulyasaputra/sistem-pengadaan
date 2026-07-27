@@ -20,7 +20,7 @@ interface OrderItem {
   purchase_unit: string; smallest_unit: string; qty_request: number; smallest_unit_qty: number;
   qty_approved?: number; approved_smallest_qty?: number;
   fulfillment_status: string; item_status: string; distribution_price?: number;
-  additional_notes?: string; current_average_price?: number; current_stock?: number;
+  additional_notes?: string; center_notes?: string; current_average_price?: number; current_stock?: number;
   conversion_ratio?: number;
 }
 
@@ -207,7 +207,7 @@ function RequestsContent() {
             {viewMode === 'by-outlet' && (
               <Select 
                 value={statusFilter} 
-                onChange={val => setStatusFilter(val)}
+                onChange={val => setStatusFilter(String(val))}
                 options={[
                   { value: '', label: 'Semua Status' },
                   { value: 'PENDING', label: 'Menunggu' },
@@ -394,6 +394,7 @@ function RequestsContent() {
                   <tr>
                     <th>Barang</th><th>Kategori</th><th className="right">Jml Diminta</th>
                     <th className="right">Jml Disetujui</th>
+                    <th>Catatan Pusat</th>
                     <th className="right">Stok Saat Ini</th>
                     <th>Pemenuhan</th><th>Status</th>
                     <th></th>
@@ -427,6 +428,20 @@ function RequestsContent() {
                           <span style={{ fontSize: 13 }}>{item.purchase_unit}</span>
                         </div>
                       </td>
+                      <td>
+                        <input 
+                          type="text"
+                          className="input"
+                          style={{ width: 140, height: 28, padding: '2px 8px', fontSize: 12 }}
+                          placeholder="Alasan / Catatan..."
+                          defaultValue={item.center_notes ?? ''}
+                          onBlur={(e) => {
+                            if (e.target.value !== (item.center_notes ?? '')) {
+                              handleUpdateItem(item.id, { center_notes: e.target.value });
+                            }
+                          }}
+                        />
+                      </td>
                       <td className="right">
                         <div className="font-bold num" style={{ color: Number(item.current_stock) >= (item.approved_smallest_qty ?? item.smallest_unit_qty) ? '#166534' : '#991b1b' }}>
                           {parseFloat((Number(item.current_stock ?? 0) / Number(item.conversion_ratio || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
@@ -436,7 +451,7 @@ function RequestsContent() {
                         <Select
                           inputStyle={{ height: 30, padding: '2px 8px', ...getFulfillmentStyle(item.fulfillment_status) }}
                           value={item.fulfillment_status}
-                          onChange={val => handleUpdateItem(item.id, { fulfillment_status: val })}
+                          onChange={val => handleUpdateItem(item.id, { fulfillment_status: String(val) })}
                           options={[
                             { value: 'MENUNGGU', label: 'Menunggu' },
                             { value: 'SANGGUP', label: 'Sanggup' },
@@ -448,7 +463,7 @@ function RequestsContent() {
                         <Select
                           inputStyle={{ height: 30, padding: '2px 8px', ...getStatusStyle(item.item_status) }}
                           value={item.item_status}
-                          onChange={val => handleUpdateItem(item.id, { item_status: val })}
+                          onChange={val => handleUpdateItem(item.id, { item_status: String(val) })}
                           options={Object.entries(ITEM_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l as string }))}
                         />
                       </td>

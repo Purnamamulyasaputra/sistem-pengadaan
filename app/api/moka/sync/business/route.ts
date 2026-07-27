@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
         }
 
         const results = await Promise.allSettled(
-            tokens.map(token => syncBusinessAndOutlets(token))
+            tokens.map((token: any) => syncBusinessAndOutlets(token))
         );
 
         const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
         } else {
             return NextResponse.json({ success: false, message: 'Failed to sync business for all connected accounts.' }, { status: 500 });
         }
-    } catch (error: any) {
-        return NextResponse.json({ success: false, message: error.message || 'Internal server error' }, { status: 500 });
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') || 'Internal server error' }, { status: 500 });
     }
 }

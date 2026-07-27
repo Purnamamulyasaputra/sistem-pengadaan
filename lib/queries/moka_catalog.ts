@@ -21,7 +21,7 @@ export async function getMokaCatalog(outletId?: string, search?: string, status?
         LEFT JOIN outlets o ON i.outlet_id = o.id
         WHERE 1=1
     `;
-    const params: any[] = [];
+    const params: unknown[] = [];
     let paramCount = 1;
 
     if (outletId) {
@@ -68,7 +68,7 @@ export async function getMokaCatalogStats(outletId?: string): Promise<{
         JOIN moka_items i ON v.item_id = i.id
         WHERE 1=1
     `;
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (outletId) {
         sql += ` AND i.outlet_id = $1`;
         params.push(outletId);
@@ -91,7 +91,7 @@ export async function getOutletsWithBusiness() {
         ORDER BY o.name
     `);
     
-    const grouped: Record<string, any[]> = {};
+    const grouped: Record<string, Record<string, unknown>[]> = {};
     for (const row of res.rows) {
         const bName = row.business_name || 'Unknown Business';
         if (!grouped[bName]) grouped[bName] = [];

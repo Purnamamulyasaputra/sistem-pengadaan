@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
 
     const data = await getAggregatedRequestsByProduct({ status, startDate, endDate });
     return NextResponse.json({ success: true, message: 'OK', data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Aggregated requests error:', error);
-    return NextResponse.json({ success: false, message: error.message, data: null }, { status: 500 });
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error'), data: null }, { status: 500 });
   }
 }

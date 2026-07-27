@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
@@ -18,14 +19,14 @@ interface LogEntry {
 }
 
 export default function StockCardPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Record<string, unknown>[]>([]);
   const [catFilter, setCatFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -67,7 +68,7 @@ export default function StockCardPage() {
   const lastIn = logs.find(l => l.movement_type === 'IN')?.created_at;
   const lastOut = logs.find(l => l.movement_type === 'OUT')?.created_at;
 
-  const filteredItems = items.filter(i => {
+  const filteredItems = items.filter((i: any) => {
     if (search && !i.name.toLowerCase().includes(search.toLowerCase()) && !String(i.id).includes(search)) return false;
     if (catFilter && String(i.category_id) !== catFilter) return false;
     
@@ -115,16 +116,16 @@ export default function StockCardPage() {
             />
             <Select 
               value={catFilter} 
-              onChange={(val: string) => setCatFilter(val)}
+              onChange={(val: any) => setCatFilter(String(val))}
               options={[
                 { value: '', label: 'Semua Kategori' },
-                ...categories.map(c => ({ value: String(c.id), label: c.name }))
+                ...categories.map((c: any) => ({ value: String(c.id), label: String(c.name) }))
               ]}
               style={{ width: 150 }}
             />
             <Select 
               value={statusFilter} 
-              onChange={(val: string) => setStatusFilter(val)}
+              onChange={(val: any) => setStatusFilter(String(val))}
               options={[
                 { value: '', label: 'Semua Status' },
                 { value: 'SAFE', label: 'Aman' },
@@ -155,12 +156,11 @@ export default function StockCardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedItems.map(item => {
+                  {paginatedItems.map((item: any) => {
                     const currentStockSmallest = Number(item.current_stock ?? 0);
                     const minStockSmallest = Number(item.minimum_threshold ?? 0);
-                    
-                    const centralStock = toCentralDisplay(currentStockSmallest, item.smallest_unit);
-                    const centralMin = toCentralDisplay(minStockSmallest, item.smallest_unit);
+                    const centralStock = toCentralDisplay(currentStockSmallest, String(item.smallest_unit || ''));
+                    const centralMin = toCentralDisplay(minStockSmallest, String(item.smallest_unit || ''));
                     
                     const isLow = currentStockSmallest < minStockSmallest;
                     const isOut = currentStockSmallest <= 0;
@@ -205,7 +205,7 @@ export default function StockCardPage() {
       <Modal 
         isOpen={!!selectedItemId} 
         onClose={() => setSelectedItemId('')} 
-        title={`Kartu Stok — ${selectedItem?.name}`} 
+        title={`Kartu Stok — ${String(selectedItem?.name || '')}`} 
         maxWidth={800}
         footer={<Button variant="outline" onClick={() => setSelectedItemId('')}>Tutup</Button>}
       >
@@ -213,11 +213,11 @@ export default function StockCardPage() {
           <div>
             <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Saldo Saat Ini</p>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {(Number(currentBalance) / Number(selectedItem?.conversion_ratio || 1)).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted" style={{ fontSize: 14 }}>{selectedItem?.purchase_unit || selectedItem?.smallest_unit}</span>
+              {(Number(currentBalance) / Number(selectedItem?.conversion_ratio || 1)).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted" style={{ fontSize: 14 }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
             </div>
             {Number(selectedItem?.conversion_ratio || 1) > 1 && (
               <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-                ({Number(currentBalance).toLocaleString('id-ID')} {selectedItem?.smallest_unit})
+                ({Number(currentBalance).toLocaleString('id-ID')} {String(selectedItem?.smallest_unit || '')})
               </div>
             )}
           </div>
@@ -273,27 +273,35 @@ export default function StockCardPage() {
                     </td>
                     <td className="right">
                       <div className="font-mono font-bold" style={{ color: log.movement_type === 'OUT' || log.qty_change < 0 ? '#dc2626' : '#16a34a' }}>
-                        {log.qty_change > 0 ? '+' : ''}{Number(convertedQtyChange).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{selectedItem?.purchase_unit || selectedItem?.smallest_unit}</span>
+                        {log.qty_change > 0 ? '+' : ''}{Number(convertedQtyChange).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
                       </div>
                       {ratio > 1 && (
                         <div className="muted font-mono" style={{ fontSize: 11 }}>
-                          ({log.qty_change > 0 ? '+' : ''}{Number(log.qty_change).toLocaleString('id-ID')} {selectedItem?.smallest_unit})
+                          ({log.qty_change > 0 ? '+' : ''}{Number(log.qty_change).toLocaleString('id-ID')} {String(selectedItem?.smallest_unit || '')})
                         </div>
                       )}
                     </td>
                     <td className="right">
                       <div className="font-mono font-bold">
-                        {Number(convertedEndingBalance).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)' }}>{selectedItem?.purchase_unit || selectedItem?.smallest_unit}</span>
+                        {Number(convertedEndingBalance).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)' }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
                       </div>
                       {ratio > 1 && (
                         <div className="muted font-mono" style={{ fontSize: 11 }}>
-                          ({Number(log.ending_balance).toLocaleString('id-ID')} {selectedItem?.smallest_unit})
+                          ({Number(log.ending_balance).toLocaleString('id-ID')} {String(selectedItem?.smallest_unit || '')})
                         </div>
                       )}
                     </td>
                     <td>
                       <div className="font-bold">{log.reference_type}</div>
-                      <div className="muted font-mono" style={{ fontSize: 12 }}>Ref ID: {log.reference_id}</div>
+                      <div className="muted font-mono" style={{ fontSize: 12 }}>
+                        {log.reference_type === 'DO' ? (
+                          <Link href={`/delivery-orders/${log.reference_id}`} className="text-blue-600 hover:underline">Ref ID: {log.reference_id}</Link>
+                        ) : log.reference_type === 'PO' ? (
+                          <Link href={`/purchase-orders/${log.reference_id}`} className="text-blue-600 hover:underline">Ref ID: {log.reference_id}</Link>
+                        ) : (
+                          <span>Ref ID: {log.reference_id}</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   );

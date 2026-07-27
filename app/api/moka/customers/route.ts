@@ -26,7 +26,7 @@ export async function GET(req: Request) {
             WHERE is_deleted = false
         `;
 
-        const params: any[] = [];
+        const params: unknown[] = [];
         let paramCount = 1;
 
         if (outletId) {
@@ -72,8 +72,8 @@ export async function GET(req: Request) {
             limit
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching customers:", error);
-        return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+        return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
     }
 }

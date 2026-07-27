@@ -14,6 +14,7 @@ interface Order {
 interface OrderItem {
   id: number; order_id: number; item_name: string; category_name: string;
   purchase_unit: string; smallest_unit: string; qty_request: number; smallest_unit_qty: number;
+  qty_approved?: number; center_notes?: string;
   fulfillment_status: string; item_status: string;
 }
 
@@ -138,7 +139,10 @@ export default function OutletRequestsPage() {
               <Table>
                 <thead>
                   <tr>
-                    <th>Barang</th><th>Kategori</th><th className="right">Jml Diminta</th>
+                    <th>Barang</th><th>Kategori</th>
+                    <th className="right">Jml Diminta</th>
+                    <th className="right">Jml Disetujui</th>
+                    <th>Catatan Pusat</th>
                     <th className="center">Pemenuhan</th><th className="center">Status</th>
                   </tr>
                 </thead>
@@ -149,6 +153,16 @@ export default function OutletRequestsPage() {
                       <td className="muted">{item.category_name}</td>
                       <td className="right">
                         <div className="font-bold num">{parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
+                      </td>
+                      <td className="right">
+                        <div className="font-bold num text-primary">{parseFloat(Number(item.qty_approved ?? item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
+                      </td>
+                      <td>
+                        {item.center_notes ? (
+                          <div style={{ fontSize: 12, color: 'var(--danger)', fontStyle: 'italic' }}>{item.center_notes}</div>
+                        ) : (
+                          <span className="muted italic" style={{ fontSize: 12 }}>-</span>
+                        )}
                       </td>
                       <td className="center">
                         <Badge variant={item.fulfillment_status === 'SANGGUP' ? 'green' : item.fulfillment_status === 'TIDAK' ? 'red' : 'amber'}>

@@ -1,7 +1,7 @@
 import { query } from "@/lib/db";
 import { fetchMokaAPIWithToken } from "@/lib/moka/api";
 
-export async function syncBusinessAndOutlets(token: any) {
+export async function syncBusinessAndOutlets(token: { access_token: string; refresh_token: string; expires_at?: Date | string; [key: string]: unknown }) {
     try {
         if (!token) throw new Error("No token provided");
 
@@ -60,7 +60,7 @@ export async function syncBusinessAndOutlets(token: any) {
     }
 }
 
-export async function syncItems(token: any) {
+export async function syncItems(token: { access_token: string; refresh_token: string; expires_at?: Date | string; [key: string]: unknown }) {
     try {
         if (!token) throw new Error("No token provided");
 

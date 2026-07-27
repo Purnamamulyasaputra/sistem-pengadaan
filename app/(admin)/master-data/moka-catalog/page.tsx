@@ -64,7 +64,7 @@ export default async function MokaCatalogPage(props: { searchParams: Promise<{ p
                 recipes={allRecipes} 
                 stats={stats}
                 totalCount={totalItems}
-                outletsGrouped={outletsGrouped} 
+                outletsGrouped={outletsGrouped as any} 
                 activeOutletId={outletId}
                 activeSearch={search}
                 activeStatus={status} 

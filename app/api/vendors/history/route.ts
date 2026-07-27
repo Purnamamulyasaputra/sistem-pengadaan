@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
   try {
     const history = await getVendorHistory(Number(vendorId));
     return NextResponse.json({ success: true, message: 'OK', data: history });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Get Vendor History Error:', err);
-    return NextResponse.json({ success: false, message: err.message || 'Internal Error' }, { status: 500 });
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') || 'Internal Error' }, { status: 500 });
   }
 }

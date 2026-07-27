@@ -10,9 +10,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
     }
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[GET /api/hpp/recipes/${resolvedParams.id}] Error:`, err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 
@@ -23,9 +23,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const data = await request.json();
     await updateRecipe(id, data);
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[PUT /api/hpp/recipes/${resolvedParams.id}] Error:`, err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 
@@ -35,8 +35,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const id = parseInt(resolvedParams.id, 10);
     await deleteRecipe(id);
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[DELETE /api/hpp/recipes/${resolvedParams.id}] Error:`, err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

@@ -18,9 +18,9 @@ const albertSans = Albert_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Sunrise Daily | Sistem Pengadaan & Inventory",
-  description: "Centralized Procurement & Inventory Management System for Sunrise Daily F&B Holdings",
-  keywords: ["procurement", "inventory", "pengadaan", "sunrise daily", "er coffeelab"],
+  title: "Sistem Pengadaan & Inventory",
+  description: "Sistem Pengadaan & Inventory",
+  keywords: ["Pengadaan", "Inventory", "Sistem"],
 };
 
 export default function RootLayout({

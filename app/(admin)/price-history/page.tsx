@@ -5,13 +5,13 @@ import { Select } from '@/components/ui/Select';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function PriceHistoryPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [vendors, setVendors] = useState<any[]>([]);
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [vendors, setVendors] = useState<{ id: number; name: string }[]>([]);
 
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
 
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -34,8 +34,8 @@ export default function PriceHistoryPage() {
       .catch(() => setLoading(false));
   }, [selectedItemId, selectedVendorId]);
 
-  const chartData = selectedItemId ? [...history].reverse().map(h => ({
-    date: new Date(h.purchase_date).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }),
+  const chartData = selectedItemId ? [...history].reverse().map((h: any) => ({
+    date: new Date(String(h.purchase_date)).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }),
     'Purchase Price': Number(h.unit_purchase_price),
     'Moving Average': Number(h.new_average_price),
   })) : [];
@@ -59,19 +59,19 @@ export default function PriceHistoryPage() {
         <div style={{ padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16 }}>
           <Select
             value={selectedItemId}
-            onChange={val => setSelectedItemId(val)}
+            onChange={val => setSelectedItemId(String(val))}
             options={[
               { value: '', label: 'Semua Barang' },
-              ...items.map(i => ({ value: String(i.id), label: i.name }))
+              ...items.map((i: any) => ({ value: String(i.id), label: String(i.name || '') }))
             ]}
             style={{ minWidth: 250 }}
           />
           <Select
             value={selectedVendorId}
-            onChange={val => setSelectedVendorId(val)}
+            onChange={val => setSelectedVendorId(String(val))}
             options={[
               { value: '', label: 'Semua Vendor' },
-              ...vendors.map(v => ({ value: String(v.id), label: v.name }))
+              ...vendors.map((v: any) => ({ value: String(v.id), label: String(v.name || '') }))
             ]}
             style={{ minWidth: 250 }}
           />
@@ -85,9 +85,9 @@ export default function PriceHistoryPage() {
                 <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
-                  <YAxis tickFormatter={(val) => `Rp${(val / 1000)}k`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={(val: any) => `Rp${(Number(val) / 1000)}k`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
                   <Tooltip
-                    formatter={(value: any) => [`Rp ${Number(value).toLocaleString('id-ID')}`, undefined]}
+                    formatter={(value: any, name: any) => [`Rp ${Number(value || 0).toLocaleString('id-ID')}`, name] as any}
                     contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} />
@@ -123,10 +123,10 @@ export default function PriceHistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {history.map(h => (
+                {history.map((h: any) => (
                   <tr key={h.id}>
                     <td>
-                      {new Date(h.purchase_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {new Date(String(h.purchase_date)).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                       <div className="muted font-mono" style={{ fontSize: 12 }}>{h.purchase_order_item_id ? `PO Item: ${h.purchase_order_item_id}` : 'Entri Manual'}</div>
                     </td>
                     <td className="font-bold">{h.item_name}</td>

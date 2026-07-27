@@ -23,10 +23,10 @@ export async function POST(req: Request) {
             message: "Item mapping saved successfully." 
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error mapping Moka item:", error);
         return NextResponse.json(
-            { message: error.message || "Internal server error" },
+            { message: (error instanceof Error ? error.message : 'Unknown error') || "Internal server error" },
             { status: 500 }
         );
     }

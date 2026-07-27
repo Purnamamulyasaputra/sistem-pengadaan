@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
         let totalItems = 0;
         const results = await Promise.allSettled(
-            tokens.map(token => syncItems(token))
+            tokens.map((token: any) => syncItems(token))
         );
 
         let successful = 0;
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         } else {
             return NextResponse.json({ success: false, message: 'Failed to sync items for all connected accounts.' }, { status: 500 });
         }
-    } catch (error: any) {
-        return NextResponse.json({ success: false, message: error.message || 'Internal server error' }, { status: 500 });
+    } catch (error: unknown) {
+        return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') || 'Internal server error' }, { status: 500 });
     }
 }

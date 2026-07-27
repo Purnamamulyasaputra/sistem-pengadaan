@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Search } from 'lucide-react';
 
 interface SelectOption {
@@ -10,7 +11,7 @@ interface SelectOption {
 
 interface SelectProps {
   value: string | number;
-  onChange: (value: any) => void;
+  onChange: (value: string | number) => void;
   options: SelectOption[];
   style?: React.CSSProperties;
   className?: string;
@@ -25,10 +26,51 @@ export function Select({ value, onChange, options, style, className = '', placeh
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && wrapperRef.current) {
+      const updatePosition = () => {
+        if (!wrapperRef.current) return;
+        const rect = wrapperRef.current.getBoundingClientRect();
+        // Check if there is enough space at the bottom (assumed max dropdown height 280px)
+        const spaceBottom = window.innerHeight - rect.bottom;
+        const isBottomSpace = spaceBottom > 280 || spaceBottom > rect.top;
+        
+        setDropdownStyle({
+          position: 'fixed',
+          top: isBottomSpace ? rect.bottom + 4 : undefined,
+          bottom: isBottomSpace ? undefined : window.innerHeight - rect.top + 4,
+          left: rect.left,
+          width: rect.width,
+          zIndex: 99999,
+        });
+      };
+      
+      updatePosition();
+      // Listen to scroll events on any scrollable parent
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+      if (
+        wrapperRef.current && 
+        !wrapperRef.current.contains(event.target as Node) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(event.target as Node))
+      ) {
         setIsOpen(false);
         setSearchTerm(''); // Reset search when closed
       }
@@ -51,7 +93,7 @@ export function Select({ value, onChange, options, style, className = '', placeh
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          cursor: 'pointer',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           userSelect: 'none',
           background: disabled ? '#f8fafc' : '#fff',
           width: '100%',
@@ -70,24 +112,22 @@ export function Select({ value, onChange, options, style, className = '', placeh
         <ChevronDown size={14} style={{ color: '#64748b', marginLeft: 8, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </div>
 
-      {isOpen && (
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          marginTop: 4,
-          background: '#fff',
-          border: '1px solid #e2e8f0',
-          borderRadius: 6,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-          zIndex: 50,
-          maxHeight: 280,
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
+      {isOpen && mounted && createPortal(
+        <div 
+          ref={dropdownRef}
+          style={{
+            ...dropdownStyle,
+            background: '#fff',
+            border: '1px solid #e2e8f0',
+            borderRadius: 6,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            maxHeight: 280,
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
           {searchable && (
-            <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, background: '#fff', zIndex: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, background: '#fff', zIndex: 2, display: 'flex', alignItems: 'center', gap: 8, borderTopLeftRadius: 6, borderTopRightRadius: 6 }}>
               <Search size={14} style={{ color: '#94a3b8', marginLeft: 4 }} />
               <input 
                 type="text" 
@@ -100,7 +140,7 @@ export function Select({ value, onChange, options, style, className = '', placeh
             </div>
           )}
           
-          <div style={{ overflowY: 'auto', flex: 1 }}>
+          <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
             {filteredOptions.map((opt, i) => (
               opt.isGroup ? (
                 <div key={`group-${i}`} style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#94a3b8', background: '#f8fafc', textTransform: 'uppercase' }}>
@@ -116,9 +156,9 @@ export function Select({ value, onChange, options, style, className = '', placeh
                     setSearchTerm('');
                   }}
                   style={{
-                    padding: '6px 10px',
+                    padding: '8px 12px',
                     cursor: opt.disabled ? 'not-allowed' : 'pointer',
-                    fontSize: 12,
+                    fontSize: 13,
                     background: String(opt.value) === String(value) ? '#f1f5f9' : '#fff',
                     color: opt.disabled ? '#94a3b8' : '#334155',
                     transition: 'background 0.1s',
@@ -143,7 +183,8 @@ export function Select({ value, onChange, options, style, className = '', placeh
               <div style={{ padding: '12px', fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>Tidak ada pilihan</div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

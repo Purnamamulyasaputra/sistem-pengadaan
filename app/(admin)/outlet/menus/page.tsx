@@ -126,7 +126,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
         />
         <Select
           value={catId}
-          onChange={val => { setCatId(val); setPage(1); }}
+          onChange={val => { setCatId(String(val)); setPage(1); }}
           options={[
             { value: '', label: 'Semua Kategori' },
             ...categories.map(c => ({ value: String(c.id), label: c.name }))
@@ -136,7 +136,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
         />
         <Select
           value={marginFlag}
-          onChange={val => { setMarginFlag(val); setPage(1); }}
+          onChange={val => { setMarginFlag(String(val)); setPage(1); }}
           options={[
             { value: '', label: 'Semua Margin' },
             { value: 'GREEN', label: 'Hijau (<35%)' },
@@ -296,10 +296,10 @@ function MenusTab({ categories }: { categories: Category[] }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {detailData.ingredients.map((ing: any) => (
-                        <tr key={ing.id}>
-                          <td style={{ fontWeight: 500 }}>{ing.ingredient_name}</td>
-                          <td className="right">{Number(ing.qty).toLocaleString('id-ID')}</td>
+                      {detailData.ingredients.map((ing: any, idx: number) => (
+                        <tr key={ing.ingredient_id || ing.item_id || idx}>
+                          <td style={{ fontWeight: 500 }}>{ing.ingredient_name || ing.item_name}</td>
+                          <td className="right">{Number(ing.qty || ing.quantity || 0).toLocaleString('id-ID')}</td>
                           <td className="center" style={{ color: 'var(--muted)', fontSize: 12 }}>{ing.unit}</td>
                           <td className="right" style={{ color: 'var(--muted)' }}>{Math.round(ing.cost_per_unit || 0).toLocaleString('id-ID')}</td>
                           <td className="right" style={{ fontWeight: 600 }}>{Math.round(ing.cost || 0).toLocaleString('id-ID')}</td>
@@ -311,7 +311,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                         <td colSpan={3} style={{ padding: '10px 14px', fontSize: 13 }}></td>
                         <td className="right" style={{ fontWeight: 600, fontSize: 13, padding: '10px 14px' }}>Total Biaya Bahan</td>
                         <td className="right" style={{ fontWeight: 700, color: '#016e3f', fontSize: 14, padding: '10px 14px' }}>
-                          {Math.round(detailData.ingredients.reduce((sum: number, i: any) => sum + Number(i.cost || 0), 0)).toLocaleString('id-ID')}
+                          {Math.round(detailData.ingredients.reduce((sum: number, i: { cost: number | string }) => sum + Number(i.cost || 0), 0)).toLocaleString('id-ID')}
                         </td>
                       </tr>
                     </tfoot>
@@ -380,8 +380,8 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
       if (!res.ok) throw new Error('Failed to delete recipe');
       setDeleteConfirm(null);
       load();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert((e instanceof Error ? e.message : 'Unknown error'));
     } finally {
       setDeleting(false);
     }
@@ -396,7 +396,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 220 }} />
         <Select
           value={venueId}
-          onChange={val => { setVenueId(val); setPage(1); }}
+          onChange={val => { setVenueId(String(val)); setPage(1); }}
           options={[
             { value: '', label: 'Semua Venue' },
             ...venues.map(v => ({ value: String(v.id), label: v.name }))
@@ -406,7 +406,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
         />
         <Select
           value={sheet}
-          onChange={val => { setSheet(val); setPage(1); }}
+          onChange={val => { setSheet(String(val)); setPage(1); }}
           options={[
             { value: '', label: 'Semua Sheet' },
             ...SHEETS.map(s => ({ value: s, label: s }))
@@ -504,10 +504,10 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {(viewRecipeData.ingredients || []).map((ing: any) => (
-                    <tr key={ing.id}>
-                      <td style={{ fontWeight: 500 }}>{ing.ingredient_name}</td>
-                      <td className="right">{Number(ing.quantity).toLocaleString('id-ID')}</td>
+                  {(viewRecipeData.ingredients || []).map((ing: any, idx: number) => (
+                    <tr key={ing.ingredient_id || ing.item_id || idx}>
+                      <td style={{ fontWeight: 500 }}>{ing.ingredient_name || ing.item_name}</td>
+                      <td className="right">{Number(ing.quantity || ing.qty || 0).toLocaleString('id-ID')}</td>
                       <td className="center" style={{ color: 'var(--muted)', fontSize: 12 }}>{ing.unit}</td>
                     </tr>
                   ))}
@@ -525,7 +525,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
 
 function IngredientsTab() {
   const [data, setData] = useState<IngRow[]>([]);
-  const [masterItems, setMasterItems] = useState<any[]>([]);
+  const [masterItems, setMasterItems] = useState<Record<string, unknown>[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -593,8 +593,8 @@ function IngredientsTab() {
       if (!res.ok) throw new Error('Failed to save');
       setModalOpen(false);
       load();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert((e instanceof Error ? e.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -611,8 +611,8 @@ function IngredientsTab() {
       }
       setDeleteConfirm(null);
       load();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert((e instanceof Error ? e.message : 'Unknown error'));
     } finally {
       setDeleting(false);
     }
@@ -715,7 +715,7 @@ function KitchenTab() {
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
         <Select
           value={filter}
-          onChange={val => setFilter(val)}
+          onChange={val => setFilter(String(val))}
           options={[
             { value: '', label: 'Semua Dapur / Sheet' },
             ...Array.from(new Set(data.map(r => r.source_sheet))).map(sheet => ({ value: sheet, label: sheet }))
@@ -846,7 +846,7 @@ function CapacityTab() {
             <input type="text" placeholder="Search menu..." value={search} onChange={e => setSearch(e.target.value)} className="input" style={{ paddingLeft: 30, fontSize: 12, height: 28, width: '100%' }} />
           </div>
           <Select value={statusFilter} onChange={(val) => setStatusFilter(val as any)} options={[{ value: 'all', label: 'All Status' }, { value: 'green', label: 'Aman (> 10)' }, { value: 'yellow', label: 'Menipis (1 - 10)' }, { value: 'red', label: 'Habis (0)' }]} style={{ width: 160 }} inputStyle={{ padding: '2px 8px', fontSize: 12, height: 28 }} />
-          <Select value={limit} onChange={setLimit} options={[{ value: 8, label: '8' }, { value: 15, label: '15' }, { value: 32, label: '32' }, { value: 50, label: '50' }]} style={{ width: 70 }} inputStyle={{ padding: '2px 6px', fontSize: 12, height: 28 }} />
+          <Select value={limit} onChange={(val) => setLimit(Number(val))} options={[{ value: 8, label: '8' }, { value: 15, label: '15' }, { value: 32, label: '32' }, { value: 50, label: '50' }]} style={{ width: 70 }} inputStyle={{ padding: '2px 6px', fontSize: 12, height: 28 }} />
           <Button variant="outline" onClick={fetchData} style={{ height: 28, fontSize: 12, padding: '0 10px', background: '#ffffff' }} disabled={loading}>
             <RefreshCw size={12} className={loading ? 'spin' : ''} style={{ marginRight: 6 }} /> Refresh
           </Button>

@@ -15,10 +15,10 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
             data: res.rows
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching transaction items:", error);
         return NextResponse.json(
-            { message: error.message || "Internal server error" },
+            { message: (error instanceof Error ? error.message : 'Unknown error') || "Internal server error" },
             { status: 500 }
         );
     }

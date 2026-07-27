@@ -69,8 +69,8 @@ export default function OutletOpnamePage() {
         alert(data.message || 'Gagal memulai opname');
         setCreating(false);
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert((err instanceof Error ? err.message : 'Unknown error'));
       setCreating(false);
     }
   };

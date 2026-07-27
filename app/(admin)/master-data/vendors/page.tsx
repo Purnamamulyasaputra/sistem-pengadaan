@@ -10,6 +10,17 @@ import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
 
 interface Vendor { id: number; name: string; type?: string; email?: string; phone?: string; address?: string; tax_id?: string; website?: string; is_active: boolean; created_at: string; }
 
+interface VendorHistoryItem {
+  po_id: number;
+  po_number: string;
+  order_date: string;
+  item_name?: string;
+  description?: string;
+  qty: number;
+  unit_price: number;
+  subtotal: number;
+}
+
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +38,7 @@ export default function VendorsPage() {
   
   const [historyVendor, setHistoryVendor] = useState<Vendor | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [historyItems, setHistoryItems] = useState<VendorHistoryItem[]>([]);
 
   const fetchVendors = useCallback(async () => {
     setLoading(true);

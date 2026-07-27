@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
     const lastSync = syncRes.rows[0]?.last_sync || null;
 
     return NextResponse.json({ success: true, data, history, lastSync });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[GET /api/sales-transactions/summary] Error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }

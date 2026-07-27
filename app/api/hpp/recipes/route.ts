@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
     const data = await request.json();
     const recipeId = await createRecipe(data);
     return NextResponse.json({ success: true, recipeId });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[POST /api/hpp/recipes] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

@@ -74,8 +74,8 @@ const loadRecipe = async () => {
       cost_per_unit: Number(ing.cost_per_unit),
       extension: Number(ing.extension),
     })));
-  } catch (err: any) {
-    setError(err.message);
+  } catch (err: unknown) {
+    setError((err instanceof Error ? err.message : 'Unknown error'));
   } finally {
     setLoading(false);
   }
@@ -177,8 +177,8 @@ const handleSave = async () => {
     }
 
     router.push('/hpp');
-  } catch (err: any) {
-    setError(err.message);
+  } catch (err: unknown) {
+    setError((err instanceof Error ? err.message : 'Unknown error'));
     setSaving(false);
   }
 };

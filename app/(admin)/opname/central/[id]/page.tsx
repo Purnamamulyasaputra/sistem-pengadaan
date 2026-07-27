@@ -19,7 +19,7 @@ const REASON_CATEGORIES = [
 function formatUnit(unit: string | null | undefined): string {
   if (!unit) return '';
   const u = unit.toLowerCase().trim();
-  if (u === 'l') return 'liter';
+  if (u === 'l') return 'Liter';
   if (u === 'g' || u === 'gr') return 'gram';
   return unit;
 }
@@ -29,8 +29,8 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
   const { id } = use(params);
   const router = useRouter();
   const [header, setHeader] = useState<any>(null);
-  const [items, setItems] = useState<any[]>([]);
-  const [details, setDetails] = useState<any[]>([]);
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [details, setDetails] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
@@ -100,7 +100,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
         alert('All items with a variance must have a Reason Category selected.');
         return;
       }
-      const invalidOthers = details.filter(d => d.reason_category === 'LAINNYA' && !d.reason_notes?.trim());
+      const invalidOthers = details.filter(d => d.reason_category === 'LAINNYA' && !String(d.reason_notes || '').trim());
       if (invalidOthers.length > 0) {
         alert('All items with reason "Other" must have a note filled in.');
         return;
@@ -137,8 +137,8 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
       } else {
         alert('Draft saved successfully.');
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert((err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -169,7 +169,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <Select
               value={limit}
-              onChange={(val) => { setLimit(val); setCurrentPage(1); }}
+              onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
               options={[
                 { value: 'all', label: 'Semua' },
                 { value: 8, label: '8' },
@@ -211,7 +211,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
               </tr>
             </thead>
             <tbody style={{ fontSize: 12 }}>
-              {paginatedItems.map(item => {
+              {paginatedItems.map((item: any) => {
                 const detail = getDetail(item.item_id);
                 const ratio = item.conversion_ratio || 1;
                 const largeUnit = formatUnit(item.purchase_unit || item.smallest_unit);
@@ -219,13 +219,13 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                 const priceLarge = Number(item.current_average_price) * ratio;
 
                 const actualSmall = detail?.actual_physical_qty;
-                const actualLarge = actualSmall !== undefined ? Math.round(actualSmall / ratio) : '';
+                const actualLarge = actualSmall !== undefined ? Math.round(Number(actualSmall) / Number(ratio)) : '';
 
                 const varianceSmall = detail?.variance ?? 0;
-                const varianceLarge = Math.round(varianceSmall / ratio);
-                const varianceValue = Math.round(Math.abs(varianceSmall) * Number(item.current_average_price));
+                const varianceLarge = Math.round(Number(varianceSmall) / Number(ratio));
+                const varianceValue = Math.round(Math.abs(Number(varianceSmall)) * Number(item.current_average_price));
 
-                const sysBalLarge = Math.round(item.system_balance / ratio);
+                const sysBalLarge = Math.round(Number(item.system_balance) / Number(ratio));
 
                 return (
                   <tr key={item.item_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -270,8 +270,8 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                     <td style={{ padding: '8px 16px' }}>
                       {varianceSmall !== 0 ? (
                         <Select
-                          value={detail?.reason_category || ''}
-                          onChange={val => handleReasonChange(item.item_id, 'reason_category', val)}
+                          value={String(detail?.reason_category || '')}
+                          onChange={val => handleReasonChange(item.item_id, 'reason_category', String(val))}
                           disabled={isLocked}
                           options={[
                             { value: '', label: '-- Pilih Alasan --' },
@@ -289,11 +289,11 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                         <input
                           type="text"
                           className="input"
-                          value={detail?.reason_notes || ''}
+                          value={String(detail?.reason_notes || '')}
                           onChange={e => handleReasonChange(item.item_id, 'reason_notes', e.target.value)}
                           disabled={isLocked}
                           placeholder={detail?.reason_category === 'LAINNYA' ? 'Wajib diisi...' : 'Opsional...'}
-                          style={{ height: 32, padding: '4px 8px', fontSize: 12, width: '100%', borderColor: (detail?.reason_category === 'LAINNYA' && !detail?.reason_notes?.trim()) ? '#fca5a5' : 'var(--border)' }}
+                          style={{ height: 32, padding: '4px 8px', fontSize: 12, width: '100%', borderColor: (detail?.reason_category === 'LAINNYA' && !String(detail?.reason_notes || '').trim()) ? '#fca5a5' : 'var(--border)' }}
                         />
                       ) : null}
                     </td>

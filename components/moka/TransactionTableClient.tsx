@@ -79,22 +79,22 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
         }
     };
 
-    const handleRowClick = async (trx: any) => {
+    const handleRowClick = async (trx: { id: number; payment_type?: string; receipt_number?: string; total_collected?: string | number }) => {
         setSelectedTrx({ ...trx, items: [], isLoadingItems: true });
         try {
-            const itemsRes = await fetchTransactionItems(trx.id);
+            const itemsRes = await fetchTransactionItems(String(trx.id));
             setSelectedTrx({ ...trx, items: itemsRes.data, isLoadingItems: false });
         } catch {
-            setSelectedTrx((prev: any) => ({ ...prev, isLoadingItems: false }));
+            setSelectedTrx((prev: typeof selectedTrx) => ({ ...prev, isLoadingItems: false }));
         }
     };
 
     const transactions = data?.data || [];
     const total = data?.total || 0;
     const summary = data?.summary;
-    const totalCollected = summary?.totalRevenue ?? transactions.reduce((s: number, t: any) => s + Number(t.total_collected || 0), 0);
-    const totalRefunded = summary?.totalRefunded ?? transactions.filter((t: any) => t.is_refunded).length;
-    const cashCount = summary?.cashCount ?? transactions.filter((t: any) => t.payment_type === 'cash').length;
+    const totalCollected = summary?.totalRevenue ?? transactions.reduce((s: number, t: { total_collected?: string | number }) => s + Number(t.total_collected || 0), 0);
+    const totalRefunded = summary?.totalRefunded ?? transactions.filter((t: { is_refunded?: boolean }) => t.is_refunded).length;
+    const cashCount = summary?.cashCount ?? transactions.filter((t: { payment_type?: string }) => t.payment_type === 'cash').length;
 
     const ITEMS_PER_PAGE = 20;
     const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
@@ -194,7 +194,7 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                         {/* Outlet Select Dropdown */}
                         <Select
                             value={outletId}
-                            onChange={(val) => { setOutletId(val); setPage(1); }}
+                            onChange={(val) => { setOutletId(String(val)); setPage(1); }}
                             options={[
                                 { value: '', label: 'All Outlets' },
                                 ...outlets.map(o => ({ value: o.id, label: o.name }))

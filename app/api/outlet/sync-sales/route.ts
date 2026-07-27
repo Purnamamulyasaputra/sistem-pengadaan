@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Sync from Moka using only the correct token
-    const syncResult = await syncTransactions(correctToken, sinceEpoch, untilEpoch, outletId.toString());
+    const syncResult = await syncTransactions(correctToken as any, sinceEpoch, untilEpoch, outletId.toString());
     if (!syncResult.success) {
       throw new Error(syncResult.message || 'Failed to sync transactions from Moka');
     }
@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
       deduction: deductionResult,
       message: `Berhasil tersinkronisasi. ${deductionResult.count} transaksi baru diproses, memotong ${deductionResult.ingredientsDeducted} bahan dari ${deductionResult.itemsDeducted} jenis menu terjual.`
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[POST /api/outlet/sync-sales]', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }
