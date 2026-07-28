@@ -88,9 +88,9 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
                 <div>
-                    <h1 className="text-[20px] font-bold text-gray-900 font-['Cabin']">Customer Data</h1>
+                    <h1 className="text-[20px] font-bold text-gray-900 font-['Cabin']">Data Pelanggan</h1>
                     <p className="text-[13px] text-gray-500 mt-0.5">
-                        Sync and manage customer database from Moka POS
+                        Sinkronisasi dan kelola database pelanggan dari integrasi Moka POS
                     </p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
@@ -100,7 +100,7 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                         className="btn flex items-center justify-center gap-1.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-md px-3 py-1.5 font-medium text-[12px] transition-colors shadow-sm w-full sm:w-auto"
                     >
                         <RefreshCw size={13} className={`${isSyncing ? 'animate-spin text-[#016e3f]' : 'text-gray-500'}`} /> 
-                        {isSyncing ? 'Syncing...' : 'Sync Customers'}
+                        {isSyncing ? 'Sinkronisasi...' : 'Sinkronisasi Pelanggan'}
                     </button>
                 </div>
             </div>
@@ -115,7 +115,7 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                             <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                             <input
                                 type="text"
-                                placeholder="Search name or phone..."
+                                placeholder="Cari nama atau telepon..."
                                 value={searchInput}
                                 onChange={(e) => {
                                     const val = e.target.value;
@@ -125,7 +125,7 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                                 }}
                                 className="w-full text-[12px] border border-gray-200 rounded-md pl-8 pr-3 py-1.5 focus:outline-none focus:border-[#016e3f] focus:ring-1 focus:ring-[#016e3f] bg-white shadow-sm"
                             />
-                            <button type="submit" className="hidden">Search</button>
+                            <button type="submit" className="hidden">Cari</button>
                         </form>
                         
                         {outletsGrouped && Object.keys(outletsGrouped).length > 0 && (
@@ -135,7 +135,7 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                                 style={{ width: '145px', minWidth: '145px' }}
                                 className="text-[12px] border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#016e3f] bg-white text-gray-700 shadow-sm"
                             >
-                                <option value="">All Outlets</option>
+                                <option value="">Semua Outlet</option>
                                 {Object.entries(outletsGrouped).map(([bizName, outlets]) => (
                                     <optgroup key={bizName} label={`--- ${bizName} ---`}>
                                         {outlets.map((o: { id: number; name: string }) => (
@@ -154,9 +154,9 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                             style={{ width: '130px', minWidth: '130px' }}
                             className="text-[12px] border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#016e3f] bg-white text-gray-700 shadow-sm"
                         >
-                            <option value="all">All Customers</option>
-                            <option value="with">With Email</option>
-                            <option value="without">Without Email</option>
+                            <option value="all">Semua Pelanggan</option>
+                            <option value="with">Dengan Email</option>
+                            <option value="without">Tanpa Email</option>
                         </select>
                         <select 
                             value={sort} 
@@ -164,14 +164,14 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                             style={{ width: '130px', minWidth: '130px' }}
                             className="text-[12px] border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#016e3f] bg-white text-gray-700 shadow-sm"
                         >
-                            <option value="newest">Newest First</option>
-                            <option value="oldest">Oldest First</option>
-                            <option value="name_asc">Name A-Z</option>
-                            <option value="name_desc">Name Z-A</option>
+                            <option value="newest">Terbaru</option>
+                            <option value="oldest">Terlama</option>
+                            <option value="name_asc">Nama A-Z</option>
+                            <option value="name_desc">Nama Z-A</option>
                         </select>
                     </div>
                     <div className="text-[12px] text-gray-500 whitespace-nowrap">
-                        <span className="font-medium text-gray-900">{total}</span> customers found
+                        <span className="font-medium text-gray-900">{total}</span> pelanggan ditemukan
                     </div>
                 </div>
 
@@ -179,14 +179,14 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-gray-400 space-y-3">
                             <RefreshCw className="w-6 h-6 animate-spin text-[#016e3f]" />
-                            <p className="text-[13px]">Loading customer data...</p>
+                            <p className="text-[13px]">Memuat data pelanggan...</p>
                         </div>
                     ) : data.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-4 py-8">
                             <Users className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                            <h3 className="text-[15px] font-bold text-gray-900 font-['Cabin']">No Customers Found</h3>
+                            <h3 className="text-[15px] font-bold text-gray-900 font-['Cabin']">Pelanggan Tidak Ditemukan</h3>
                             <p className="text-[12px] text-gray-500 mt-1.5 max-w-sm">
-                                We couldn't find any customers matching your current filters. Try syncing from Moka or adjusting your search.
+                                Kami tidak dapat menemukan pelanggan yang sesuai filter saat ini. Coba sinkronisasi dari Moka atau ubah filter Anda.
                             </p>
                         </div>
                     ) : (
@@ -194,10 +194,10 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-[10px] font-bold uppercase tracking-wider">
                                     <th className="px-2 py-2 w-8 text-center"></th>
-                                    <th className="px-2 py-2">CUSTOMER NAME</th>
-                                    <th className="px-2 py-2">PHONE NUMBER</th>
-                                    <th className="px-2 py-2">EMAIL ADDRESS</th>
-                                    <th className="px-2 py-2">JOINED DATE</th>
+                                    <th className="px-2 py-2">NAMA PELANGGAN</th>
+                                    <th className="px-2 py-2">NO. TELEPON</th>
+                                    <th className="px-2 py-2">ALAMAT EMAIL</th>
+                                    <th className="px-2 py-2">TANGGAL BERGABUNG</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-[12px]">
@@ -258,8 +258,8 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                                                                 
                                                                 {/* Headers */}
                                                                 <div className="grid grid-cols-12 gap-4 text-[9px] font-bold text-gray-400 uppercase tracking-widest pb-1.5 border-b border-gray-100 mb-2">
-                                                                    <div className="col-span-5">Personal Information</div>
-                                                                    <div className="col-span-7">Location & Address</div>
+                                                                    <div className="col-span-5">Informasi Pribadi</div>
+                                                                    <div className="col-span-7">Lokasi & Alamat</div>
                                                                 </div>
 
                                                                 {/* Content */}
@@ -268,13 +268,13 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                                                                     <div className="col-span-5">
                                                                         <div className="grid grid-cols-2 gap-3">
                                                                             <div>
-                                                                                <div className="text-[10px] text-gray-500 mb-0.5">Gender</div>
+                                                                                <div className="text-[10px] text-gray-500 mb-0.5">Jenis Kelamin</div>
                                                                                 <div className="text-[11px] font-medium text-gray-800 capitalize">
                                                                                     {item.sex || '-'}
                                                                                 </div>
                                                                             </div>
                                                                             <div>
-                                                                                <div className="text-[10px] text-gray-500 mb-0.5">Birthday</div>
+                                                                                <div className="text-[10px] text-gray-500 mb-0.5">Tanggal Lahir</div>
                                                                                 <div className="text-[11px] font-medium text-gray-800">
                                                                                     {item.birthday || '-'}
                                                                                 </div>
@@ -286,13 +286,13 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                                                                     <div className="col-span-7">
                                                                         <div className="flex gap-4">
                                                                             <div className="flex-1">
-                                                                                <div className="text-[10px] text-gray-500 mb-0.5">Full Address</div>
+                                                                                <div className="text-[10px] text-gray-500 mb-0.5">Alamat Lengkap</div>
                                                                                 <div className="text-[11px] font-medium text-gray-800">
-                                                                                    {item.address || <span className="text-gray-400 italic font-normal">No address provided</span>}
+                                                                                    {item.address || <span className="text-gray-400 italic font-normal">Alamat tidak diisi</span>}
                                                                                 </div>
                                                                             </div>
                                                                             <div className="w-[150px]">
-                                                                                <div className="text-[10px] text-gray-500 mb-0.5">City / Region</div>
+                                                                                <div className="text-[10px] text-gray-500 mb-0.5">Kota / Wilayah</div>
                                                                                 <div className="text-[11px] font-medium text-gray-800">
                                                                                     {[item.city, item.state, item.postal_code].filter(Boolean).join(', ') || '-'}
                                                                                 </div>
@@ -318,7 +318,7 @@ export default function CustomerTableClient({ outletsGrouped, activeOutletId }: 
                 {!isLoading && totalPages > 1 && (
                     <div className="px-3 py-2 border-t border-gray-100 flex items-center justify-between text-[12px] text-gray-500 bg-gray-50/50">
                         <div>
-                            Showing <span className="font-medium text-gray-900">{(page - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-medium text-gray-900">{Math.min(page * ITEMS_PER_PAGE, total)}</span> of <span className="font-medium text-gray-900">{total}</span>
+                            Menampilkan <span className="font-medium text-gray-900">{(page - 1) * ITEMS_PER_PAGE + 1}</span> sampai <span className="font-medium text-gray-900">{Math.min(page * ITEMS_PER_PAGE, total)}</span> dari <span className="font-medium text-gray-900">{total}</span>
                         </div>
                         <div className="flex items-center gap-1">
                             <button 

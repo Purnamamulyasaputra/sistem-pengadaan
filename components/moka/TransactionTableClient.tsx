@@ -108,8 +108,8 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
-                    <h1 className="text-[20px] font-bold text-gray-900 font-['Cabin']">Transaction Details</h1>
-                    <p className="text-[13px] text-gray-500 mt-0.5">View and sync detailed transaction records from Moka POS</p>
+                    <h1 className="text-[20px] font-bold text-gray-900 font-['Cabin']">Data Transaksi</h1>
+                    <p className="text-[13px] text-gray-500 mt-0.5">Lihat dan sinkronkan data transaksi dari integrasi Moka POS</p>
                 </div>
                 <button
                     onClick={handleSync}
@@ -117,7 +117,7 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                     className={`btn flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-medium text-[12px] transition-colors shadow-sm w-full sm:w-auto ${isSyncing ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#016e3f] text-white hover:bg-[#015933]'}`}
                 >
                     <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
-                    {isSyncing ? 'Syncing...' : 'Sync Transactions'}
+                    {isSyncing ? 'Sinkronisasi...' : 'Sinkronisasi Transaksi'}
                 </button>
             </div>
 
@@ -125,35 +125,35 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Total Revenue</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Total Pendapatan</div>
                         <div className="p-1 rounded bg-emerald-50 text-emerald-600"><TrendingUp size={12} /></div>
                     </div>
                     <div className="text-[15px] font-bold text-gray-900 font-['Cabin'] leading-none">{formatRp(totalCollected)}</div>
-                    <div className="text-[9px] text-gray-400 mt-1">Total in selected period</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Total pada periode terpilih</div>
                 </div>
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Transactions</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Jumlah Transaksi</div>
                         <div className="p-1 rounded bg-blue-50 text-blue-600"><ShoppingCart size={12} /></div>
                     </div>
                     <div className="text-[15px] font-bold text-gray-900 font-['Cabin'] leading-none">{total.toLocaleString()}</div>
-                    <div className="text-[9px] text-gray-400 mt-1">Total in selected period</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Total pada periode terpilih</div>
                 </div>
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Refunded</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Pengembalian</div>
                         <div className="p-1 rounded bg-red-50 text-red-600"><TrendingDown size={12} /></div>
                     </div>
                     <div className="text-[15px] font-bold text-gray-900 font-['Cabin'] leading-none">{totalRefunded}</div>
-                    <div className="text-[9px] text-gray-400 mt-1">Transactions refunded</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Transaksi dikembalikan</div>
                 </div>
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Cash Payments</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Pembayaran Tunai</div>
                         <div className="p-1 rounded bg-amber-50 text-amber-600"><DollarSign size={12} /></div>
                     </div>
                     <div className="text-[15px] font-bold text-gray-900 font-['Cabin'] leading-none">{cashCount}</div>
-                    <div className="text-[9px] text-gray-400 mt-1">Cash method (current page)</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Metode tunai (halaman ini)</div>
                 </div>
             </div>
 
@@ -166,7 +166,7 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                             <Search size={12} className="text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                             <input
                                 type="text"
-                                placeholder="Search receipt no / cashier..."
+                                placeholder="Cari no struk / kasir..."
                                 value={search}
                                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                                 className="bg-white border border-gray-200 text-[12px] text-gray-700 rounded-md pl-7 pr-2.5 py-1 w-[180px] shadow-sm focus:outline-none focus:border-[#016e3f] placeholder-gray-400"
@@ -196,7 +196,7 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                             value={outletId}
                             onChange={(val) => { setOutletId(String(val)); setPage(1); }}
                             options={[
-                                { value: '', label: 'All Outlets' },
+                                { value: '', label: 'Semua Outlet' },
                                 ...outlets.map(o => ({ value: o.id, label: o.name }))
                             ]}
                             style={{ width: 130 }}
@@ -206,7 +206,7 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
 
                     {/* Right-aligned items found count */}
                     <div className="text-[12px] text-gray-500 font-medium">
-                        <span className="font-semibold text-gray-800">{total}</span> items found
+                        <span className="font-semibold text-gray-800">{total}</span> transaksi ditemukan
                     </div>
                 </div>
 
@@ -215,7 +215,7 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                {['Date & Time', 'Receipt No.', 'Outlet', 'Payment Method', 'Total', 'Cashier', 'Status'].map(col => (
+                                {['Tanggal & Waktu', 'No. Struk', 'Outlet', 'Metode Pembayaran', 'Total', 'Kasir', 'Status'].map(col => (
                                     <th key={col} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                                         {col}
                                     </th>
@@ -226,12 +226,12 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                             {isLoading ? (
                                 <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                        <Loader2 size={16} className="animate-spin" /> Loading transactions...
+                                        <Loader2 size={16} className="animate-spin" /> Memuat transaksi...
                                     </div>
                                 </td></tr>
                             ) : transactions.length === 0 ? (
                                 <tr><td colSpan={7} style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
-                                    No transactions found. Try syncing or adjusting your filters.
+                                    Tidak ada transaksi ditemukan. Coba sinkronisasi atau ubah filter Anda.
                                 </td></tr>
                             ) : (
                                 transactions.map((trx: any) => (
@@ -263,11 +263,11 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                                         <td style={{ padding: '10px 16px' }}>
                                             {trx.is_refunded ? (
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: '#fef2f2', color: '#dc2626', fontSize: 11, fontWeight: 600 }}>
-                                                    <RotateCcw size={10} /> Refunded
+                                                    <RotateCcw size={10} /> Dikembalikan
                                                 </span>
                                             ) : (
                                                 <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: 999, background: '#f0fdf4', color: '#16a34a', fontSize: 11, fontWeight: 600 }}>
-                                                    Completed
+                                                    Selesai
                                                 </span>
                                             )}
                                         </td>
@@ -282,7 +282,7 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                 {total > 0 && (
                     <div className="px-5 py-3 border-t border-gray-100 flex flex-wrap justify-between items-center gap-3">
                         <span className="text-[12px] text-gray-500">
-                            Showing {((page - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total.toLocaleString('id-ID')} transactions
+                            Menampilkan {((page - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} dari {total.toLocaleString('id-ID')} transaksi
                         </span>
                         
                         <div className="flex items-center gap-1">

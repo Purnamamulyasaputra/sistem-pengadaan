@@ -106,32 +106,6 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
         setToastOpen(true);
     };
 
-    const handleSync = async () => {
-        setIsFiltering(true);
-        setIsSyncing(true);
-        try {
-            const res = await fetch('/api/moka/sync/sales', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    start_date: startDate,
-                    end_date: endDate,
-                    outlet_id: selectedOutlet || undefined
-                })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Failed to sync data.');
-
-            showToast(data.message || 'Sync successful', 'success');
-            router.refresh();
-        } catch (error: any) {
-            showToast(error.message, 'error');
-        } finally {
-            setIsSyncing(false);
-            setIsFiltering(false);
-        }
-    };
-
     const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
 
     return (
@@ -139,22 +113,15 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
-                    <h1 className="text-[20px] font-bold text-gray-900 font-['Cabin']">Sales Summary</h1>
+                    <h1 className="text-[20px] font-bold text-gray-900 font-['Cabin']">Ringkasan Penjualan</h1>
                     <p className="text-[13px] text-gray-500 mt-0.5 flex items-center gap-2">
-                        <span>Monitor your business performance from Moka POS</span>
+                        <span>Pantau performa bisnis Anda dari integrasi Moka POS</span>
                         <span className="inline-block w-1 h-1 rounded-full bg-gray-300"></span>
-                        <span className="text-gray-400">Last synced: {lastSync ? new Date(lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
+                        <span className="text-gray-400">Terakhir sinkron: {lastSync ? new Date(lastSync).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Belum pernah'}</span>
                     </p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
-                    <button
-                        onClick={handleSync}
-                        disabled={isSyncing}
-                        className={`btn flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-medium text-[12px] transition-colors shadow-sm w-full sm:w-auto ${isSyncing ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#016e3f] text-white hover:bg-[#015933]'}`}
-                    >
-                        <RefreshCw size={13} className={`${isSyncing ? 'animate-spin' : ''}`} />
-                        {isSyncing ? 'Syncing...' : 'Sync Moka Data'}
-                    </button>
+                    {/* Tombol sinkronisasi telah dipindahkan ke halaman Pengaturan Moka */}
                 </div>
             </div>
 
@@ -162,49 +129,49 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Net Sales</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Penjualan Bersih</div>
                         <div className="p-1 rounded bg-emerald-50 text-emerald-600"><TrendingUp size={12} /></div>
                     </div>
                     <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{formatRp(totalNetSales)}</div>
                     <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1">
-                        Gross: <span className="font-medium text-gray-600">{formatRp(totalGrossSales)}</span>
+                        Kotor: <span className="font-medium text-gray-600">{formatRp(totalGrossSales)}</span>
                     </div>
                 </div>
 
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Items Sold</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Barang Terjual</div>
                         <div className="p-1 rounded bg-blue-50 text-blue-600"><Package size={12} /></div>
                     </div>
                     <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{totalUnitsSold.toLocaleString('id-ID')}</div>
-                    <div className="text-[9px] text-gray-400 mt-1">Total quantity sold</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Total kuantitas terjual</div>
                 </div>
                 
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Refunds</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Pengembalian</div>
                         <div className="p-1 rounded bg-red-50 text-red-600"><TrendingDown size={12} /></div>
                     </div>
                     <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{formatRp(totalRefund)}</div>
-                    <div className="text-[9px] text-gray-400 mt-1">Total refunded amount</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Total nilai pengembalian</div>
                 </div>
 
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Discounts</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Diskon</div>
                         <div className="p-1 rounded bg-amber-50 text-amber-600"><Percent size={12} /></div>
                     </div>
                     <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{formatRp(totalDiscounts)}</div>
-                    <div className="text-[9px] text-gray-400 mt-1">Total discount given</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Total diskon diberikan</div>
                 </div>
 
                 <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm flex flex-col justify-between">
                     <div className="flex justify-between items-start mb-1">
-                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Avg Margin</div>
+                        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Rata-rata Margin</div>
                         <div className="p-1 rounded bg-[#016e3f]/10 text-[#016e3f]"><DollarSign size={12} /></div>
                     </div>
                     <div className="text-[16px] font-bold text-gray-900 font-['Cabin'] leading-none">{avgMargin.toFixed(1)}%</div>
-                    <div className="text-[9px] text-gray-400 mt-1">Net Sales vs COGS</div>
+                    <div className="text-[9px] text-gray-400 mt-1">Penjualan Bersih vs HPP</div>
                 </div>
             </div>
 
@@ -216,14 +183,14 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                         className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-[13px] font-medium transition-all ${viewMode === 'table' ? 'bg-[#016e3f] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         <TableIcon size={14} />
-                        Data Table
+                        Tabel Data
                     </button>
                     <button
                         onClick={() => setViewMode('chart')}
                         className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-[13px] font-medium transition-all ${viewMode === 'chart' ? 'bg-[#016e3f] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         <BarChart2 size={14} />
-                        Top Products Chart
+                        Grafik Produk Terlaris
                     </button>
                 </div>
             </div>
@@ -232,7 +199,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
             {viewMode === 'chart' && (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-                        <h3 className="text-[14px] font-bold text-gray-900 font-['Cabin']">Top 10 Best Selling Products (By Revenue)</h3>
+                        <h3 className="text-[14px] font-bold text-gray-900 font-['Cabin']">10 Produk Terlaris (Berdasarkan Pendapatan)</h3>
                         
                         {/* Filters in Chart view */}
                         <div className="flex flex-wrap items-center gap-2">
@@ -272,7 +239,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                                     setTimeout(() => setIsFiltering(false), 1000);
                                 }}
                                 options={[
-                                    { value: '', label: 'All Outlets' },
+                                    { value: '', label: 'Semua Outlet' },
                                     ...outlets.map(o => ({ value: o.id, label: o.name }))
                                 ]}
                                 style={{ width: 130 }}
@@ -323,7 +290,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
                                 <TrendingDown size={32} className="mb-2 opacity-50" />
-                                <p className="text-[13px]">No sales data available for chart</p>
+                                <p className="text-[13px]">Tidak ada data penjualan untuk ditampilkan</p>
                             </div>
                         )}
                     </div>
@@ -340,7 +307,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                                 <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
                                 <input
                                     type="text"
-                                    placeholder="Search item..."
+                                    placeholder="Cari barang..."
                                     value={searchInput}
                                     onChange={(e) => {
                                         setSearchInput(e.target.value);
@@ -349,7 +316,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                                     }}
                                     className="w-full text-[11px] border border-gray-200 rounded-md pl-6 pr-2 py-1 focus:outline-none focus:border-[#016e3f] bg-white shadow-sm"
                                 />
-                                <button type="submit" className="hidden">Search</button>
+                                <button type="submit" className="hidden">Cari</button>
                             </form>
 
                             {/* Date Filter */}
@@ -390,7 +357,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                                     setTimeout(() => setIsFiltering(false), 1000);
                                 }}
                                 options={[
-                                    { value: '', label: 'All Outlets' },
+                                    { value: '', label: 'Semua Outlet' },
                                     ...outlets.map(o => ({ value: o.id, label: o.name }))
                                 ]}
                                 style={{ width: 130 }}
@@ -399,13 +366,13 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
 
                             {isFiltering && (
                                 <div className="text-[11px] font-medium text-[#016e3f] animate-pulse flex items-center gap-1.5 ml-1">
-                                    <RefreshCw size={12} className="animate-spin" /> Updating...
+                                    <RefreshCw size={12} className="animate-spin" /> Memperbarui...
                                 </div>
                             )}
                         </div>
 
                         <div className="text-[12px] text-gray-500 whitespace-nowrap">
-                            <span className="font-medium text-gray-900">{filteredData.length}</span> items found
+                            <span className="font-medium text-gray-900">{filteredData.length}</span> item ditemukan
                         </div>
                     </div>
 
@@ -413,21 +380,21 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                         {filteredData.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-4 py-8">
                                 <Package className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                                <h3 className="text-[15px] font-bold text-gray-900 font-['Cabin']">No Data Found</h3>
+                                <h3 className="text-[15px] font-bold text-gray-900 font-['Cabin']">Data Tidak Ditemukan</h3>
                                 <p className="text-[12px] text-gray-500 mt-1.5 max-w-sm">
-                                    No sales data found for this date range or keyword. Try adjusting filters or syncing from Moka.
+                                    Tidak ada data penjualan pada periode atau kata kunci ini. Coba ubah filter atau lakukan sinkronisasi dari Moka.
                                 </p>
                             </div>
                         ) : (
                             <table className="w-full text-left border-collapse min-w-[800px]">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-[11px] font-bold uppercase tracking-wider">
-                                        <th className="px-4 py-3 w-[15%] text-left align-middle">CATEGORY</th>
-                                        <th className="px-4 py-3 w-[35%] text-left align-middle">ITEM / VARIANT NAME</th>
+                                        <th className="px-4 py-3 w-[15%] text-left align-middle">KATEGORI</th>
+                                        <th className="px-4 py-3 w-[35%] text-left align-middle">NAMA BARANG / VARIAN</th>
                                         <th className="px-4 py-3 w-[15%] text-left align-middle">SKU</th>
-                                        <th className="px-4 py-3 w-[10%] text-center align-middle">UNITS SOLD</th>
-                                        <th className="px-4 py-3 w-[12%] text-right align-middle">GROSS SALES</th>
-                                        <th className="px-4 py-3 w-[13%] text-right align-middle">NET SALES</th>
+                                        <th className="px-4 py-3 w-[10%] text-center align-middle">JUMLAH TERJUAL</th>
+                                        <th className="px-4 py-3 w-[12%] text-right align-middle">PENJUALAN KOTOR</th>
+                                        <th className="px-4 py-3 w-[13%] text-right align-middle">PENJUALAN BERSIH</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 text-[13px]">
@@ -449,7 +416,7 @@ export default function SalesReportClient({ outlets, lastSync, initialSalesData,
                     {totalPages > 1 && (
                         <div className="px-5 py-3 border-t border-gray-100 flex flex-wrap justify-between items-center gap-3">
                             <div className="text-[12px] text-gray-500">
-                                Showing <span className="font-medium text-gray-900">{(page - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-medium text-gray-900">{Math.min(page * ITEMS_PER_PAGE, filteredData.length)}</span> of <span className="font-medium text-gray-900">{filteredData.length.toLocaleString('id-ID')}</span> items
+                                Menampilkan <span className="font-medium text-gray-900">{(page - 1) * ITEMS_PER_PAGE + 1}</span> sampai <span className="font-medium text-gray-900">{Math.min(page * ITEMS_PER_PAGE, filteredData.length)}</span> dari <span className="font-medium text-gray-900">{filteredData.length.toLocaleString('id-ID')}</span> item
                             </div>
                             
                             <div className="flex items-center gap-1">

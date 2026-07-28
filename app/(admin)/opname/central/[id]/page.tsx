@@ -38,6 +38,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
   const [isLocked, setIsLocked] = useState(false);
   const [limit, setLimit] = useState<number | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
   const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
@@ -156,26 +157,37 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat data opname...</div>;
   if (!header) return <div style={{ padding: 40, textAlign: 'center' }}>Sesi tidak ditemukan.</div>;
 
-  const paginatedItems = limit === 'all' ? items : items.slice((currentPage - 1) * limit, currentPage * limit);
-  const totalPages = limit === 'all' ? 1 : Math.ceil(items.length / limit);
+  const filteredItems = items.filter((item: any) => 
+    !searchQuery || String(item.item_name).toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const paginatedItems = limit === 'all' ? filteredItems : filteredItems.slice((currentPage - 1) * limit, currentPage * limit);
+  const totalPages = limit === 'all' ? 1 : Math.ceil(filteredItems.length / limit);
 
   return (
     <section style={{ margin: '-16px -20px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Detail Opname Pusat — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
+            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Detail Opname Pusat — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
             <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
-              <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
-              <span className="muted" style={{ fontSize: 13 }}>
+               <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
+              <span className="muted" style={{ fontSize: 11 }}>
                 <span className="font-bold">Mulai:</span> {new Date(header.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
               </span>
-              <span className="muted" style={{ fontSize: 13 }}>
+              <span className="muted" style={{ fontSize: 11 }}>
                 <span className="font-bold">Terakhir Diubah:</span> {new Date(header.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <input 
+              type="text"
+              className="input"
+              placeholder="Cari nama barang..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              style={{ width: 180, height: 32, fontSize: 11 }}
+            />
             <Select
               value={limit}
               onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
@@ -184,7 +196,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                 { value: 8, label: '8' },
                 { value: 32, label: '32' }
               ]}
-              inputStyle={{ padding: '4px 10px', height: 32, fontSize: 13, minWidth: 90 }}
+              inputStyle={{ padding: '4px 10px', height: 32, fontSize: 11, minWidth: 90 }}
               style={{ width: 100 }}
             />
             {!isLocked && (
@@ -212,8 +224,8 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
         </div>
 
         {!isLocked && (
-          <div style={{ padding: '12px 24px', background: '#fffbeb', borderBottom: '1px solid #fde68a', color: '#b45309', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          <div style={{ padding: '12px 24px', background: '#fffbeb', borderBottom: '1px solid #fde68a', color: '#b45309', fontSize: 11, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
             <strong>Mode Draft:</strong> Stok fisik belum berubah. Klik "Kunci & Submit" untuk menerapkan penyesuaian stok.
           </div>
         )}
@@ -222,14 +234,14 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
           <Table>
             <thead>
               <tr>
-                <th style={{ padding: '12px 16px', fontSize: 12, minWidth: 200 }}>Nama Barang</th>
-                <th className="right" style={{ padding: '12px 16px', fontSize: 12, width: 140 }}>Harga</th>
-                <th className="right" style={{ padding: '12px 16px', fontSize: 12, width: 120 }}>Stok Sistem</th>
-                <th className="right" style={{ width: 140, padding: '12px 16px', fontSize: 12 }}>Stok Fisik</th>
-                <th className="right" style={{ width: 100, padding: '12px 16px', fontSize: 12 }}>Selisih</th>
-                <th className="right" style={{ width: 130, padding: '12px 16px', fontSize: 12 }}>Est. Biaya</th>
-                <th style={{ width: 180, padding: '12px 16px', fontSize: 12 }}>Alasan</th>
-                <th style={{ width: 220, padding: '12px 16px', fontSize: 12 }}>Catatan</th>
+                <th style={{ padding: '12px 16px', fontSize: 10, minWidth: 200 }}>Nama Barang</th>
+                <th className="right" style={{ padding: '12px 16px', fontSize: 10, width: 140 }}>Harga</th>
+                <th className="right" style={{ padding: '12px 16px', fontSize: 10, width: 120 }}>Stok Sistem</th>
+                <th className="right" style={{ width: 140, padding: '12px 16px', fontSize: 10 }}>Stok Fisik</th>
+                <th className="right" style={{ width: 100, padding: '12px 16px', fontSize: 10 }}>Selisih</th>
+                <th className="right" style={{ width: 130, padding: '12px 16px', fontSize: 10 }}>Est. Biaya</th>
+                <th style={{ width: 180, padding: '12px 16px', fontSize: 10 }}>Alasan</th>
+                <th style={{ width: 220, padding: '12px 16px', fontSize: 10 }}>Catatan</th>
               </tr>
             </thead>
             <tbody style={{ fontSize: 12 }}>
@@ -251,20 +263,20 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
 
                 return (
                   <tr key={item.item_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td className="font-bold" style={{ padding: '8px 16px', fontSize: 13 }}>
+                    <td className="font-bold" style={{ padding: '8px 16px', fontSize: 11 }}>
                       {item.item_name}
-                      <div className="muted font-normal" style={{ fontSize: 11, marginTop: 2 }}>
+                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
                         Satuan Kecil: {smallUnit} (Rasio: {ratio})
                       </div>
                     </td>
-                    <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
+                    <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
                       Rp {Math.round(priceLarge).toLocaleString('id-ID')}
-                      <div className="muted font-normal" style={{ fontSize: 11, marginTop: 2 }}>
+                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
                         / {largeUnit}
                       </div>
                     </td>
-                    <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
-                      {sysBalLarge.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{largeUnit}</span>
+                    <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
+                      {sysBalLarge.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 10 }}>{largeUnit}</span>
                     </td>
                     <td className="right" style={{ padding: '8px 16px' }}>
                       <input
@@ -276,21 +288,21 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                         disabled={isLocked}
                         placeholder="0"
                         step="any"
-                        style={{ height: 32, width: '100%', fontSize: 13, padding: '4px 8px', borderColor: actualLarge === '' ? '#fca5a5' : 'var(--border)' }}
+                        style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: actualLarge === '' ? '#fca5a5' : 'var(--border)' }}
                       />
                     </td>
-                    <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
+                    <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
                       {varianceLarge !== 0 ? (
                         <span style={{ color: varianceLarge > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
                           {varianceLarge > 0 ? '+' : ''}{varianceLarge.toLocaleString('id-ID')}
                         </span>
                       ) : '-'}
                     </td>
-                    <td className="right num font-bold" style={{ padding: '8px 16px', fontSize: 13, color: varianceSmall !== 0 ? '#dc2626' : 'inherit' }}>
+                    <td className="right num font-mono muted" style={{ padding: '8px 16px', fontSize: 11 }}>
                       {varianceSmall !== 0 ? `Rp ${varianceValue.toLocaleString('id-ID')}` : '-'}
                     </td>
                     <td style={{ padding: '8px 16px' }}>
-                      {varianceSmall !== 0 ? (
+                      {varianceLarge !== 0 ? (
                         <Select
                           value={String(detail?.reason_category || '')}
                           onChange={val => handleReasonChange(item.item_id, 'reason_category', String(val))}
@@ -299,15 +311,14 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                             { value: '', label: '-- Pilih Alasan --' },
                             ...REASON_CATEGORIES
                           ]}
-                          inputStyle={{ height: 32, padding: '0px 8px', fontSize: 12, borderColor: !detail?.reason_category ? '#fca5a5' : 'var(--border)' }}
-                          optionStyle={{ padding: '6px 10px', fontSize: 12 }}
+                          inputStyle={{ height: 28, padding: '0px 8px', fontSize: 11, borderColor: !detail?.reason_category ? '#fca5a5' : 'var(--border)' }}
                         />
                       ) : (
-                        <span className="muted italic" style={{ fontSize: 12 }}>Tidak ada selisih</span>
+                        <span className="muted italic" style={{ fontSize: 10 }}>Tidak ada selisih</span>
                       )}
                     </td>
                     <td style={{ padding: '8px 16px' }}>
-                      {varianceSmall !== 0 && detail?.reason_category ? (
+                      {varianceLarge !== 0 && detail?.reason_category ? (
                         <input
                           type="text"
                           className="input"
@@ -315,7 +326,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                           onChange={e => handleReasonChange(item.item_id, 'reason_notes', e.target.value)}
                           disabled={isLocked}
                           placeholder={detail?.reason_category === 'LAINNYA' ? 'Wajib diisi...' : 'Opsional...'}
-                          style={{ height: 32, padding: '4px 8px', fontSize: 12, width: '100%', borderColor: (detail?.reason_category === 'LAINNYA' && !String(detail?.reason_notes || '').trim()) ? '#fca5a5' : 'var(--border)' }}
+                          style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: (detail?.reason_category === 'LAINNYA' && !detail?.reason_notes) ? '#fca5a5' : 'var(--border)' }}
                         />
                       ) : null}
                     </td>

@@ -1,6 +1,6 @@
 import { getAllActiveMokaTokens } from '@/lib/queries/moka';
 import { getSyncStatus } from '@/lib/queries/moka_sync';
-import { ConnectMokaButton, SyncMasterButton, DisconnectAccountButton } from '@/components/moka/MokaActions';
+import { ConnectMokaButton, SyncMasterButton, DisconnectAccountButton, SyncSalesButton, SyncTransactionsButton, SyncCustomersButton } from '@/components/moka/MokaActions';
 import MokaToaster from '@/components/moka/MokaToaster';
 import { Store, AlertCircle, Database } from 'lucide-react';
 import Link from 'next/link';
@@ -26,15 +26,22 @@ export default async function MokaIntegrationPage(props: {
             <MokaToaster errorMsg={errorMsg} successMsg={successMsg} />
             <div className="card">
                 <div className="card-head" style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6' }}>
-                    <div className="flex justify-between items-center w-full">
+                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 w-full">
                         <div>
-                            <h3 style={{ fontSize: '16px', margin: 0, fontWeight: 700, color: '#111827' }}>Moka POS Accounts</h3>
+                            <h3 style={{ fontSize: '16px', margin: 0, fontWeight: 700, color: '#111827' }}>Akun Terhubung Moka POS</h3>
                             <p className="text-muted" style={{ fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>
-                                Manage your connected Moka POS accounts for automatic synchronization of Master Items, Sales Reports, and Transactions.
+                                Kelola akun Moka POS yang terhubung untuk sinkronisasi Katalog Moka, Ringkasan Penjualan, Data Transaksi, dan Data Pelanggan.
                             </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                            {tokens.length > 0 && <SyncMasterButton />}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {tokens.length > 0 && (
+                                <>
+                                    <SyncMasterButton />
+                                    <SyncSalesButton />
+                                    <SyncTransactionsButton />
+                                    <SyncCustomersButton />
+                                </>
+                            )}
                             <ConnectMokaButton />
                         </div>
                     </div>
@@ -46,9 +53,9 @@ export default async function MokaIntegrationPage(props: {
                             <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
                                 <Store className="w-6 h-6" />
                             </div>
-                            <h4 className="text-sm font-bold text-gray-900 mb-1">No Accounts Connected</h4>
+                            <h4 className="text-sm font-bold text-gray-900 mb-1">Belum Ada Akun Terhubung</h4>
                             <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
-                                You haven't connected any Moka POS accounts yet. Click the button above to add your first account.
+                                Anda belum menghubungkan akun Moka POS. Klik tombol di atas untuk menghubungkan akun pertama Anda.
                             </p>
                         </div>
                     ) : (
@@ -58,7 +65,7 @@ export default async function MokaIntegrationPage(props: {
                             <div className="lg:col-span-2 space-y-4">
                                 <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                                     <Database className="w-4 h-4 text-[#016e3f]" />
-                                    Connected Accounts ({tokens.length})
+                                    Daftar Akun Terhubung ({tokens.length})
                                 </h3>
                                 
                                 <div className="space-y-3">
@@ -66,14 +73,14 @@ export default async function MokaIntegrationPage(props: {
                                         const isSelected = selectedAccountId === token.business_id.toString();
                                         return (
                                         <div key={token.id} className={`relative p-4 rounded-xl border transition-colors ${isSelected ? 'bg-green-50/50 border-[#016e3f] shadow-sm ring-1 ring-[#016e3f]/20' : 'bg-white border-gray-200 shadow-sm hover:border-gray-300'}`}>
-                                            <Link href={`?account_id=${token.business_id}`} className="absolute inset-0 z-0 rounded-xl" title="Click to view sync status" />
+                                            <Link href={`?account_id=${token.business_id}`} className="absolute inset-0 z-0 rounded-xl" title="Klik untuk melihat status sinkronisasi" />
                                             <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pointer-events-none">
                                                 <div className="flex items-start sm:items-center gap-3">
                                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isSelected ? 'bg-[#016e3f] text-white' : 'bg-[#016e3f]/10 text-[#016e3f]'}`}>
                                                         <Store className="w-5 h-5" />
                                                     </div>
                                                     <div>
-                                                        <h4 className="text-sm font-bold text-gray-900">{token.account_name || `Account ID: ${token.business_id}`}</h4>
+                                                        <h4 className="text-sm font-bold text-gray-900">{token.account_name || `ID Akun: ${token.business_id}`}</h4>
                                                         {token.account_email && (
                                                             <p className="text-[11px] text-gray-500 mt-0.5">{token.account_email}</p>
                                                         )}
@@ -83,7 +90,7 @@ export default async function MokaIntegrationPage(props: {
                                                             </span>
                                                             <span className="text-[10px] flex items-center gap-1 font-medium text-[#016e3f] bg-[#016e3f]/10 px-1.5 py-0.5 rounded border border-[#016e3f]/20">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-[#016e3f] animate-pulse"></span>
-                                                                Active
+                                                                Aktif
                                                             </span>
                                                         </div>
                                                     </div>
@@ -92,7 +99,7 @@ export default async function MokaIntegrationPage(props: {
                                                 <div className="shrink-0 pt-3 sm:pt-0 border-t sm:border-0 border-gray-100 w-full sm:w-auto flex justify-end pointer-events-auto">
                                                     <DisconnectAccountButton 
                                                         businessId={token.business_id} 
-                                                        accountName={token.account_name || 'Account'} 
+                                                        accountName={token.account_name || 'Akun'} 
                                                     />
                                                 </div>
                                             </div>
@@ -105,35 +112,35 @@ export default async function MokaIntegrationPage(props: {
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <AlertCircle className="w-4 h-4 text-[#016e3f]" />
-                                    {selectedAccountId ? 'Account Sync Status' : 'Global Sync Status'}
+                                    {selectedAccountId ? 'Status Sinkronisasi Akun' : 'Status Sinkronisasi Global'}
                                 </h3>
                                 
                                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                                     <p className="text-[11px] text-gray-500 mb-4 pb-3 border-b border-gray-100">
                                         {selectedAccountId 
-                                            ? 'This shows the latest successful synchronization time for the selected account.'
-                                            : 'This shows the latest successful synchronization time across all connected accounts.'}
+                                            ? 'Menampilkan waktu sinkronisasi berhasil terakhir untuk akun yang dipilih.'
+                                            : 'Menampilkan waktu sinkronisasi berhasil terakhir dari seluruh akun terhubung.'}
                                     </p>
                                     
                                     <div className="divide-y divide-gray-100">
                                         {[
-                                            { label: 'Profile & Outlets', date: syncStatus.business },
-                                            { label: 'Master Items & Menus', date: syncStatus.items },
-                                            { label: 'Sales Reports', date: syncStatus.sales },
-                                            { label: 'Transaction Details', date: syncStatus.transactions },
-                                            { label: 'Customer Database', date: syncStatus.customers },
+                                            { label: 'Profil & Outlet Toko', date: syncStatus.business },
+                                            { label: 'Katalog Moka (Barang & Menu)', date: syncStatus.items },
+                                            { label: 'Ringkasan Penjualan', date: syncStatus.sales },
+                                            { label: 'Data Transaksi Kasir', date: syncStatus.transactions },
+                                            { label: 'Data Pelanggan', date: syncStatus.customers },
                                         ].map((item, idx) => (
                                             <div key={idx} className="flex justify-between items-center py-2.5 first:pt-0 last:pb-0">
                                                 <span className="text-[11.5px] font-medium text-gray-700">{item.label}</span>
                                                 {item.date ? (
                                                     <span className="text-[10px] font-bold text-[#016e3f] bg-[#016e3f]/10 px-2 py-0.5 rounded border border-[#016e3f]/10">
-                                                        {new Date(item.date).toLocaleString('en-US', {
+                                                        {new Date(item.date).toLocaleString('id-ID', {
                                                             day: '2-digit', month: 'short', year: 'numeric',
                                                             hour: '2-digit', minute: '2-digit'
                                                         })}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Never synced</span>
+                                                    <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Belum pernah</span>
                                                 )}
                                             </div>
                                         ))}

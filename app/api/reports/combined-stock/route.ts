@@ -8,8 +8,8 @@ export async function GET(request: Request) {
     
     let sql = `
       SELECT 
-        i.id, i.name as item_name, c.name as category_name, 
-        i.smallest_unit, i.purchase_unit, i.conversion_ratio,
+        i.id, i.name as item_name, c.name as category_name, i.category_id,
+        i.smallest_unit, i.purchase_unit, i.conversion_ratio, i.minimum_threshold,
         COALESCE((SELECT ending_balance FROM inventory_logs il WHERE il.item_id = i.id ORDER BY il.created_at DESC LIMIT 1), 0)::numeric AS central_stock,
         COALESCE((SELECT SUM(current_balance) FROM outlet_stocks os WHERE os.item_id = i.id), 0)::numeric AS outlet_stock,
         i.current_average_price

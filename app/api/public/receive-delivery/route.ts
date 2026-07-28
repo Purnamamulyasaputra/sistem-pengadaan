@@ -67,8 +67,8 @@ export async function POST(req: NextRequest) {
     if (!dn) {
       return NextResponse.json({ success: false, message: 'Surat Jalan tidak ditemukan.' }, { status: 404 });
     }
-    if (dn.status !== 'DIKIRIM' && dn.status !== 'DRAFT') {
-      return NextResponse.json({ success: false, message: `Surat Jalan ini tidak bisa diterima karena statusnya sudah ${dn.status}.` }, { status: 400 });
+    if (dn.status !== 'DIKIRIM') {
+      return NextResponse.json({ success: false, message: `Surat Jalan ini tidak bisa diterima karena statusnya "${dn.status}". Hanya Surat Jalan berstatus DIKIRIM yang bisa dikonfirmasi.` }, { status: 400 });
     }
 
     // Upload main DO photo to Vercel Blob

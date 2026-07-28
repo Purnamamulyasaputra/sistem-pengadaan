@@ -87,11 +87,11 @@ export default function ReturnsPage() {
       <div className="card">
         <div className="card-head" style={{ padding: '16px 20px', borderBottom: 'none' }}>
           <div>
-            <h3 className="flex items-center gap-2 text-gray-900" style={{ fontSize: '18px', margin: 0 }}>
-              <AlertOctagon className="text-red-600" size={18} />
+            <h3 className="flex items-center gap-2 text-gray-900" style={{ fontSize: '15px', margin: 0 }}>
+              <AlertOctagon className="text-red-600" size={16} />
               Tiket Masalah / Retur
             </h3>
-            <p className="text-gray-500 mt-1" style={{ fontSize: '13px', margin: '4px 0 0 0' }}>Kelola laporan barang rusak/kurang dari outlet</p>
+            <p className="text-gray-500 mt-1" style={{ fontSize: '12px', margin: '4px 0 0 0' }}>Kelola laporan barang rusak/kurang dari outlet</p>
           </div>
         </div>
 
@@ -99,14 +99,14 @@ export default function ReturnsPage() {
           <button 
             className={`tab ${activeTab === 'PENDING' ? 'active' : ''}`} 
             onClick={() => setActiveTab('PENDING')}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'PENDING' ? '2px solid var(--primary)' : '2px solid transparent', padding: '12px 16px', fontSize: 14, fontWeight: activeTab === 'PENDING' ? 600 : 500, color: activeTab === 'PENDING' ? 'var(--primary)' : 'var(--muted)' }}
+            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'PENDING' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 12, fontWeight: activeTab === 'PENDING' ? 600 : 500, color: activeTab === 'PENDING' ? 'var(--primary)' : 'var(--muted)' }}
           >
             Menunggu Tindakan
           </button>
           <button 
             className={`tab ${activeTab === 'RESOLVED' ? 'active' : ''}`} 
             onClick={() => setActiveTab('RESOLVED')}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'RESOLVED' ? '2px solid var(--primary)' : '2px solid transparent', padding: '12px 16px', fontSize: 14, fontWeight: activeTab === 'RESOLVED' ? 600 : 500, color: activeTab === 'RESOLVED' ? 'var(--primary)' : 'var(--muted)' }}
+            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'RESOLVED' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 12, fontWeight: activeTab === 'RESOLVED' ? 600 : 500, color: activeTab === 'RESOLVED' ? 'var(--primary)' : 'var(--muted)' }}
           >
             Riwayat Selesai
           </button>
@@ -157,52 +157,52 @@ export default function ReturnsPage() {
                     return (
                       <tr key={issue.id}>
                         <td>
-                          <div className="font-semibold text-[13px] text-gray-900">{new Date(issue.reported_at).toLocaleDateString('id-ID')}</div>
-                          <div className="text-[11px] text-gray-500 mt-1">{new Date(issue.reported_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</div>
+                          <div className="font-semibold text-[12px] text-gray-900">{new Date(issue.reported_at).toLocaleDateString('id-ID')}</div>
+                          <div className="text-[10px] text-gray-500 mt-1">{new Date(issue.reported_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</div>
                         </td>
                         <td>
-                          <div className="font-mono text-primary font-bold text-[13px]">{issue.delivery_note_number}</div>
-                          <div className="text-[11px] text-gray-600 mt-1">{issue.outlet_name}</div>
+                          <div className="font-mono text-primary font-bold text-[12px]">{issue.delivery_note_number}</div>
+                          <div className="text-[10px] text-gray-600 mt-1">{issue.outlet_name}</div>
                         </td>
                         <td>
-                          <div className="font-semibold text-[13px] text-gray-900">{issue.item_name}</div>
-                          <div className="text-[11px] text-gray-500 mt-1">Dikirim: {qtyShipped.toLocaleString('id-ID')} {issue.purchase_unit}</div>
+                          <div className="font-semibold text-[12px] text-gray-900">{issue.item_name}</div>
+                          <div className="text-[10px] text-gray-500 mt-1">Dikirim: {qtyShipped.toLocaleString('id-ID')} {issue.purchase_unit}</div>
                         </td>
                         <td>
-                          <div className="text-[13px] font-bold text-gray-900 mb-0.5">
+                          <div className="text-[12px] font-bold text-gray-900 mb-0.5">
                             {qtyIssue.toLocaleString('id-ID')} {issue.purchase_unit}
                           </div>
-                          <div className="text-[11px] text-gray-600 max-w-[180px] leading-snug">
+                          <div className="text-[10px] text-gray-600 max-w-[180px] leading-snug">
                             <span className="font-medium text-gray-500">Catatan:</span> {issue.reason}
                           </div>
                         </td>
                         {activeTab === 'RESOLVED' ? (
                           <td>
-                            <div className={`font-semibold text-[13px] ${issue.status === 'APPROVED_REPLACE' ? 'text-primary' : 'text-amber-600'}`}>
+                            <div className={`font-semibold text-[12px] ${issue.status === 'APPROVED_REPLACE' ? 'text-primary' : 'text-amber-600'}`}>
                               {issue.status === 'APPROVED_REPLACE' ? 'Ganti Barang' : 'Catat Kerugian'}
                             </div>
-                            <div className="text-[11px] text-gray-500 mt-1 max-w-[180px] leading-snug">
+                            <div className="text-[10px] text-gray-500 mt-1 max-w-[180px] leading-snug">
                               {(issue as any).resolution_notes || '-'}
                             </div>
                           </td>
                         ) : null}
                         <td className="text-center">
                           {displayPhoto ? (
-                            <button onClick={() => setPreviewPhoto(displayPhoto)} className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded border border-gray-200 hover:bg-gray-200 transition-colors text-[11px] font-semibold">
-                              <ImageIcon size={13} /> Buka Foto
+                            <button onClick={() => setPreviewPhoto(displayPhoto)} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2 py-1 rounded border border-gray-200 hover:bg-gray-200 transition-colors text-[10px] font-semibold">
+                              <ImageIcon size={11} /> Buka Foto
                             </button>
                           ) : (
-                            <span className="text-gray-400 text-xs italic">Tidak ada foto</span>
+                            <span className="text-gray-400 text-[10px] italic">Tidak ada foto</span>
                           )}
                         </td>
                         {activeTab === 'PENDING' ? (
                           <td className="text-right whitespace-nowrap">
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-1.5">
                               <Button
                                 variant="outline" size="sm"
                                 onClick={() => setConfirmState({ isOpen: true, id: issue.id, action: 'WRITE_OFF', notes: '' })}
                                 disabled={resolvingId === issue.id}
-                                style={{ fontSize: '12px', padding: '4px 8px' }}
+                                style={{ fontSize: '10px', padding: '2px 6px', height: 'auto' }}
                               >
                                 Catat Kerugian
                               </Button>
@@ -210,7 +210,7 @@ export default function ReturnsPage() {
                                 variant="primary" size="sm"
                                 onClick={() => setConfirmState({ isOpen: true, id: issue.id, action: 'REPLACE', notes: '' })}
                                 disabled={resolvingId === issue.id}
-                                style={{ fontSize: '12px', padding: '4px 8px' }}
+                                style={{ fontSize: '10px', padding: '2px 6px', height: 'auto' }}
                               >
                                 Ganti Barang
                               </Button>

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -75,9 +76,9 @@ export default function InventoryValueTablePage() {
     <section style={{ margin: '-16px -20px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff' }}>
         <div className="tabs" style={{ marginBottom: 0, padding: '0 24px', paddingTop: 16 }}>
-          <a href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Grafik Keuangan</a>
-          <a href="/reports/inventory-value" className="tab active" style={{ textDecoration: 'none' }}>Tabel Persediaan</a>
-          <a href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</a>
+          <Link href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Grafik Keuangan</Link>
+          <Link href="/reports/inventory-value" className="tab active" style={{ textDecoration: 'none' }}>Tabel Persediaan</Link>
+          <Link href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</Link>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -142,11 +143,11 @@ export default function InventoryValueTablePage() {
               </thead>
               <tbody style={{ fontSize: 12 }}>
                 {filteredData.map((r: any, i: number) => {
-                  const ma = Number(r.current_average_price);
-                  const valIn = Number(r.total_in_qty) * ma;
-                  const valDist = Number(r.total_distribution_qty) * ma;
-                  const valAdj = Math.abs(Number(r.total_adj_qty)) * ma;
-                  const valCurrent = Number(r.current_balance) * ma;
+                  const ma = Number(r.current_average_price || 0);
+                  const valIn = Math.round(Number(r.total_in_qty) * ma);
+                  const valDist = Math.round(Number(r.total_distribution_qty) * ma);
+                  const valAdj = Math.round(Math.abs(Number(r.total_adj_qty)) * ma);
+                  const valCurrent = Math.round(Number(r.current_balance) * ma);
                   
                   return (
                     <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>

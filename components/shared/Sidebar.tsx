@@ -51,6 +51,7 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/master-data/items', label: 'Master Barang', icon: <Icon name="db" /> },
   { href: '/hpp', label: 'Master Menu & HPP', icon: <Icon name="hpp" /> },
   { href: '/stock-card', label: 'Stok Pusat', icon: <Icon name="clipboard" /> },
+  { href: '/stock-monitoring', label: 'Stok Seluruh Outlet', icon: <LayoutGrid size={15} /> },
   { href: '/warehouse', label: 'Penerimaan Barang', icon: <Icon name="box" /> },
   { href: '/opname/central', label: 'Stock Opname', icon: <Icon name="package" /> },
 
@@ -58,7 +59,6 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/requests', label: 'Permintaan Outlet', icon: <Icon name="list" /> },
   { href: '/delivery-orders', label: 'Pengiriman (Surat Jalan)', icon: <Icon name="truck" /> },
   { href: '/returns', label: 'Tiket Masalah / Retur', icon: <AlertOctagon size={15} /> },
-  { href: '/stock-monitoring', label: 'Stok Seluruh Outlet', icon: <LayoutGrid size={15} /> },
 
   { section: 'PEMBELIAN (PURCHASING)' },
   { href: '/purchase-orders', label: 'Pembelian (PO)', icon: <Icon name="cart" /> },
@@ -84,15 +84,13 @@ const OUTLET_MENU: NavItem[] = [
   { href: '/outlet/requests', label: 'Order ke Pusat', icon: <Icon name="cart" /> },
   { href: '/outlet/receive-goods', label: 'Penerimaan Barang', icon: <Icon name="truck" /> },
 
-  { section: 'MANAJEMEN STOK' },
+  { section: 'MANAJEMEN STOK & PENJUALAN' },
   { href: '/outlet/inventory/stock', label: 'Stok Outlet (Live)', icon: <Icon name="db" /> },
+  { href: '/outlet/sales', label: 'Analitik Penjualan', icon: <Icon name="trend" /> },
   { href: '/outlet/opname', label: 'Stock Opname', icon: <Icon name="clipboard" /> },
 
   { section: 'KATALOG' },
   { href: '/outlet/menus', label: 'Menu & HPP', icon: <Icon name="hpp" /> },
-
-  { section: 'LAPORAN & PENGATURAN' },
-  { href: '/outlet/sales', label: 'Analitik Penjualan', icon: <Icon name="trend" /> },
 ];
 
 export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
@@ -185,12 +183,24 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
     };
 
     fetchBadges();
-    const interval = setInterval(fetchBadges, 15000);
-    return () => clearInterval(interval);
+    // Poll every 30 seconds
+    const interval = setInterval(fetchBadges, 30000);
+
+    // Re-fetch immediately when user returns to this tab
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchBadges();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [role]);
 
   const getEffectiveBadge = (href: string, actualCount: number) => {
-    if (pathname === href) return 0; // Hide if currently on the page
+    // Hide badge if currently on this page or any sub-page
+    if (pathname === href || pathname.startsWith(href + '/')) return 0;
     return actualCount;
   };
 
@@ -248,7 +258,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
               isActive = pathname === '/sales-report';
             }
             if (item.href === '/settings') {
-              isActive = pathname === '/settings' || pathname.startsWith('/settings/profile');
+              isActive = pathname.startsWith('/settings') && !pathname.startsWith('/settings/moka');
             }
 
             if (item.href === '/purchase-orders' && pathname.startsWith('/goods-receipt')) isActive = true;

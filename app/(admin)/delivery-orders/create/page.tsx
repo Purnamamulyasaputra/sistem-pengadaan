@@ -135,14 +135,21 @@ export default function CreateDeliveryOrderPage() {
   };
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && orders.length > 0 && !selectedOrderId) {
+    if (typeof window !== 'undefined' && !selectedOrderId) {
       const urlParams = new URLSearchParams(window.location.search);
       const qId = urlParams.get('order_id');
-      if (qId && orders.some(o => String(o.order_id) === qId)) {
+      const qOutlet = urlParams.get('outlet_id');
+
+      if (qId === 'DIRECT') {
+        setSelectedOrderId('DIRECT');
+        if (qOutlet) {
+          setTargetOutletId(String(qOutlet));
+        }
+      } else if (qId && orders.length > 0 && orders.some(o => String(o.order_id) === qId)) {
         handleSelectOrder(qId);
       }
     }
-  }, [orders]);
+  }, [orders, selectedOrderId]);
 
   const handleToggleItem = (orderItemId: number | string) => {
     setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? { ...i, selected: !i.selected } : i));

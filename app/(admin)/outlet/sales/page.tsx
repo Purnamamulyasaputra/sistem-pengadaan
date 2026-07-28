@@ -5,7 +5,7 @@ import { Table } from '@/components/ui/Table';
 import { Select } from '@/components/ui/Select';
 import { Toast } from '@/components/ui/Toast';
 import { TransactionDetailModal } from '@/components/sales/TransactionDetailModal';
-import { Calculator, ShoppingBag, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calculator, ShoppingBag, ArrowRight, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
 type SalesSummaryRow = {
   menu_id: number;
@@ -199,12 +199,12 @@ export default function SalesAnalyticsPage() {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
-              className="btn btn-primary"
-              style={{ fontSize: 12, padding: '4px 10px', opacity: syncing ? 0.7 : 1 }}
               onClick={handleSyncSales}
               disabled={syncing}
+              className="flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors shadow-sm disabled:opacity-50"
             >
-              {syncing ? 'Sinkronisasi...' : 'Sinkronisasi Data Penjualan'}
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Menarik Penjualan Hari Ini...' : 'Sync Penjualan (Hari Ini)'}
             </button>
           </div>
         </div>

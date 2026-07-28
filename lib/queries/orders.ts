@@ -66,7 +66,11 @@ export async function getOrders(opts?: { outletId?: number; status?: string; sta
 }
 
 export async function getPendingOrderCount() {
-  const result = await query<{ count: string }>(`SELECT count(*) FROM orders WHERE status = 'PENDING'`);
+  // Valid orders.status values: PENDING, PROCESSING, SHIPPED, COMPLETED
+  // PROSES_BELANJA is only valid for order_items.item_status, NOT orders.status
+  const result = await query<{ count: string }>(
+    `SELECT count(*) FROM orders WHERE status IN ('PENDING', 'PROCESSING')`
+  );
   return parseInt(result.rows[0]?.count ?? '0', 10);
 }
 

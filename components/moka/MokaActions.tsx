@@ -55,15 +55,15 @@ export function ConnectMokaButton() {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors"
             >
                 <Link className="w-3.5 h-3.5" />
-                Connect Moka Account
+                Hubungkan Akun
             </button>
 
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
-                        <h3 className="text-sm font-bold text-gray-900 mb-1">Connect Moka Private App</h3>
+                        <h3 className="text-sm font-bold text-gray-900 mb-1">Hubungkan Aplikasi Moka</h3>
                         <p className="text-xs text-gray-500 mb-5">
-                            Enter the Client ID and Client Secret from your Moka Developer Portal. Each account has its own unique credentials.
+                            Masukkan Client ID dan Client Secret dari Portal Developer Moka. Setiap akun memiliki kredensial unik.
                         </p>
 
                         <div className="space-y-3">
@@ -73,7 +73,7 @@ export function ConnectMokaButton() {
                                     type="text"
                                     value={clientId}
                                     onChange={e => setClientId(e.target.value)}
-                                    placeholder="Paste your Moka Client ID..."
+                                    placeholder="Tempel Client ID Moka Anda..."
                                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
                                 />
                             </div>
@@ -83,7 +83,7 @@ export function ConnectMokaButton() {
                                     type="password"
                                     value={clientSecret}
                                     onChange={e => setClientSecret(e.target.value)}
-                                    placeholder="Paste your Moka Client Secret..."
+                                    placeholder="Tempel Client Secret Moka Anda..."
                                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
                                 />
                             </div>
@@ -95,7 +95,7 @@ export function ConnectMokaButton() {
                                 onClick={() => setShowModal(false)}
                                 className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
                             >
-                                Cancel
+                                Batal
                             </button>
                             <button
                                 onClick={handleConnect}
@@ -103,7 +103,7 @@ export function ConnectMokaButton() {
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors disabled:opacity-50"
                             >
                                 {isLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Link className="w-3.5 h-3.5" />}
-                                Authorize & Connect
+                                Otorisasi & Hubungkan
                             </button>
                         </div>
                     </div>
@@ -154,19 +154,19 @@ export function SyncMasterButton() {
 
     return (
         <>
-            <Toast 
-                isOpen={toastOpen} 
-                message={toastMessage} 
-                type={toastType} 
-                onClose={() => setToastOpen(false)} 
+            <Toast
+                isOpen={toastOpen}
+                message={toastMessage}
+                type={toastType}
+                onClose={() => setToastOpen(false)}
             />
-            <button 
-                onClick={handleSyncMaster} 
+            <button
+                onClick={handleSyncMaster}
                 disabled={isSyncing}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white text-[#016e3f] border border-[#016e3f] rounded-md hover:bg-[#016e3f]/5 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:opacity-50"
             >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                Sync Master Data
+                Sync Katalog
             </button>
         </>
     );
@@ -190,7 +190,7 @@ export function DisconnectAccountButton({ businessId, accountName }: { businessI
         setShowConfirm(false);
         setIsLoading(true);
         try {
-            const res = await fetch('/api/moka/disconnect', { 
+            const res = await fetch('/api/moka/disconnect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ business_id: businessId })
@@ -211,31 +211,323 @@ export function DisconnectAccountButton({ businessId, accountName }: { businessI
 
     return (
         <>
-            <Toast 
-                isOpen={toastOpen} 
-                message={toastMessage} 
-                type={toastType} 
-                onClose={() => setToastOpen(false)} 
+            <Toast
+                isOpen={toastOpen}
+                message={toastMessage}
+                type={toastType}
+                onClose={() => setToastOpen(false)}
             />
-            <button 
-                onClick={() => setShowConfirm(true)} 
+            <button
+                onClick={() => setShowConfirm(true)}
                 disabled={isLoading}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-red-200 text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50"
             >
                 {isLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />}
-                Disconnect
+                Putuskan
             </button>
 
             <ConfirmDialog
                 open={showConfirm}
-                title={`Disconnect ${accountName}?`}
-                message={`Are you sure you want to disconnect ${accountName}? The system will no longer fetch new transactions and menus for this account.`}
-                confirmText="Yes, Disconnect"
-                cancelText="Cancel"
+                title={`Putuskan koneksi ${accountName}?`}
+                message={`Apakah Anda yakin ingin memutuskan akun ${accountName}? Sistem tidak akan lagi mengambil data transaksi dari akun ini.`}
+                confirmText="Ya, Putuskan"
+                cancelText="Batal"
                 onConfirm={handleDisconnect}
                 onCancel={() => setShowConfirm(false)}
                 danger={true}
             />
+        </>
+    );
+}
+
+export function SyncSalesButton() {
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+
+    const today = new Date();
+    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    const [startDate, setStartDate] = useState(todayStr);
+    const [endDate, setEndDate] = useState(todayStr);
+
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
+    const [toastOpen, setToastOpen] = useState(false);
+    const router = useRouter();
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToastMessage(message);
+        setToastType(type);
+        setToastOpen(true);
+    };
+
+    const handleSyncSales = async () => {
+        if (!startDate || !endDate) {
+            showToast('Silakan pilih rentang tanggal yang valid', 'error');
+            return;
+        }
+
+        setIsSyncing(true);
+        setShowModal(false);
+        try {
+            const res = await fetch('/api/moka/sync/sales', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_date: startDate,
+                    end_date: endDate
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Gagal sinkronisasi data penjualan');
+
+            showToast(data.message || 'Sinkronisasi penjualan berhasil!', 'success');
+            router.refresh();
+        } catch (error: any) {
+            console.error('Error syncing sales:', error);
+            showToast(error.message || 'Terjadi kesalahan sistem', 'error');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    return (
+        <>
+            <Toast
+                isOpen={toastOpen}
+                message={toastMessage}
+                type={toastType}
+                onClose={() => setToastOpen(false)}
+            />
+
+            <button
+                onClick={() => setShowModal(true)}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:opacity-50"
+            >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                Sync Penjualan
+            </button>
+
+            {showModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+                        <h3 className="text-sm font-bold text-gray-900 mb-1">Pilih Rentang Tanggal</h3>
+                        <p className="text-xs text-gray-500 mb-5">
+                            Tentukan tanggal mulai dan akhir untuk menarik data penjualan dari Moka POS.
+                        </p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Mulai</label>
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={e => setStartDate(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Akhir</label>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={e => setEndDate(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 mt-6">
+                            <button
+                                onClick={() => setShowModal(false)}
+                                className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleSyncSales}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors"
+                            >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                Tarik Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+export function SyncTransactionsButton() {
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+
+    const today = new Date();
+    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    const [startDate, setStartDate] = useState(todayStr);
+    const [endDate, setEndDate] = useState(todayStr);
+
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
+    const [toastOpen, setToastOpen] = useState(false);
+    const router = useRouter();
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToastMessage(message);
+        setToastType(type);
+        setToastOpen(true);
+    };
+
+    const handleSync = async () => {
+        if (!startDate || !endDate) {
+            showToast('Silakan pilih rentang tanggal yang valid', 'error');
+            return;
+        }
+
+        setIsSyncing(true);
+        setShowModal(false);
+        try {
+            const res = await fetch('/api/moka/sync/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_date: startDate,
+                    end_date: endDate
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Gagal sinkronisasi data transaksi');
+
+            showToast(data.message || 'Sinkronisasi transaksi berhasil!', 'success');
+            router.refresh();
+        } catch (error: any) {
+            console.error('Error syncing transactions:', error);
+            showToast(error.message || 'Terjadi kesalahan sistem', 'error');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    return (
+        <>
+            <Toast
+                isOpen={toastOpen}
+                message={toastMessage}
+                type={toastType}
+                onClose={() => setToastOpen(false)}
+            />
+
+            <button
+                onClick={() => setShowModal(true)}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:opacity-50"
+            >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                Sync Transaksi
+            </button>
+
+            {showModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+                        <h3 className="text-sm font-bold text-gray-900 mb-1">Pilih Tanggal (Transaksi)</h3>
+                        <p className="text-xs text-gray-500 mb-5">
+                            Tentukan tanggal mulai dan akhir untuk menarik rincian data transaksi kasir dari Moka POS.
+                        </p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Mulai</label>
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={e => setStartDate(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Akhir</label>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={e => setEndDate(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 mt-6">
+                            <button
+                                onClick={() => setShowModal(false)}
+                                className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleSync}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors"
+                            >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                Tarik Transaksi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+export function SyncCustomersButton() {
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
+    const [toastOpen, setToastOpen] = useState(false);
+    const router = useRouter();
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToastMessage(message);
+        setToastType(type);
+        setToastOpen(true);
+    };
+
+    const handleSync = async () => {
+        setIsSyncing(true);
+        try {
+            const res = await fetch('/api/moka/sync/customers', { method: 'POST' });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(`Failed to sync customers: ${data.message || 'Server error'}`);
+            }
+
+            showToast(`Sinkronisasi pelanggan berhasil!`, 'success');
+            router.refresh();
+        } catch (error: any) {
+            console.error('Error syncing customers:', error);
+            showToast(error.message || 'Network error occurred', 'error');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    return (
+        <>
+            <Toast
+                isOpen={toastOpen}
+                message={toastMessage}
+                type={toastType}
+                onClose={() => setToastOpen(false)}
+            />
+            <button
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:opacity-50"
+            >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                Sync Pelanggan
+            </button>
         </>
     );
 }

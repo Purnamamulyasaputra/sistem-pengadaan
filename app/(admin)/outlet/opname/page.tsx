@@ -80,7 +80,7 @@ export default function OutletOpnamePage() {
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Stock Opname Outlet</h3>
+            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Stock Opname Outlet</h3>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <select className="input" style={{ width: 90 }} value={limit} onChange={(e) => { setLimit(e.target.value === 'all' ? 'all' : Number(e.target.value)); setCurrentPage(1); }}>
@@ -117,14 +117,14 @@ export default function OutletOpnamePage() {
                   <th className="center">Status</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody style={{ fontSize: 11 }}>
                 {(limit === 'all' ? sessions : sessions.slice((currentPage - 1) * limit, currentPage * limit)).map(s => (
                   <tr key={s.id} onClick={() => router.push(`/outlet/opname/${s.id}`)} className="hover-row" style={{ cursor: 'pointer' }}>
                     <td className="font-bold">{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
-                    <td className="muted" style={{ fontSize: 13 }}>
+                    <td className="muted" style={{ fontSize: 11 }}>
                       {new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="muted" style={{ fontSize: 13 }}>
+                    <td className="muted" style={{ fontSize: 11 }}>
                       {new Date(s.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="muted">{s.pic_name}</td>

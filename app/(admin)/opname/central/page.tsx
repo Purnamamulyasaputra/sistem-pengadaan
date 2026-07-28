@@ -70,7 +70,7 @@ export default function CentralOpnamePage() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)' }}>
           <div>
-            <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Stock Opname Pusat</h3>
+            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Stock Opname Pusat</h3>
           </div>
           <Button variant="primary" size="sm" onClick={handleStartOpname} disabled={creating}>
             {creating ? 'Memulai...' : '+ Mulai Opname'}
@@ -91,26 +91,26 @@ export default function CentralOpnamePage() {
             <Table>
               <thead>
                 <tr>
-                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Tanggal Opname</th>
-                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Waktu Mulai</th>
-                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Terakhir Diubah</th>
-                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Dilakukan Oleh</th>
-                  <th className="right" style={{ padding: '12px 16px', fontSize: 11 }}>Est. Biaya Pemakaian</th>
-                  <th className="center" style={{ padding: '12px 16px', fontSize: 11 }}>Status</th>
+                  <th style={{ padding: '12px 16px', fontSize: 10 }}>Tanggal Opname</th>
+                  <th style={{ padding: '12px 16px', fontSize: 10 }}>Waktu Mulai</th>
+                  <th style={{ padding: '12px 16px', fontSize: 10 }}>Terakhir Diubah</th>
+                  <th style={{ padding: '12px 16px', fontSize: 10 }}>Dilakukan Oleh</th>
+                  <th className="right" style={{ padding: '12px 16px', fontSize: 10 }}>Est. Biaya Pemakaian</th>
+                  <th className="center" style={{ padding: '12px 16px', fontSize: 10 }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {sessions.map(s => (
                   <tr key={s.id} onClick={() => router.push(`/opname/central/${s.id}`)} className="hover-row" style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
-                    <td className="font-bold" style={{ padding: '12px 16px', fontSize: 12 }}>{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>
+                    <td className="font-bold" style={{ padding: '12px 16px', fontSize: 11 }}>{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
+                    <td className="muted" style={{ padding: '12px 16px', fontSize: 11 }}>
                       {new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>
+                    <td className="muted" style={{ padding: '12px 16px', fontSize: 11 }}>
                       {new Date(s.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>{s.pic_name}</td>
-                    <td className="right font-mono font-bold" style={{ padding: '12px 16px', fontSize: 12, color: Number(s.total_value) > 0 ? '#dc2626' : 'var(--muted)' }}>
+                    <td className="muted" style={{ padding: '12px 16px', fontSize: 11 }}>{s.pic_name}</td>
+                    <td className="right font-mono font-bold" style={{ padding: '12px 16px', fontSize: 11, color: Number(s.total_value) > 0 ? '#dc2626' : 'var(--muted)' }}>
                       Rp {Number(s.total_value).toLocaleString('id-ID')}
                     </td>
                     <td className="center" style={{ padding: '12px 16px' }}>

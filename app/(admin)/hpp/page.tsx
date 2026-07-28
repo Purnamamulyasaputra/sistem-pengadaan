@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
+import { Pagination } from '@/components/ui/Pagination';
 
 // ─── Types ───────────────────────────────────────────────────
 type Category = { id: number; name: string };
@@ -259,18 +260,13 @@ function MenusTab({ categories }: { categories: Category[] }) {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 16, borderTop: '1px solid var(--border)' }}>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-            <ChevronLeft size={16} />
-          </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Halaman {page} dari {totalPages}</span>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
-
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={total}
+        itemsPerPage={limit}
+        onPageChange={setPage}
+      />
       <Modal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Detail Menu & HPP" maxWidth={680}>
         {detailLoading ? (
           <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>Memuat detail...</div>
@@ -487,17 +483,14 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 16, borderTop: '1px solid var(--border)' }}>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-            <ChevronLeft size={16} />
-          </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Halaman {page} dari {totalPages}</span>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
+      {/* Pagination */}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={total}
+        itemsPerPage={limit}
+        onPageChange={setPage}
+      />
 
       <ConfirmDialog
         open={!!deleteConfirm}
@@ -708,17 +701,14 @@ function IngredientsTab() {
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 16, borderTop: '1px solid var(--border)' }}>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-            <ChevronLeft size={16} />
-          </button>
-          <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Halaman {page} dari {totalPages}</span>
-          <button className="btn" style={{ padding: '6px 10px', display: 'flex', alignItems: 'center' }} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
+      {/* Pagination */}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={total}
+        itemsPerPage={limit}
+        onPageChange={setPage}
+      />
 
       {modalOpen && (
         <div className="modal-overlay" onClick={() => setModalOpen(false)}>

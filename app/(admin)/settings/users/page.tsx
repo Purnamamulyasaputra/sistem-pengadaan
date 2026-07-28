@@ -120,34 +120,33 @@ export default function UsersManagementPage() {
             <Table>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', padding: '12px 24px', background: '#f1f5f9' }}>Nama</th>
-                  <th style={{ textAlign: 'left', padding: '12px 24px', background: '#f1f5f9' }}>Email Google</th>
-                  <th style={{ textAlign: 'left', padding: '12px 24px', background: '#f1f5f9' }}>Peran</th>
-                  <th style={{ textAlign: 'left', padding: '12px 24px', background: '#f1f5f9' }}>Outlet</th>
-                  <th style={{ textAlign: 'center', padding: '12px 24px', background: '#f1f5f9' }}>Aksi</th>
+                  <th style={{ textAlign: 'left', padding: '10px 16px', background: '#f8fafc', fontSize: 12, color: '#64748b' }}>NAMA</th>
+                  <th style={{ textAlign: 'left', padding: '10px 16px', background: '#f8fafc', fontSize: 12, color: '#64748b' }}>EMAIL GOOGLE</th>
+                  <th style={{ textAlign: 'left', padding: '10px 16px', background: '#f8fafc', fontSize: 12, color: '#64748b' }}>PERAN</th>
+                  <th style={{ textAlign: 'left', padding: '10px 16px', background: '#f8fafc', fontSize: 12, color: '#64748b' }}>OUTLET</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map(user => (
-                  <tr key={user.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '12px 24px' }}>{user.name}</td>
-                    <td style={{ padding: '12px 24px' }}>{user.email}</td>
-                    <td style={{ padding: '12px 24px' }}>
-                      <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: user.role === 'ADMIN_PUSAT' ? '#fef3c7' : '#e0e7ff', color: user.role === 'ADMIN_PUSAT' ? '#92400e' : '#3730a3', fontWeight: 600 }}>
+                  <tr 
+                    key={user.id} 
+                    onClick={() => openEditUser(user)}
+                    className="hover:bg-slate-50 transition-colors"
+                    style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                  >
+                    <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500 }}>{user.name}</td>
+                    <td style={{ padding: '12px 16px', fontSize: 13 }}>{user.email}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: user.role === 'ADMIN_PUSAT' ? '#fef3c7' : '#e0e7ff', color: user.role === 'ADMIN_PUSAT' ? '#92400e' : '#3730a3', fontWeight: 600 }}>
                         {user.role === 'ADMIN_PUSAT' ? 'Super Admin (Pusat)' : user.role === 'ADMIN_OUTLET' ? 'Admin Outlet' : user.role}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 24px', color: '#64748b' }}>{user.outlet_name || '-'}</td>
-                    <td style={{ padding: '12px 24px', textAlign: 'center' }}>
-                      <Button variant="outline" size="sm" onClick={() => openEditUser(user)}>
-                        Edit
-                      </Button>
-                    </td>
+                    <td style={{ padding: '12px 16px', color: '#64748b', fontSize: 13 }}>{user.outlet_name || '-'}</td>
                   </tr>
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Tidak ada pengguna ditemukan.</td>
+                    <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Tidak ada pengguna ditemukan.</td>
                   </tr>
                 )}
               </tbody>

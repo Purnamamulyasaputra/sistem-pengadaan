@@ -62,11 +62,20 @@ export default async function WarehousePage() {
                     </span>
                   </td>
                   <td>
-                    <Link href={`/warehouse/receipt/${po.id}`}>
-                      <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none' }}>
-                        Terima Barang
-                      </button>
-                    </Link>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Link href={`/warehouse/receipt/${po.id}`}>
+                        <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}>
+                          {po.status === 'DITERIMA_SEBAGIAN' ? 'Terima Sisa' : 'Terima Barang'}
+                        </button>
+                      </Link>
+                      {po.status === 'DITERIMA_SEBAGIAN' && (
+                        <a href={`/api/purchase-orders/${po.id}/issue-pdf`} target="_blank" rel="noreferrer">
+                          <button className="btn btn-sm" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', whiteSpace: 'nowrap' }} title="Cetak Laporan Kekurangan Barang">
+                            Cetak Retur
+                          </button>
+                        </a>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

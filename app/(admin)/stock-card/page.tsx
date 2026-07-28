@@ -29,7 +29,7 @@ export default function StockCardPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   const [categories, setCategories] = useState<Record<string, unknown>[]>([]);
   const [catFilter, setCatFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -75,16 +75,16 @@ export default function StockCardPage() {
   const filteredItems = items.filter((i: any) => {
     if (search && !i.name.toLowerCase().includes(search.toLowerCase()) && !String(i.id).includes(search)) return false;
     if (catFilter && String(i.category_id) !== catFilter) return false;
-    
+
     if (statusFilter) {
       const current = Number(i.current_stock ?? 0);
       const min = Number(i.minimum_threshold ?? 0);
-      
+
       if (statusFilter === 'SAFE' && current < min) return false;
       if (statusFilter === 'LOW' && (current >= min || current <= 0)) return false;
       if (statusFilter === 'OUT' && current > 0) return false;
     }
-    
+
     return true;
   });
 
@@ -111,15 +111,15 @@ export default function StockCardPage() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input 
-              className="input" 
-              placeholder="Cari nama barang..." 
-              value={search} 
-              onChange={e => setSearch(e.target.value)} 
-              style={{ width: 200 }} 
+            <input
+              className="input"
+              placeholder="Cari nama barang..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: 200 }}
             />
-            <Select 
-              value={catFilter} 
+            <Select
+              value={catFilter}
               onChange={(val: any) => setCatFilter(String(val))}
               options={[
                 { value: '', label: 'Semua Kategori' },
@@ -127,8 +127,8 @@ export default function StockCardPage() {
               ]}
               style={{ width: 150 }}
             />
-            <Select 
-              value={statusFilter} 
+            <Select
+              value={statusFilter}
               onChange={(val: any) => setStatusFilter(String(val))}
               options={[
                 { value: '', label: 'Semua Status' },
@@ -144,55 +144,55 @@ export default function StockCardPage() {
         <div className="card-body flush">
           {loading ? (
             <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat inventaris...</div>
-            ) : filteredItems.length === 0 ? (
-              <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Tidak ada barang ditemukan.</div>
-            ) : (
-              <>
-                <div className="table-responsive">
+          ) : filteredItems.length === 0 ? (
+            <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Tidak ada barang ditemukan.</div>
+          ) : (
+            <>
+              <div className="table-responsive">
                 <Table>
                   <thead>
-                  <tr>
-                    <th>Kode</th>
-                    <th>Nama Barang</th>
-                    <th className="right">Stok Min.</th>
-                    <th className="right">Stok Fisik</th>
-                    <th className="center">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedItems.map((item: any) => {
-                    const currentStockSmallest = Number(item.current_stock ?? 0);
-                    const minStockSmallest = Number(item.minimum_threshold ?? 0);
-                    const centralStock = toCentralDisplay(currentStockSmallest, String(item.smallest_unit || ''));
-                    const centralMin = toCentralDisplay(minStockSmallest, String(item.smallest_unit || ''));
-                    
-                    const isLow = currentStockSmallest < minStockSmallest;
-                    const isOut = currentStockSmallest <= 0;
-                    
-                    return (
-                      <tr key={item.id} onClick={() => setSelectedItemId(String(item.id))} className="cursor-pointer" title="Lihat Kartu Stok">
-                        <td className="font-mono text-muted">ERC{String(item.id).padStart(5, '0')}</td>
-                        <td className="font-bold">{item.name}</td>
-                        <td className="right">
-                          <div className="num font-bold">{centralMin.value.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>{centralMin.unit}</span></div>
-                          {centralMin.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({minStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
-                        </td>
-                        <td className="right">
-                          <div className="num font-bold" style={{ color: isOut ? '#dc2626' : isLow ? '#d97706' : '#059669', fontSize: 14 }}>
-                            {centralStock.value.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{centralStock.unit}</span>
-                          </div>
-                          {centralStock.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({currentStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
-                        </td>
-                        <td className="center">
-                          <Badge variant={isOut ? 'red' : isLow ? 'amber' : 'green'}>
-                            {isOut ? 'Habis' : isLow ? 'Stok Rendah' : 'Aman'}
-                          </Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
+                    <tr>
+                      <th>Kode</th>
+                      <th>Nama Barang</th>
+                      <th className="right">Stok Min.</th>
+                      <th className="right">Stok Fisik</th>
+                      <th className="center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedItems.map((item: any) => {
+                      const currentStockSmallest = Number(item.current_stock ?? 0);
+                      const minStockSmallest = Number(item.minimum_threshold ?? 0);
+                      const centralStock = toCentralDisplay(currentStockSmallest, String(item.smallest_unit || ''));
+                      const centralMin = toCentralDisplay(minStockSmallest, String(item.smallest_unit || ''));
+
+                      const isLow = currentStockSmallest < minStockSmallest;
+                      const isOut = currentStockSmallest <= 0;
+
+                      return (
+                        <tr key={item.id} onClick={() => setSelectedItemId(String(item.id))} className="cursor-pointer" title="Lihat Kartu Stok">
+                          <td className="font-mono text-muted">ERC{String(item.id).padStart(5, '0')}</td>
+                          <td className="font-bold">{item.name}</td>
+                          <td className="right">
+                            <div className="num font-bold">{centralMin.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>{centralMin.unit}</span></div>
+                            {centralMin.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({minStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
+                          </td>
+                          <td className="right">
+                            <div className="num font-bold" style={{ color: isOut ? '#dc2626' : isLow ? '#d97706' : '#059669', fontSize: 14 }}>
+                              {centralStock.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{centralStock.unit}</span>
+                            </div>
+                            {centralStock.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({currentStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
+                          </td>
+                          <td className="center">
+                            <Badge variant={isOut ? 'red' : isLow ? 'amber' : 'green'}>
+                              {isOut ? 'Habis' : isLow ? 'Stok Rendah' : 'Aman'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
               </div>
               <Pagination
                 currentPage={currentPage}
@@ -203,13 +203,13 @@ export default function StockCardPage() {
               />
             </>
           )}
-          </div>
+        </div>
       </div>
 
-      <Modal 
-        isOpen={!!selectedItemId} 
-        onClose={() => setSelectedItemId('')} 
-        title={`Kartu Stok — ${String(selectedItem?.name || '')}`} 
+      <Modal
+        isOpen={!!selectedItemId}
+        onClose={() => setSelectedItemId('')}
+        title={`Kartu Stok — ${String(selectedItem?.name || '')}`}
         maxWidth={800}
         footer={<Button variant="outline" onClick={() => setSelectedItemId('')}>Tutup</Button>}
       >
@@ -217,7 +217,7 @@ export default function StockCardPage() {
           <div>
             <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Saldo Saat Ini</p>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {(Number(currentBalance) / Number(selectedItem?.conversion_ratio || 1)).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted" style={{ fontSize: 14 }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
+              {(Number(currentBalance) / Number(selectedItem?.conversion_ratio || 1)).toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span className="muted" style={{ fontSize: 14 }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
             </div>
             {Number(selectedItem?.conversion_ratio || 1) > 1 && (
               <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
@@ -248,76 +248,76 @@ export default function StockCardPage() {
             </div>
           ) : (
             <div className="table-responsive" style={{ maxHeight: '450px', overflowY: 'auto' }}>
-            <Table>
-              <thead>
-                <tr>
-                  <th>Tanggal & Waktu</th>
-                  <th>Jenis Mutasi</th>
-                  <th className="right">Perubahan (Jml)</th>
-                  <th className="right">Nilai (Rp)</th>
-                  <th className="right">Saldo Akhir</th>
-                  <th>Referensi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map(log => {
-                  const ratio = Number(selectedItem?.conversion_ratio || 1);
-                  const convertedQtyChange = log.qty_change / ratio;
-                  const convertedEndingBalance = log.ending_balance / ratio;
-                  
-                  return (
-                  <tr key={log.id}>
-                    <td>
-                      {new Date(log.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      <div className="muted" style={{ fontSize: 12 }}>{new Date(log.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
-                    </td>
-                    <td>
-                      <Badge variant={log.movement_type === 'IN' ? 'green' : log.movement_type === 'OUT' ? 'blue' : 'amber'}>
-                        {log.movement_type}
-                      </Badge>
-                    </td>
-                    <td className="right">
-                      <div className="font-mono font-bold" style={{ color: log.movement_type === 'OUT' || log.qty_change < 0 ? '#dc2626' : '#16a34a' }}>
-                        {log.qty_change > 0 ? '+' : ''}{Number(convertedQtyChange).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
-                      </div>
-                      {ratio > 1 && (
-                        <div className="muted font-mono" style={{ fontSize: 11 }}>
-                          ({log.qty_change > 0 ? '+' : ''}{Number(log.qty_change).toLocaleString('id-ID')} {String(selectedItem?.smallest_unit || '')})
-                        </div>
-                      )}
-                    </td>
-                    <td className="right font-mono font-bold" style={{ color: log.movement_type === 'OUT' || log.qty_change < 0 ? '#dc2626' : 'inherit' }}>
-                      Rp {(Math.abs(log.qty_change) * Number(selectedItem?.current_average_price || 0)).toLocaleString('id-ID')}
-                    </td>
-                    <td className="right">
-                      <div className="font-mono font-bold">
-                        {Number(convertedEndingBalance).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)' }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
-                      </div>
-                      {ratio > 1 && (
-                        <div className="muted font-mono" style={{ fontSize: 11 }}>
-                          ({Number(log.ending_balance).toLocaleString('id-ID')} {String(selectedItem?.smallest_unit || '')})
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <div className="font-bold">{log.reference_type}</div>
-                      <div className="muted font-mono" style={{ fontSize: 12 }}>
-                        {(log.reference_type === 'BARCODE_SCAN' || log.reference_type === 'BULK_SHIP') && log.do_id ? (
-                          <Link href={`/delivery-orders/${log.do_id}`} className="text-blue-600 hover:underline">{log.do_number}</Link>
-                        ) : log.reference_type === 'RECEIPT' && log.po_id ? (
-                          <Link href={`/purchase-orders/${log.po_id}`} className="text-blue-600 hover:underline">{log.po_number}</Link>
-                        ) : log.reference_type === 'OPNAME_ADJUSTMENT' ? (
-                          <Link href={`/opname/central/${log.reference_id}`} className="text-blue-600 hover:underline">Ref ID: {log.reference_id}</Link>
-                        ) : (
-                          <span>Ref ID: {log.reference_id ?? '-'}</span>
-                        )}
-                      </div>
-                    </td>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Tanggal & Waktu</th>
+                    <th>Jenis Mutasi</th>
+                    <th className="right">Perubahan (Jml)</th>
+                    <th className="right">Nilai (Rp)</th>
+                    <th className="right">Saldo Akhir</th>
+                    <th>Referensi</th>
                   </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
+                </thead>
+                <tbody>
+                  {logs.map(log => {
+                    const ratio = Number(selectedItem?.conversion_ratio || 1);
+                    const convertedQtyChange = log.qty_change / ratio;
+                    const convertedEndingBalance = log.ending_balance / ratio;
+
+                    return (
+                      <tr key={log.id}>
+                        <td>
+                          {new Date(log.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          <div className="muted" style={{ fontSize: 12 }}>{new Date(log.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+                        </td>
+                        <td>
+                          <Badge variant={log.movement_type === 'IN' ? 'green' : log.movement_type === 'OUT' ? 'blue' : 'amber'}>
+                            {log.movement_type}
+                          </Badge>
+                        </td>
+                        <td className="right">
+                          <div className="font-mono font-bold" style={{ color: log.movement_type === 'OUT' || log.qty_change < 0 ? '#dc2626' : '#16a34a' }}>
+                            {log.qty_change > 0 ? '+' : ''}{Number(convertedQtyChange).toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
+                          </div>
+                          {ratio > 1 && (
+                            <div className="muted font-mono" style={{ fontSize: 11 }}>
+                              ({log.qty_change > 0 ? '+' : ''}{Number(log.qty_change).toLocaleString('id-ID')} {String(selectedItem?.smallest_unit || '')})
+                            </div>
+                          )}
+                        </td>
+                        <td className="right font-mono font-bold" style={{ color: log.movement_type === 'OUT' || log.qty_change < 0 ? '#dc2626' : 'inherit' }}>
+                          Rp {Math.round((Math.abs(log.qty_change) / ratio) * Math.round(Number(selectedItem?.current_average_price || 0) * ratio)).toLocaleString('id-ID')}
+                        </td>
+                        <td className="right">
+                          <div className="font-mono font-bold">
+                            {Number(convertedEndingBalance).toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)' }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
+                          </div>
+                          {ratio > 1 && (
+                            <div className="muted font-mono" style={{ fontSize: 11 }}>
+                              ({Number(log.ending_balance).toLocaleString('id-ID')} {String(selectedItem?.smallest_unit || '')})
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="font-bold">{log.reference_type}</div>
+                          <div className="muted font-mono" style={{ fontSize: 12 }}>
+                            {(log.reference_type === 'BARCODE_SCAN' || log.reference_type === 'BULK_SHIP') && log.do_id ? (
+                              <Link href={`/delivery-orders/${log.do_id}`} className="text-[#016e3f] hover:underline font-medium">{log.do_number}</Link>
+                            ) : log.reference_type === 'RECEIPT' && log.po_id ? (
+                              <Link href={`/purchase-orders/${log.po_id}`} className="text-[#016e3f] hover:underline font-medium">{log.po_number}</Link>
+                            ) : (log.reference_type === 'OPNAME_ADJUSTMENT' || log.reference_type === 'ADJUSTMENT') && log.reference_id ? (
+                              <Link href={`/opname/central/${log.reference_id}`} className="text-[#016e3f] hover:underline font-medium">Ref ID: {log.reference_id}</Link>
+                            ) : (
+                              <span>Ref ID: {log.reference_id ?? '-'}</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
             </div>
           )}
         </div>

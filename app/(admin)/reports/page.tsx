@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -7,69 +8,69 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import * as XLSX from 'xlsx';
 
 export default function ReportsPage() {
-  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
-  const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [groupingType, setGroupingType] = useState<'category' | 'item'>('category');
-  const [reportData, setReportData] = useState<Record<string, unknown>[]>([]);
-  const [loading, setLoading] = useState(false);
+    const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
+    const [year, setYear] = useState<number>(new Date().getFullYear());
+    const [groupingType, setGroupingType] = useState<'category' | 'item'>('category');
+    const [reportData, setReportData] = useState<Record<string, unknown>[]>([]);
+    const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/reports/inventory-value?month=${month}&year=${year}`)
-      .then(r => r.json())
-      .then(d => {
-        setReportData(d.data ?? []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [month, year]);
+    useEffect(() => {
+        setLoading(true);
+        fetch(`/api/reports/inventory-value?month=${month}&year=${year}`)
+            .then(r => r.json())
+            .then(d => {
+                setReportData(d.data ?? []);
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+    }, [month, year]);
 
 
 
-  let grandTotalIn = 0;
-  let grandTotalDist = 0;
-  let grandTotalAdj = 0;
-  let grandTotalValue = 0;
+    let grandTotalIn = 0;
+    let grandTotalDist = 0;
+    let grandTotalAdj = 0;
+    let grandTotalValue = 0;
 
-  const dataMap = new Map<string, number>();
+    const dataMap = new Map<string, number>();
 
-  reportData.forEach((r: any) => {
-    const ma = Number(r.current_average_price);
-    const valIn = Number(r.total_in_qty) * ma;
-    const valDist = Number(r.total_distribution_qty) * ma;
-    const valAdj = Math.abs(Number(r.total_adj_qty)) * ma;
-    const valCurrent = Number(r.current_balance) * ma;
+    reportData.forEach((r: any) => {
+        const ma = Number(r.current_average_price);
+        const valIn = Number(r.total_in_qty) * ma;
+        const valDist = Number(r.total_distribution_qty) * ma;
+        const valAdj = Math.abs(Number(r.total_adj_qty)) * ma;
+        const valCurrent = Number(r.current_balance) * ma;
 
-    grandTotalIn += valIn;
-    grandTotalDist += valDist;
-    grandTotalAdj += valAdj;
-    grandTotalValue += valCurrent;
+        grandTotalIn += valIn;
+        grandTotalDist += valDist;
+        grandTotalAdj += valAdj;
+        grandTotalValue += valCurrent;
 
-    const key = String(groupingType === 'category' 
-      ? (r.category_name || 'Tidak Berkategori')
-      : (r.item_name || 'Tidak Diketahui'));
+        const key = String(groupingType === 'category'
+            ? (r.category_name || 'Tidak Berkategori')
+            : (r.item_name || 'Tidak Diketahui'));
       
-    dataMap.set(key, (dataMap.get(key) || 0) + valCurrent);
-  });
+        dataMap.set(key, (dataMap.get(key) || 0) + valCurrent);
+    });
 
-  let chartData = Array.from(dataMap.entries()).map(([name, value]) => ({
-    name,
-    'Nilai Persediaan': value
-  }));
+    let chartData = Array.from(dataMap.entries()).map(([name, value]) => ({
+        name,
+        'Nilai Persediaan': value
+    }));
 
-  if (groupingType === 'item') {
-    chartData.sort((a, b) => b['Nilai Persediaan'] - a['Nilai Persediaan']);
-    chartData = chartData.slice(0, 15);
-  }
+    if (groupingType === 'item') {
+        chartData.sort((a, b) => b['Nilai Persediaan'] - a['Nilai Persediaan']);
+        chartData = chartData.slice(0, 15);
+    }
 
-  return (
-    <section className="screen">
-      <div className="card">
-        <div className="tabs" style={{ marginBottom: 0 }}>
-          <a href="/reports" className="tab active" style={{ textDecoration: 'none' }}>Grafik Keuangan</a>
-          <a href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</a>
-          <a href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</a>
-        </div>
+    return (
+        <section className="screen">
+            <div className="card">
+                <div className="tabs" style={{ marginBottom: 0 }}>
+                    <Link href="/reports" className="tab active" style={{ textDecoration: 'none' }}>Grafik Keuangan</Link>
+                    <Link href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</Link>
+                    <Link href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</Link>
+                </div>
         <div className="card-head">
           <div>
             <h3>Grafik Keuangan Pengadaan & Persediaan</h3>

@@ -31,6 +31,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   const [isLocked, setIsLocked] = useState(false);
   const [limit, setLimit] = useState<number | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' as 'success' | 'error' });
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -126,8 +127,11 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat data opname...</div>;
   if (!header) return <div style={{ padding: 40, textAlign: 'center' }}>Sesi tidak ditemukan.</div>;
 
-  const paginatedItems = limit === 'all' ? items : items.slice((currentPage - 1) * limit, currentPage * limit);
-  const totalPages = limit === 'all' ? 1 : Math.ceil(items.length / limit);
+  const filteredItems = items.filter((item: any) => 
+    !searchQuery || String(item.item_name).toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const paginatedItems = limit === 'all' ? filteredItems : filteredItems.slice((currentPage - 1) * limit, currentPage * limit);
+  const totalPages = limit === 'all' ? 1 : Math.ceil(filteredItems.length / limit);
 
   return (
     <section className="screen">
@@ -135,18 +139,26 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
       <div className="card">
         <div className="card-head">
           <div>
-            <h3>Detail Opname — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
+            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Detail Opname — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
             <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
               <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
-              <span className="muted" style={{ fontSize: 13 }}>
+              <span className="muted" style={{ fontSize: 11 }}>
                 <span className="font-bold">Mulai:</span> {new Date(header.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
               </span>
-              <span className="muted" style={{ fontSize: 13 }}>
+              <span className="muted" style={{ fontSize: 11 }}>
                 <span className="font-bold">Terakhir Diubah:</span> {new Date(header.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <input 
+              type="text"
+              className="input"
+              placeholder="Cari nama barang..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              style={{ width: 180, height: 32, fontSize: 11 }}
+            />
             <Select 
               value={limit}
               onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
@@ -155,7 +167,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                 { value: 8, label: '8' },
                 { value: 32, label: '32' }
               ]}
-              inputStyle={{ padding: '4px 10px', height: 32, fontSize: 13, minWidth: 90 }}
+              inputStyle={{ padding: '4px 10px', height: 32, fontSize: 11, minWidth: 90 }}
               style={{ width: 100 }}
             />
             {!isLocked && (
@@ -193,7 +205,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                 <th style={{ width: 220 }}>Catatan</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody style={{ fontSize: 11 }}>
               {paginatedItems.map((item: any) => {
                 const detail = getDetail(item.item_id);
                 const actual = detail ? detail.actual_physical_qty : '';
@@ -214,7 +226,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                         onChange={(e) => handleQtyChange(item.item_id, item.system_balance, e.target.value)} 
                         disabled={isLocked}
                         placeholder="0"
-                        style={{ height: 32, width: '100%', borderColor: String(actual ?? '') === '' ? '#fca5a5' : 'var(--border)' }} 
+                        style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: String(actual ?? '') === '' ? '#fca5a5' : 'var(--border)' }} 
                       />
                     </td>
                     <td className="right num">
@@ -237,7 +249,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                             { value: '', label: '-- Pilih Alasan --' },
                             ...REASON_CATEGORIES
                           ]}
-                          inputStyle={{ height: 32, padding: '0px 8px', fontSize: 13, borderColor: !detail?.reason_category ? '#fca5a5' : 'var(--border)' }}
+                          inputStyle={{ height: 28, padding: '0px 8px', fontSize: 11, borderColor: !detail?.reason_category ? '#fca5a5' : 'var(--border)' }}
                         />
                       ) : (
                         <span className="muted italic" style={{ fontSize: 13 }}>Tidak ada selisih</span>
@@ -252,7 +264,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                           onChange={e => handleReasonChange(item.item_id, 'reason_notes', e.target.value)}
                           disabled={isLocked}
                           placeholder={detail?.reason_category === 'LAINNYA' ? 'Wajib diisi...' : 'Opsional...'}
-                          style={{ height: 32, padding: '4px 8px', fontSize: 13, width: '100%', borderColor: (detail?.reason_category === 'LAINNYA' && !String(detail?.reason_notes || '').trim()) ? '#fca5a5' : 'var(--border)' }}
+                          style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: (detail?.reason_category === 'LAINNYA' && !String(detail?.reason_notes || '').trim()) ? '#fca5a5' : 'var(--border)' }}
                         />
                       ) : null}
                     </td>

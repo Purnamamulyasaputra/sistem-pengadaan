@@ -1,5 +1,17 @@
 import { query, withTransaction } from '../db';
 
+/**
+ * outlet_inventory_logs.movement_type valid values (not documented in DB — tracked here):
+ *   'IN'    — Penerimaan barang dari Delivery Order (processPublicReceive)
+ *   'ADJ'   — Penyesuaian dari Stock Opname Outlet (lockStockCount OUTLET)
+ *   'SALES' — Pemotongan otomatis dari penjualan Moka POS (deductOutletStockFromSales)
+ *
+ * outlet_inventory_logs.reference_type valid values:
+ *   'PUBLIC_RECEIVE'    — Konfirmasi penerimaan DO oleh outlet
+ *   'OPNAME_ADJUSTMENT' — Penyesuaian dari stock opname outlet
+ *   'MOKA_SALES'        — Pemotongan bahan dari transaksi Moka POS
+ */
+
 export type OutletStockRow = {
   item_id: number;
   item_name: string;

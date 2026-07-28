@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Select } from '@/components/ui/Select';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -44,9 +45,9 @@ export default function PriceHistoryPage() {
     <section className="screen">
       <div className="card">
         <div className="tabs" style={{ marginBottom: 0 }}>
-          <a href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Grafik Keuangan</a>
-          <a href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</a>
-          <a href="/price-history" className="tab active" style={{ textDecoration: 'none' }}>Riwayat Harga</a>
+          <Link href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Grafik Keuangan</Link>
+          <Link href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</Link>
+          <Link href="/price-history" className="tab active" style={{ textDecoration: 'none' }}>Riwayat Harga</Link>
         </div>
         <div className="card-head">
           <div>
