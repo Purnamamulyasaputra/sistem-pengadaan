@@ -49,7 +49,7 @@ export default function CreateDeliveryOrderPage() {
   const [error, setError] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [requireBarcode, setRequireBarcode] = useState(true);
-  
+
   const [allItems, setAllItems] = useState<any[]>([]);
 
   useEffect(() => {
@@ -218,9 +218,8 @@ export default function CreateDeliveryOrderPage() {
   };
 
   const handleQtyChange = (orderItemId: number | string, val: string) => {
-    // allow empty string or trailing dot for decimal typing
-    const newVal = val === '' || val.endsWith('.') ? val : (parseFloat(val) || 0);
-    setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? { ...i, qty_shipped: newVal } : i));
+    const cleanVal = val.replace(/[^0-9.,]/g, '');
+    setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? { ...i, qty_shipped: cleanVal } : i));
   };
 
   const handleBarcodeScan = (barcode: string) => {
@@ -244,21 +243,30 @@ export default function CreateDeliveryOrderPage() {
     setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? { ...i, keterangan: val } : i));
   };
 
+  const parseLocalNumber = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    const str = String(val).trim();
+    // Ganti koma jadi titik, hilangkan karakter selain angka dan titik
+    const clean = str.replace(',', '.').replace(/[^0-9.]/g, '');
+    return parseFloat(clean) || 0;
+  };
+
   const handleSave = async () => {
-    const selectedItems = orderItems.filter(i => i.selected && parseFloat(String(i.qty_shipped)) > 0 && i.item_id !== 0);
+    const selectedItems = orderItems.filter(i => i.selected && parseLocalNumber(i.qty_shipped) > 0 && i.item_id !== 0);
     if (selectedItems.length === 0) {
       setError('Pilih setidaknya satu barang untuk dikirim.');
       return;
     }
 
     const overStockItems = selectedItems.filter(i => {
-      const u = (String(i.smallest_unit || '')).toLowerCase();
-      const ratio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
-      return (parseFloat(String(i.qty_shipped)) * ratio) > i.current_stock;
+      const ratio = Number(i.conversion_ratio) || 1;
+      const roundedStock = parseFloat((i.current_stock / ratio).toFixed(3));
+      return parseLocalNumber(i.qty_shipped) > roundedStock;
     });
     if (overStockItems.length > 0) {
       const names = overStockItems.map(i => i.item_name).join(', ');
-      setError(`Stok tidak mencukupi untuk: ${names}. Kurangi jumlah yang akan dikirim.`);
+      setError(`Stok tidak mencukupi untuk: ${names}.`);
       return;
     }
 
@@ -284,7 +292,7 @@ export default function CreateDeliveryOrderPage() {
         items: selectedItems.map(i => ({
           order_item_id: i.order_item_id,
           item_id: i.item_id,
-          qty_shipped: parseFloat(String(i.qty_shipped)) || 0,
+          qty_shipped: parseLocalNumber(i.qty_shipped),
           price_at_shipment: i.current_average_price,
           keterangan: i.keterangan || '',
           is_additional: i.is_additional
@@ -325,11 +333,11 @@ export default function CreateDeliveryOrderPage() {
         </div>
 
         <div className="card-body flush" style={{ padding: 24 }}>
-          <Toast 
-            isOpen={!!error} 
-            message={error} 
-            type="error" 
-            onClose={() => setError('')} 
+          <Toast
+            isOpen={!!error}
+            message={error}
+            type="error"
+            onClose={() => setError('')}
           />
 
           <div className="form-grid" style={{ marginBottom: 32 }}>
@@ -347,9 +355,9 @@ export default function CreateDeliveryOrderPage() {
             </div>
             <div className="form-group">
               <label>Kirim Ke (Outlet)</label>
-              <select 
-                className="input" 
-                value={targetOutletId} 
+              <select
+                className="input"
+                value={targetOutletId}
                 onChange={(e) => setTargetOutletId(e.target.value)}
                 disabled={!selectedOrderId || (selectedOrderId !== 'DIRECT' && !!selectedOrderId)}
                 style={{ fontWeight: 600, background: (!selectedOrderId || selectedOrderId !== 'DIRECT') ? '#f1f5f9' : '#fff' }}
@@ -421,104 +429,107 @@ export default function CreateDeliveryOrderPage() {
                     const u = (String(item.smallest_unit || '')).toLowerCase();
                     const centralRatio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
                     const centralUnit = u === 'ml' ? 'Liter' : (u === 'gr' || u === 'g') ? 'Kg' : item.smallest_unit;
-                    const isExceeded = (parseFloat(String(item.qty_shipped)) * centralRatio) > item.current_stock;
+                    const parsedQty = parseLocalNumber(item.qty_shipped);
+                    const roundedStock = parseFloat((item.current_stock / centralRatio).toFixed(3));
+                    const isExceeded = parsedQty > roundedStock;
                     return (
-                    <tr
-                      key={String(item.order_item_id)}
-                      style={{
-                        opacity: item.selected ? 1 : 0.6,
-                        backgroundColor: item.selected ? (isExceeded ? '#fef2f2' : '#f8fafc') : '#fafafa',
-                        transition: 'all 0.2s ease-in-out'
-                      }}
-                    >
-                      <td className="center">
-                        <input
-                          type="checkbox"
-                          checked={item.selected}
-                          onChange={() => handleToggleItem(item.order_item_id)}
-                          style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary)' }}
-                        />
-                      </td>
-                      <td className="font-bold">
-                        {item.item_id === 0 ? (
-                          <div style={{ position: 'relative', width: 200, zIndex: 10 }}>
-                            <Select
-                              value={item.item_id === 0 ? '' : item.item_id}
-                              onChange={(val) => handleSelectAdditionalItem(item.order_item_id, String(val))}
-                              options={allItems.map(i => ({ value: i.id, label: i.name }))}
-                              placeholder="Cari barang..."
-                              searchable
-                            />
-                          </div>
-                        ) : (
-                          <>
-                            <div>{item.item_name}</div>
-                          </>
-                        )}
-                      </td>
-                      <td className="center num font-bold">
-                        {parseFloat(Number((item.qty_request * (Number(item.conversion_ratio) || 1)) / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
-                      </td>
-                      <td className="center">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                      <tr
+                        key={String(item.order_item_id)}
+                        style={{
+                          opacity: item.selected ? 1 : 0.6,
+                          backgroundColor: item.selected ? (isExceeded ? '#fef2f2' : '#f8fafc') : '#fafafa',
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                      >
+                        <td className="center">
                           <input
-                            type="number"
-                            className="input right font-bold num"
-                            value={item.qty_shipped}
-                            onChange={(e) => handleQtyChange(item.order_item_id, e.target.value)}
+                            type="checkbox"
+                            checked={item.selected}
+                            onChange={() => handleToggleItem(item.order_item_id)}
+                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary)' }}
+                          />
+                        </td>
+                        <td className="font-bold">
+                          {item.item_id === 0 ? (
+                            <div style={{ position: 'relative', width: 200, zIndex: 10 }}>
+                              <Select
+                                value={item.item_id === 0 ? '' : item.item_id}
+                                onChange={(val) => handleSelectAdditionalItem(item.order_item_id, String(val))}
+                                options={allItems.map(i => ({ value: i.id, label: i.name }))}
+                                placeholder="Cari barang..."
+                                searchable
+                              />
+                            </div>
+                          ) : (
+                            <>
+                              <div>{item.item_name}</div>
+                            </>
+                          )}
+                        </td>
+                        <td className="center num font-bold">
+                          {parseFloat(Number((item.qty_request * (Number(item.conversion_ratio) || 1)) / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
+                        </td>
+                        <td className="center">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              className="input right font-bold num"
+                              value={item.qty_shipped}
+                              onChange={(e) => handleQtyChange(item.order_item_id, e.target.value)}
+                              disabled={!item.selected}
+                              style={{
+                                width: 90,
+                                height: 32,
+                                borderColor: item.selected ? (isExceeded ? 'var(--danger)' : 'var(--primary)') : 'var(--border)',
+                                background: item.selected ? '#ffffff' : '#f1f5f9',
+                                color: isExceeded ? 'var(--danger)' : 'inherit'
+                              }}
+                            />
+                            <span className="muted font-bold" style={{ fontSize: 12, width: 35, textAlign: 'left' }}>{centralUnit}</span>
+                          </div>
+                        </td>
+                        <td className="center num font-bold" style={{ color: isExceeded ? 'var(--danger)' : 'var(--muted)' }}>
+                          {parseFloat((item.current_stock / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
+                        </td>
+                        <td className="center">
+                          <input
+                            type="text"
+                            className="input"
+                            placeholder="Catatan opsional..."
+                            value={item.keterangan || ''}
+                            onChange={(e) => handleKeteranganChange(item.order_item_id, e.target.value)}
                             disabled={!item.selected}
                             style={{
-                              width: 90,
+                              width: '100%',
                               height: 32,
-                              borderColor: item.selected ? (isExceeded ? 'var(--danger)' : 'var(--primary)') : 'var(--border)',
+                              borderColor: item.selected ? 'var(--border)' : 'transparent',
                               background: item.selected ? '#ffffff' : '#f1f5f9',
-                              color: isExceeded ? 'var(--danger)' : 'inherit'
+                              fontSize: 12
                             }}
                           />
-                          <span className="muted font-bold" style={{ fontSize: 12, width: 35, textAlign: 'left' }}>{centralUnit}</span>
-                        </div>
-                      </td>
-                      <td className="center num font-bold" style={{ color: isExceeded ? 'var(--danger)' : 'var(--muted)' }}>
-                        {parseFloat((item.current_stock / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
-                      </td>
-                      <td className="center">
-                        <input
-                          type="text"
-                          className="input"
-                          placeholder="Catatan opsional..."
-                          value={item.keterangan || ''}
-                          onChange={(e) => handleKeteranganChange(item.order_item_id, e.target.value)}
-                          disabled={!item.selected}
-                          style={{
-                            width: '100%',
-                            height: 32,
-                            borderColor: item.selected ? 'var(--border)' : 'transparent',
-                            background: item.selected ? '#ffffff' : '#f1f5f9',
-                            fontSize: 12
-                          }}
-                        />
-                      </td>
-                      <td className="center">
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                          <Badge variant={item.item_status === 'READY_DI_GUDANG' ? 'green' : 'amber'}>
-                            {item.item_status === 'READY_DI_GUDANG' ? 'Tersedia' : 'Proses Belanja'}
-                          </Badge>
-                          {item.is_additional && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveAdditionalItem(item.order_item_id)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', display: 'flex', padding: 4 }}
-                              title="Hapus Barang Tambahan"
-                            >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="center">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                            <Badge variant={item.item_status === 'READY_DI_GUDANG' ? 'green' : 'amber'}>
+                              {item.item_status === 'READY_DI_GUDANG' ? 'Tersedia' : 'Proses Belanja'}
+                            </Badge>
+                            {item.is_additional && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAdditionalItem(item.order_item_id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', display: 'flex', padding: 4 }}
+                                title="Hapus Barang Tambahan"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6"></polyline>
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     );
                   })}
                   {orderItems.length === 0 && (
@@ -535,10 +546,10 @@ export default function CreateDeliveryOrderPage() {
         </div>
       </div>
 
-      <BarcodeScannerModal 
-        isOpen={isScannerOpen} 
-        onClose={() => setIsScannerOpen(false)} 
-        onScan={handleBarcodeScan} 
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={handleBarcodeScan}
       />
     </section>
   );

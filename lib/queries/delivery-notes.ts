@@ -327,6 +327,9 @@ export async function processPublicReceive(data: {
           [itemId, -actualQtyReceived, centralNewBalance, data.delivery_note_id]
         );
 
+        // Panggil alert pengecekan
+        await checkAndCreateAlert(itemId, centralNewBalance, client);
+
         const stockRes = await client.query(
           `SELECT current_balance FROM outlet_stocks 
            WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
@@ -829,6 +832,9 @@ export async function approveAndTransferDeliveryNote(deliveryNoteId: number, adm
          VALUES ($1, 'OUT', $2, $3, 'ATOMIC_TRANSFER', $4)`,
         [dni.item_id, -qty, centralNewBalance, deliveryNoteId]
       );
+
+      // Panggil alert pengecekan
+      await checkAndCreateAlert(dni.item_id, centralNewBalance, client);
 
       // STEP 2: Tambahkan stok ke Gudang Outlet (outlet_stocks & outlet_inventory_logs)
       const stockRes = await client.query(

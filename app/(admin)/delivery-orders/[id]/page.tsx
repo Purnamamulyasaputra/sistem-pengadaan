@@ -362,10 +362,10 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
                       disabled={scanning}
                       autoFocus
                     />
-                    <Button variant="primary" onClick={handleScan} disabled={scanning || !barcodeInput.trim()}>
+                    <Button type="submit" variant="primary" disabled={scanning || !barcodeInput.trim()}>
                       Pindai Manual
                     </Button>
-                    <Button variant="outline" onClick={() => setConfirmBulk({ open: true, type: 'OUT' })} disabled={scanning} style={{ color: 'var(--primary)', borderColor: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Button type="button" variant="outline" onClick={() => setConfirmBulk({ open: true, type: 'OUT' })} disabled={scanning} style={{ color: 'var(--primary)', borderColor: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
                       Validasi Semua
                     </Button>
@@ -405,7 +405,9 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
           <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24, borderBottom: '1px solid var(--border)' }}>
             <div>
               <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Referensi Pesanan (PO)</p>
-              <div className="font-bold">PO-{new Date(dn.created_at).getFullYear()}-{String(dn.order_id).padStart(5, '0')}</div>
+              <div className="font-bold">
+                {dn.order_number || (dn.order_id ? `PO-${new Date(dn.created_at).getFullYear()}-${String(dn.order_id).padStart(5, '0')}` : '-')}
+              </div>
             </div>
             <div>
               <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Outlet Tujuan</p>

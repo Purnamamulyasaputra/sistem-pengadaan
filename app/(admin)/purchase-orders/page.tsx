@@ -49,6 +49,7 @@ export default function PurchaseOrdersPage() {
   const [activeTab, setActiveTab] = useState('Bahan / Produk');
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [deliverToFocused, setDeliverToFocused] = useState(false);
+  const [shouldAutoFill, setShouldAutoFill] = useState(false);
 
   // Email state
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -79,11 +80,25 @@ export default function PurchaseOrdersPage() {
   }, [fetchPOs]);
 
   useEffect(() => {
+    if (shouldAutoFill && items.length > 0) {
+      setShouldAutoFill(false);
+      autoFillLowStock(true); // pass true to indicate it's an auto-trigger (so we don't show toast if empty)
+    }
+  }, [shouldAutoFill, items]);
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const openId = urlParams.get('open');
       if (openId) {
         handleViewPO({ id: Number(openId) } as any);
+        window.history.replaceState({}, '', '/purchase-orders');
+      }
+      
+      const createItemsStr = urlParams.get('create_items');
+      if (createItemsStr) {
+        setShowModal(true);
+        setShouldAutoFill(true);
         window.history.replaceState({}, '', '/purchase-orders');
       }
     }
@@ -102,18 +117,18 @@ export default function PurchaseOrdersPage() {
     setLines(l => l.filter((_, idx) => idx !== i));
   }
 
-  async function autoFillLowStock() {
+  async function autoFillLowStock(isAuto = false) {
     try {
       const res = await fetch('/api/purchase-orders/suggestions');
       const data = await res.json();
       if (data.success && data.data) {
         const suggestions = data.data;
         if (suggestions.length === 0) {
-          setToast({ isOpen: true, message: 'Saat ini tidak ada barang yang berada di bawah batas minimum (stok aman).', type: 'success' });
+          if (!isAuto) setToast({ isOpen: true, message: 'Saat ini tidak ada barang yang berada di bawah batas minimum (stok aman).', type: 'success' });
           return;
         }
 
-        setToast({ isOpen: true, message: `Berhasil menambahkan ${suggestions.length} barang ke dalam daftar.`, type: 'success' });
+        if (!isAuto) setToast({ isOpen: true, message: `Berhasil menambahkan ${suggestions.length} barang ke dalam daftar.`, type: 'success' });
         setLines(current => {
           const valid = current.filter(l => l.description || l.item_id || (l.type === 'note' && l.description));
           const newLines = suggestions.map((a: any) => {
@@ -127,7 +142,13 @@ export default function PurchaseOrdersPage() {
               item_id: String(a.item_id),
               description: a.item_name,
               qty: String(suggestedPurchaseQty),
-              unit_price: item ? String(item.current_average_price || 0) : '0',
+              unit_price: (() => {
+                if (!item) return '0';
+                const lastPrice = (item as any).last_purchase_price;
+                return lastPrice && Number(lastPrice) > 0
+                  ? String(Math.round(Number(lastPrice) * conversion))
+                  : String(Math.round((item.current_average_price || 0) * conversion));
+              })(),
               tax_percent: '11',
               disc_percent: '0',
               purchase_unit: item ? item.purchase_unit : a.smallest_unit,
@@ -886,7 +907,7 @@ export default function PurchaseOrdersPage() {
 
                       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                         <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>+ Produk</button>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={autoFillLowStock}>+ Auto-fill Stok</button>
+                        <button type="button" className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => autoFillLowStock()}>+ Auto-fill Stok</button>
                         <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }}>+ Bagian</button>
                         <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addNote}>+ Catatan</button>
                       </div>

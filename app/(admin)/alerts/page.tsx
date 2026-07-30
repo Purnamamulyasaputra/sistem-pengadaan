@@ -59,6 +59,14 @@ export default function AlertsPage() {
               Daftar barang yang jumlah stoknya sudah berada di bawah batas minimum (Reorder Point).
             </p>
           </div>
+          {alerts.length > 0 && (
+            <Link href={`/purchase-orders?create_items=${alerts.map(a => a.item_id).join(',')}`}>
+              <Button variant="primary" style={{ background: '#016e3f', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Buat PO untuk Semua
+              </Button>
+            </Link>
+          )}
         </div>
         
         <div className="card-body flush">
@@ -85,7 +93,6 @@ export default function AlertsPage() {
                   <th className="right">Stok Saat Ini</th>
                   <th className="right">Batas Minimum</th>
                   <th className="center">Status</th>
-                  <th className="right">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -111,21 +118,6 @@ export default function AlertsPage() {
                         <Badge variant={stockPct <= 0 ? 'red' : 'amber'}>
                           {stockPct <= 0 ? 'Stok Kosong' : 'Stok Menipis'}
                         </Badge>
-                      </td>
-                      <td className="right">
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                          <Link href={`/purchase-orders/create?item=${a.item_id}`}>
-                            <Button variant="outline" size="sm">Buat PO</Button>
-                          </Link>
-                          <Button 
-                            variant="primary" 
-                            size="sm" 
-                            onClick={() => handleResolve(a.id)}
-                            disabled={resolvingId === a.id}
-                          >
-                            {resolvingId === a.id ? 'Memproses...' : 'Tandai Selesai'}
-                          </Button>
-                        </div>
                       </td>
                     </tr>
                   );

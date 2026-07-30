@@ -35,7 +35,10 @@ export async function checkAndCreateAlert(
     }
   }
 
-  if (currentBalance > threshold) return;
+  if (currentBalance > threshold) {
+    await doQuery(`UPDATE stock_alerts SET is_resolved = TRUE WHERE item_id = $1 AND is_resolved = FALSE`, [itemId]);
+    return;
+  }
 
   // Check if alert already open
   const existingRes = await doQuery(
@@ -57,10 +60,11 @@ export async function getAlerts(opts?: { resolved?: boolean }) {
 
   const result = await query(
     `SELECT sa.*, i.name AS item_name, i.smallest_unit, i.minimum_threshold, i.threshold_type,
-            i.current_average_price,
+            i.current_average_price, c.name AS category_name,
             (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_balance
      FROM stock_alerts sa
      LEFT JOIN items i ON i.id = sa.item_id
+     LEFT JOIN categories c ON c.id = i.category_id
      ${where}
      ORDER BY sa.created_at DESC`,
     params

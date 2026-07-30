@@ -185,8 +185,9 @@ export default function StockMonitoringPage() {
     return qty.toLocaleString('id-ID', { maximumFractionDigits: 2 });
   };
 
-  const getStatus = (qty: number, minStock: number | null) => {
-    if (!minStock || minStock === 0) return 'AMAN'; // if no limit set, assume safe
+  const getStatus = (qty: number, rawMinStock: any) => {
+    const minStock = Number(rawMinStock) || 0;
+    if (minStock === 0) return 'AMAN'; // if no limit set, assume safe
     if (qty <= minStock) return 'KRITIS';
     if (qty <= minStock * 1.5) return 'MENIPIS';
     return 'AMAN';
