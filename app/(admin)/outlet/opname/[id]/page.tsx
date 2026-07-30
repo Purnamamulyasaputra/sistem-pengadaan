@@ -13,12 +13,25 @@ import { Toast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const REASON_CATEGORIES = [
-  { value: 'RUSAK', label: 'Rusak' },
-  { value: 'KADALUARSA', label: 'Kadaluarsa' },
-  { value: 'SALAH_CATAT', label: 'Salah Catat' },
-  { value: 'HILANG_SUSUT', label: 'Hilang / Susut' },
-  { value: 'LAINNYA', label: 'Lainnya' },
+  { value: 'SALAH_CATAT', label: 'Salah Catat / Koreksi (+ / -)' },
+  { value: 'BONUS_SUPPLIER', label: 'Bonus / Kelebihan Kirim (+)' },
+  { value: 'RETUR_BELUM_CATAT', label: 'Retur Belum Dicatat (+)' },
+  { value: 'RUSAK', label: 'Rusak (-)' },
+  { value: 'KADALUARSA', label: 'Kadaluarsa (-)' },
+  { value: 'HILANG_SUSUT', label: 'Hilang / Susut (-)' },
+  { value: 'LAINNYA', label: 'Lainnya (+ / -)' },
 ];
+
+const formatUnit = (unit: string | undefined | null) => {
+  if (!unit) return '';
+  const u = unit.trim().toLowerCase();
+  if (u === 'gr' || u === 'gram' || u === 'g') return 'gr';
+  if (u === 'kg' || u === 'kilogram') return 'Kg';
+  if (u === 'ml' || u === 'mililiter') return 'ml';
+  if (u === 'l' || u === 'liter') return 'Liter';
+  if (u === 'pcs' || u === 'piece' || u === 'pc') return 'Pcs';
+  return unit;
+};
 
 export default function OutletOpnameDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -110,12 +123,13 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
         const data = await res.json();
         if (data.success) {
           showToast('Stock Opname berhasil dikunci.', 'success');
-          fetchOpname();
+          router.push('/outlet/opname');
         } else {
           showToast(data.message || 'Gagal mengunci opname.', 'error');
         }
       } else {
         showToast('Draft berhasil disimpan.', 'success');
+        router.push('/outlet/opname');
       }
     } catch (err: unknown) {
       showToast((err instanceof Error ? err.message : 'Unknown error'), 'error');
@@ -141,7 +155,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
           <div>
             <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Detail Opname — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
             <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
-              <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
+              <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status === 'LOCKED' ? 'Selesai (Terkunci)' : header.status === 'SUBMITTED' ? 'Diajukan' : header.status === 'DRAFT' ? 'Draf' : header.status}</Badge>
               <span className="muted" style={{ fontSize: 11 }}>
                 <span className="font-bold">Mulai:</span> {new Date(header.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -200,7 +214,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                   </div>
                 </th>
                 <th className="right">Selisih</th>
-                <th className="right">Est. Biaya Pemakaian</th>
+                <th className="right">Est. Nilai Selisih</th>
                 <th style={{ width: 180 }}>Alasan</th>
                 <th style={{ width: 220 }}>Catatan</th>
               </tr>
@@ -212,12 +226,33 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                 const variance = Number(detail ? detail.variance : 0);
                 // Cost calculation: absolute variance * current average price
                 const cost = Math.abs(Number(variance)) * Number(item.current_average_price);
+
+                const ratio = Number(item.conversion_ratio) || 1;
+                const smallUnit = formatUnit(item.smallest_unit);
+                const largeUnit = formatUnit(item.purchase_unit || item.smallest_unit);
+                const hasLargeUnit = ratio > 1 && largeUnit && largeUnit !== smallUnit;
                 
                 return (
                   <tr key={item.item_id}>
-                    <td className="font-bold">{item.item_name}</td>
+                    <td className="font-bold">
+                      {item.item_name}
+                      {hasLargeUnit && (
+                        <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
+                          {smallUnit} — {largeUnit} (Rasio 1:{ratio.toLocaleString('id-ID')})
+                        </div>
+                      )}
+                    </td>
                     <td className="muted">{item.category_name}</td>
-                    <td className="right num">{Number(item.system_balance).toLocaleString('id-ID', { maximumFractionDigits: 0 })} {item.smallest_unit}</td>
+                    <td className="right num">
+                      <div className="font-bold">
+                        {Number(item.system_balance).toLocaleString('id-ID', { maximumFractionDigits: 0 })} {smallUnit}
+                      </div>
+                      {hasLargeUnit && (
+                        <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
+                          {(Number(item.system_balance) / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} {largeUnit}
+                        </div>
+                      )}
+                    </td>
                     <td className="right">
                       <input 
                         type="text" 
@@ -228,16 +263,32 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                         placeholder="0"
                         style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: String(actual ?? '') === '' ? '#fca5a5' : 'var(--border)' }} 
                       />
+                      {hasLargeUnit && (
+                        <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2, textAlign: 'right', color: '#64748b' }}>
+                          {actual !== '' && actual !== undefined ? (
+                            `= ${(Number(actual) / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} ${largeUnit}`
+                          ) : (
+                            `= 0 ${largeUnit}`
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="right num">
                       {variance !== 0 ? (
-                        <span style={{ color: variance > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
-                          {variance > 0 ? '+' : ''}{variance.toLocaleString('id-ID', { maximumFractionDigits: 0 })}
-                        </span>
+                        <div>
+                          <span style={{ color: variance > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
+                            {variance > 0 ? '+' : ''}{variance.toLocaleString('id-ID', { maximumFractionDigits: 0 })} {smallUnit}
+                          </span>
+                          {hasLargeUnit && (
+                            <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
+                              {variance > 0 ? '+' : ''}{(variance / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} {largeUnit}
+                            </div>
+                          )}
+                        </div>
                       ) : '-'}
                     </td>
-                    <td className="right num font-mono muted">
-                      Rp {cost.toLocaleString('id-ID', { maximumFractionDigits: 0 })}
+                    <td className="right num font-mono" style={{ color: variance > 0 ? '#016e3f' : variance < 0 ? '#dc2626' : 'var(--muted)', fontWeight: variance !== 0 ? 600 : 400 }}>
+                      {variance > 0 ? `+Rp ${cost.toLocaleString('id-ID', { maximumFractionDigits: 0 })}` : variance < 0 ? `-Rp ${cost.toLocaleString('id-ID', { maximumFractionDigits: 0 })}` : 'Rp 0'}
                     </td>
                     <td>
                       {variance !== 0 ? (

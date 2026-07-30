@@ -38,24 +38,42 @@ export default function DeliveryOrdersPage() {
       .catch(console.error);
   }, []);
 
-  const fetchNotes = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString()
-    });
-    if (statusFilter) params.append('status', statusFilter);
-    if (outletFilter) params.append('outlet_id', outletFilter);
-    if (searchQuery) params.append('search', searchQuery);
+  const fetchNotes = useCallback(async (isQuiet = false) => {
+    if (!isQuiet) setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString()
+      });
+      if (statusFilter) params.append('status', statusFilter);
+      if (outletFilter) params.append('outlet_id', outletFilter);
+      if (searchQuery) params.append('search', searchQuery);
 
-    const res = await fetch(`/api/delivery-notes?${params.toString()}`);
-    const data = await res.json();
-    setNotes(data.data ?? []);
-    setTotal(data.total ?? 0);
-    setLoading(false);
+      const res = await fetch(`/api/delivery-notes?${params.toString()}`, { cache: 'no-store' });
+      const data = await res.json();
+      setNotes(data.data ?? []);
+      setTotal(data.total ?? 0);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (!isQuiet) setLoading(false);
+    }
   }, [page, statusFilter, outletFilter, searchQuery]);
 
-  useEffect(() => { fetchNotes(); }, [fetchNotes]);
+  useEffect(() => { 
+    fetchNotes(false);
+    const interval = setInterval(() => {
+      fetchNotes(true);
+    }, 3000);
+    const handleFocus = () => {
+      fetchNotes(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fetchNotes]);
 
   const totalPages = Math.ceil(total / limit);
 

@@ -11,11 +11,13 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Toast } from '@/components/ui/Toast';
 
 const REASON_CATEGORIES = [
-  { value: 'RUSAK', label: 'Rusak' },
-  { value: 'KADALUARSA', label: 'Kadaluarsa' },
-  { value: 'SALAH_CATAT', label: 'Salah Catat' },
-  { value: 'HILANG_SUSUT', label: 'Hilang / Susut' },
-  { value: 'LAINNYA', label: 'Lainnya' },
+  { value: 'SALAH_CATAT', label: 'Salah Catat / Koreksi (+ / -)' },
+  { value: 'BONUS_SUPPLIER', label: 'Bonus / Kelebihan Kirim (+)' },
+  { value: 'RETUR_BELUM_CATAT', label: 'Retur Belum Dicatat (+)' },
+  { value: 'RUSAK', label: 'Rusak (-)' },
+  { value: 'KADALUARSA', label: 'Kadaluarsa (-)' },
+  { value: 'HILANG_SUSUT', label: 'Hilang / Susut (-)' },
+  { value: 'LAINNYA', label: 'Lainnya (+ / -)' },
 ];
 
 function formatUnit(unit: string | null | undefined): string {
@@ -108,12 +110,12 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
     if (submit) {
       const invalidDetails = details.filter(d => d.variance !== 0 && !d.reason_category);
       if (invalidDetails.length > 0) {
-        showToast('All items with a variance must have a Reason Category selected.', 'error');
+        showToast('Alasan wajib diisi untuk barang yang memiliki selisih stok.', 'error');
         return;
       }
       const invalidOthers = details.filter(d => d.reason_category === 'LAINNYA' && !String(d.reason_notes || '').trim());
       if (invalidOthers.length > 0) {
-        showToast('All items with reason "Other" must have a note filled in.', 'error');
+        showToast('Barang dengan alasan "Lainnya" wajib mengisi catatan/keterangan.', 'error');
         return;
       }
     }
@@ -168,7 +170,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
           <div>
             <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Detail Opname Outlet — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
             <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
-              <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
+              <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status === 'LOCKED' ? 'Selesai (Terkunci)' : header.status === 'SUBMITTED' ? 'Diajukan' : header.status === 'DRAFT' ? 'Draf' : header.status}</Badge>
               <span className="muted" style={{ fontSize: 13 }}>
                 <span className="font-bold">Mulai:</span> {new Date(header.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -229,7 +231,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                 <th className="right" style={{ padding: '12px 16px', fontSize: 12, width: 120 }}>Stok Sistem</th>
                 <th className="right" style={{ width: 140, padding: '12px 16px', fontSize: 12 }}>Stok Fisik</th>
                 <th className="right" style={{ width: 100, padding: '12px 16px', fontSize: 12 }}>Selisih</th>
-                <th className="right" style={{ width: 130, padding: '12px 16px', fontSize: 12 }}>Est. Biaya</th>
+                <th className="right" style={{ width: 130, padding: '12px 16px', fontSize: 12 }}>Est. Nilai Selisih</th>
                 <th style={{ width: 180, padding: '12px 16px', fontSize: 12 }}>Alasan</th>
                 <th style={{ width: 220, padding: '12px 16px', fontSize: 12 }}>Catatan</th>
               </tr>
@@ -243,10 +245,10 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                 const priceLarge = Number(item.current_average_price) * ratio;
 
                 const actualSmall = detail?.actual_physical_qty;
-                const actualLarge = actualSmall !== undefined ? Math.round(Number(actualSmall) / Number(ratio)) : '';
+                const actualLarge = actualSmall !== undefined && actualSmall !== null && actualSmall !== '' ? Math.round(Number(actualSmall) / Number(ratio)) : '';
 
-                const varianceSmall = detail?.variance ?? 0;
-                const varianceLarge = Math.round(Number(varianceSmall) / Number(ratio));
+                const varianceSmall = Number(detail?.variance ?? 0);
+                const varianceLarge = Math.round(varianceSmall / Number(ratio));
                 const varianceValue = Math.round(Math.abs(Number(varianceSmall)) * Number(item.current_average_price));
 
                 const sysBalLarge = Math.round(Number(item.system_balance) / Number(ratio));
@@ -288,8 +290,8 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                         </span>
                       ) : '-'}
                     </td>
-                    <td className="right num font-bold" style={{ padding: '8px 16px', fontSize: 13, color: varianceSmall !== 0 ? '#dc2626' : 'inherit' }}>
-                      {varianceSmall !== 0 ? `Rp ${varianceValue.toLocaleString('id-ID')}` : '-'}
+                    <td className="right num font-mono" style={{ padding: '8px 16px', fontSize: 13, color: varianceSmall > 0 ? '#016e3f' : varianceSmall < 0 ? '#dc2626' : 'inherit', fontWeight: varianceSmall !== 0 ? 600 : 400 }}>
+                      {varianceSmall > 0 ? `+Rp ${varianceValue.toLocaleString('id-ID')}` : varianceSmall < 0 ? `-Rp ${varianceValue.toLocaleString('id-ID')}` : '-'}
                     </td>
                     <td style={{ padding: '8px 16px' }}>
                       {varianceSmall !== 0 ? (

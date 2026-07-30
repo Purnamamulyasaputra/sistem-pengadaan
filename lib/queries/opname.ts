@@ -26,7 +26,13 @@ export async function getStockCountHeaders(opts?: { locationType?: string; locat
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const result = await query<StockCountHeader>(
-    `SELECT sch.*, o.name AS location_name, u.name AS pic_name
+    `SELECT sch.*, o.name AS location_name, u.name AS pic_name,
+            COALESCE((
+              SELECT SUM(scd.variance * COALESCE(i.current_average_price, 0))
+              FROM stock_count_details scd
+              LEFT JOIN items i ON i.id = scd.item_id
+              WHERE scd.header_id = sch.id
+            ), sch.total_value, 0)::numeric AS total_value
      FROM stock_count_headers sch
      LEFT JOIN outlets o ON o.id = sch.location_id
      LEFT JOIN users u ON u.id = sch.pic_id
@@ -39,7 +45,13 @@ export async function getStockCountHeaders(opts?: { locationType?: string; locat
 
 export async function getStockCountHeaderById(id: number) {
   const result = await query(
-    `SELECT sch.*, o.name AS location_name, u.name AS pic_name
+    `SELECT sch.*, o.name AS location_name, u.name AS pic_name,
+            COALESCE((
+              SELECT SUM(scd.variance * COALESCE(i.current_average_price, 0))
+              FROM stock_count_details scd
+              LEFT JOIN items i ON i.id = scd.item_id
+              WHERE scd.header_id = sch.id
+            ), sch.total_value, 0)::numeric AS total_value
      FROM stock_count_headers sch
      LEFT JOIN outlets o ON o.id = sch.location_id
      LEFT JOIN users u ON u.id = sch.pic_id
@@ -51,7 +63,7 @@ export async function getStockCountHeaderById(id: number) {
 
 export async function getStockCountDetails(headerId: number) {
   const result = await query(
-    `SELECT scd.*, i.name AS item_name, c.name AS category_name, i.smallest_unit, i.current_average_price
+    `SELECT scd.*, i.name AS item_name, c.name AS category_name, i.smallest_unit, i.purchase_unit, i.conversion_ratio, i.current_average_price
      FROM stock_count_details scd
      LEFT JOIN items i ON i.id = scd.item_id
      LEFT JOIN categories c ON c.id = i.category_id
@@ -90,7 +102,7 @@ export async function upsertStockCountDetail(data: {
   // Get current avg price for monetary value
   const priceRes = await query(`SELECT current_average_price FROM items WHERE id = $1`, [data.item_id]);
   const avgPrice = parseFloat(priceRes.rows[0]?.current_average_price ?? '0');
-  const valueAmount = Math.abs(variance) * avgPrice;
+  const valueAmount = variance * avgPrice;
 
   const result = await query(
     `INSERT INTO stock_count_details (header_id, item_id, system_balance, actual_physical_qty, variance, reason_category, reason_notes, value_amount)
@@ -133,14 +145,14 @@ export async function lockStockCount(headerId: number) {
             client,
           });
         } else if (locationType === 'OUTLET' && header.location_id) {
-          // Update outlet_stocks directly
+          // Update outlet_stocks menggunakan selisih (variance), persis seperti opname pusat
           const updateRes = await client.query(`
             INSERT INTO outlet_stocks (outlet_id, item_id, current_balance)
             VALUES ($1, $2, $3)
             ON CONFLICT (outlet_id, item_id)
-            DO UPDATE SET current_balance = EXCLUDED.current_balance
+            DO UPDATE SET current_balance = outlet_stocks.current_balance + $4
             RETURNING current_balance
-          `, [header.location_id, detail.item_id, detail.actual_physical_qty]);
+          `, [header.location_id, detail.item_id, detail.actual_physical_qty, variance]);
 
           const newBalance = updateRes.rows[0].current_balance;
 
@@ -150,7 +162,7 @@ export async function lockStockCount(headerId: number) {
             VALUES ($1, $2, 'ADJ', $3, $4, 'OPNAME_ADJUSTMENT', $5)
           `, [header.location_id, detail.item_id, variance, newBalance, headerId]);
         }
-        totalValue += Math.abs(parseFloat(detail.value_amount ?? '0'));
+        totalValue += parseFloat(detail.value_amount ?? '0');
       }
     }
 
@@ -185,7 +197,7 @@ export async function getItemsForOpname(locationType: string, locationId?: numbe
   } else if (locationType === 'OUTLET' && locationId) {
     return query(
       `SELECT DISTINCT
-         i.id AS item_id, i.name AS item_name, i.smallest_unit, c.name AS category_name,
+         i.id AS item_id, i.name AS item_name, i.smallest_unit, i.purchase_unit, i.conversion_ratio, c.name AS category_name,
          i.current_average_price,
          COALESCE(os.current_balance, 0) AS system_balance
        FROM items i

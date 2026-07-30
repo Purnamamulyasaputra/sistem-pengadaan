@@ -79,7 +79,11 @@ export function Select({ value, onChange, options, style, className = '', placeh
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const selectedOption = options.find(o => String(o.value) === String(value));
+  let selectedOption = options.find(o => String(o.value) === String(value)) || 
+                       options.find(o => String(o.value).toLowerCase() === String(value).toLowerCase());
+  if (!selectedOption && value !== undefined && value !== null && String(value).trim() !== '') {
+    selectedOption = { value: String(value), label: String(value) };
+  }
   
   const filteredOptions = searchable && searchTerm.trim() !== ''
     ? options.filter(o => o.label.toLowerCase().includes(searchTerm.toLowerCase()))

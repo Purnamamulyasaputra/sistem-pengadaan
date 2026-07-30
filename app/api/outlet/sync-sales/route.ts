@@ -34,15 +34,25 @@ export async function POST(req: NextRequest) {
 
     // Find the outlet's business_id
     const outletRes = await query('SELECT moka_business_id FROM outlets WHERE id = $1', [outletId]);
-    if (outletRes.rows.length === 0 || !outletRes.rows[0].moka_business_id) {
-      return NextResponse.json({ success: false, message: 'Outlet does not have a linked Moka Business ID' }, { status: 400 });
+    if (outletRes.rows.length === 0) {
+      return NextResponse.json({ success: false, message: 'Outlet tidak ditemukan' }, { status: 404 });
     }
-    const businessId = outletRes.rows[0].moka_business_id;
+    let businessId = outletRes.rows[0].moka_business_id;
+
+    // Auto-fallback: Jika moka_business_id NULL dan tepat ada 1 token Moka aktif di sistem, hubungkan otomatis
+    if (!businessId && tokens.length === 1 && tokens[0].business_id) {
+      businessId = tokens[0].business_id;
+      await query('UPDATE outlets SET moka_business_id = $1 WHERE id = $2', [businessId, outletId]);
+    }
+
+    if (!businessId) {
+      return NextResponse.json({ success: false, message: 'Outlet belum terhubung dengan Moka Business ID. Silakan hubungkan outlet di menu Pengaturan Moka.' }, { status: 400 });
+    }
 
     // Find the specific token for this business
     const correctToken = tokens.find(t => t.business_id === businessId);
     if (!correctToken) {
-      return NextResponse.json({ success: false, message: `No active Moka token found for business ${businessId}` }, { status: 400 });
+      return NextResponse.json({ success: false, message: `Token Moka aktif tidak ditemukan untuk bisnis ID ${businessId}` }, { status: 400 });
     }
 
     // Sync from Moka using only the correct token

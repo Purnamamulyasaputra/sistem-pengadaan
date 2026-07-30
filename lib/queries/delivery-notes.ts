@@ -314,6 +314,19 @@ export async function processPublicReceive(data: {
         const actualQtyReceived = itemRes.rows[0]?.qty_received || 0;
         if (!itemId || actualQtyReceived <= 0) continue;
 
+        // Atomic transfer: Deduct from central warehouse
+        const balRes = await client.query(
+          `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          [itemId]
+        );
+        const centralOldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
+        const centralNewBalance = centralOldBalance - actualQtyReceived;
+        await client.query(
+          `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+           VALUES ($1, 'OUT', $2, $3, 'PUBLIC_RECEIVE', $4)`,
+          [itemId, -actualQtyReceived, centralNewBalance, data.delivery_note_id]
+        );
+
         const stockRes = await client.query(
           `SELECT current_balance FROM outlet_stocks 
            WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
@@ -406,26 +419,6 @@ export async function recordScan(data: {
         `UPDATE delivery_note_items SET scanned_out_at = now(), scanned_out_by = $1 WHERE id = $2`,
         [data.scanned_by, data.delivery_note_item_id]
       );
-
-      // Deduct stock from central warehouse
-      const balRes = await client.query(
-        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
-        [data.item_id]
-      );
-      const oldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
-      const newBalance = oldBalance - dni.qty_shipped;
-
-      if (newBalance < 0) {
-        throw new Error(`Gagal Scan OUT: Stok fisik tersisa ${oldBalance}, tidak cukup untuk mengirim ${dni.qty_shipped}`);
-      }
-
-      await client.query(
-        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
-         VALUES ($1,'OUT',$2,$3,'BARCODE_SCAN',$4)`,
-        [data.item_id, -dni.qty_shipped, newBalance, data.delivery_note_item_id]
-      );
-
-      await checkAndCreateAlert(data.item_id, newBalance, client);
 
       // Update order item status to DIKIRIM
       await client.query(
@@ -582,24 +575,6 @@ export async function processShipAll(deliveryNoteId: number, adminId: number) {
         [adminId, dni.id]
       );
 
-      // Deduct central stock
-      const balRes = await client.query(
-        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
-        [dni.item_id]
-      );
-      const oldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
-      const newBalance = oldBalance - dni.qty_shipped;
-
-      if (newBalance < 0) {
-        throw new Error(`Gagal Kirim: Stok fisik tersisa ${oldBalance}, tidak cukup untuk mengirim ${dni.qty_shipped}`);
-      }
-
-      await client.query(
-        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
-         VALUES ($1,'OUT',$2,$3,'BULK_SHIP',$4)`,
-        [dni.item_id, -dni.qty_shipped, newBalance, dni.id]
-      );
-
       // Update order item status to DIKIRIM
       await client.query(
         `UPDATE order_items SET item_status = 'DIKIRIM', distribution_price = $1, updated_at = now() WHERE id = $2`,
@@ -631,13 +606,6 @@ export async function bulkRecordScan(data: {
 
     for (const dni of items) {
       if (data.scan_type === 'OUT' && !dni.scanned_out_at) {
-        // deduct stock
-        const balRes = await client.query(`SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`, [dni.item_id]);
-        const oldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
-        await client.query(
-          `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id) VALUES ($1,'OUT',$2,$3,'BARCODE_SCAN',$4)`,
-          [dni.item_id, -dni.qty_shipped, oldBalance - dni.qty_shipped, dni.id]
-        );
         // update dni
         await client.query(`UPDATE delivery_note_items SET scanned_out_at = now(), scanned_out_by = $1 WHERE id = $2`, [data.scanned_by, dni.id]);
         // update order item
@@ -818,3 +786,114 @@ export async function resolveDeliveryNoteIssue(issueId: number, action: 'REPLACE
     return { success: true };
   });
 }
+
+export async function approveAndTransferDeliveryNote(deliveryNoteId: number, adminId: number) {
+  return withTransaction(async (client) => {
+    // 1. Dapatkan informasi Delivery Note
+    const dnRes = await client.query(
+      `SELECT id, order_id, outlet_id, status FROM delivery_notes WHERE id = $1 FOR UPDATE`,
+      [deliveryNoteId]
+    );
+    const dn = dnRes.rows[0];
+    if (!dn) throw new Error('Surat Jalan tidak ditemukan');
+    if (dn.status === 'DITERIMA' || dn.status === 'CANCELLED') {
+      throw new Error(`Surat Jalan dengan status ${dn.status} tidak dapat diproses transfer stok.`);
+    }
+
+    // 2. Ambil semua item dalam Delivery Note
+    const itemsRes = await client.query(
+      `SELECT id, item_id, qty_shipped, qty_received, order_item_id, price_at_shipment 
+       FROM delivery_note_items 
+       WHERE delivery_note_id = $1`,
+      [deliveryNoteId]
+    );
+
+    if (itemsRes.rows.length === 0) {
+      throw new Error('Surat Jalan tidak memiliki item untuk ditransfer.');
+    }
+
+    for (const dni of itemsRes.rows) {
+      const qty = parseFloat(dni.qty_received ?? dni.qty_shipped ?? '0');
+      if (qty <= 0) continue;
+
+      // STEP 1: Potong stok dari Gudang Pusat (inventory_logs)
+      const balRes = await client.query(
+        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [dni.item_id]
+      );
+      const centralOldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
+      const centralNewBalance = centralOldBalance - qty;
+
+      await client.query(
+        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         VALUES ($1, 'OUT', $2, $3, 'ATOMIC_TRANSFER', $4)`,
+        [dni.item_id, -qty, centralNewBalance, deliveryNoteId]
+      );
+
+      // STEP 2: Tambahkan stok ke Gudang Outlet (outlet_stocks & outlet_inventory_logs)
+      const stockRes = await client.query(
+        `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
+        [dn.outlet_id, dni.item_id]
+      );
+
+      let outletOldBalance = 0;
+      if (stockRes.rows.length > 0) {
+        outletOldBalance = parseFloat(stockRes.rows[0].current_balance);
+        const outletNewBalance = outletOldBalance + qty;
+        await client.query(
+          `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() WHERE outlet_id = $2 AND item_id = $3`,
+          [outletNewBalance, dn.outlet_id, dni.item_id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
+          [dn.outlet_id, dni.item_id, qty]
+        );
+      }
+
+      const outletLogBalance = outletOldBalance + qty;
+      await client.query(
+        `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         VALUES ($1, $2, 'IN', $3, $4, 'ATOMIC_TRANSFER', $5)`,
+        [dn.outlet_id, dni.item_id, qty, outletLogBalance, deliveryNoteId]
+      );
+
+      // STEP 3: Update delivery_note_items menjadi sudah scan IN dan OUT
+      await client.query(
+        `UPDATE delivery_note_items 
+         SET scanned_out_at = COALESCE(scanned_out_at, NOW()),
+             scanned_out_by = COALESCE(scanned_out_by, $1),
+             scanned_in_at = COALESCE(scanned_in_at, NOW()),
+             scanned_in_by = COALESCE(scanned_in_by, $1),
+             qty_received = $2
+         WHERE id = $3`,
+        [adminId, qty, dni.id]
+      );
+
+      // STEP 4: Update order item menjadi SELESAI
+      if (dni.order_item_id) {
+        await client.query(
+          `UPDATE order_items SET item_status = 'SELESAI', distribution_price = $1, updated_at = NOW() WHERE id = $2`,
+          [dni.price_at_shipment, dni.order_item_id]
+        );
+      }
+    }
+
+    // 3. Update status Delivery Note menjadi DITERIMA
+    await client.query(
+      `UPDATE delivery_notes SET status = 'DITERIMA', updated_at = NOW() WHERE id = $1`,
+      [deliveryNoteId]
+    );
+
+    // 4. Update status Order menjadi COMPLETED
+    if (dn.order_id) {
+      await client.query(
+        `UPDATE orders SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+        [dn.order_id]
+      );
+    }
+
+    return { success: true };
+  });
+}
+

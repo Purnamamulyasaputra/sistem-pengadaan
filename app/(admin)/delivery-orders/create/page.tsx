@@ -111,7 +111,22 @@ export default function CreateDeliveryOrderPage() {
     }
 
     if (id === 'DIRECT') {
-      setOrderItems([]);
+      setOrderItems([{
+        order_item_id: -(Date.now()),
+        item_id: 0,
+        item_name: '',
+        item_status: 'READY_DI_GUDANG',
+        smallest_unit: '',
+        conversion_ratio: 1,
+        qty_request: 0,
+        current_average_price: 0,
+        barcode: '',
+        qty_shipped: 1,
+        selected: true,
+        keterangan: 'Tambahan dari Pusat',
+        current_stock: 0,
+        is_additional: true
+      }]);
       setTargetOutletId('');
       return;
     }
@@ -141,7 +156,7 @@ export default function CreateDeliveryOrderPage() {
       const qOutlet = urlParams.get('outlet_id');
 
       if (qId === 'DIRECT') {
-        setSelectedOrderId('DIRECT');
+        handleSelectOrder('DIRECT');
         if (qOutlet) {
           setTargetOutletId(String(qOutlet));
         }

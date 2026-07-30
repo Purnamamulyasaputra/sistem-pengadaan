@@ -281,8 +281,13 @@ export async function updatePurchaseOrderStatus(id: number, status: string, user
         );
 
         await client.query(
-          `UPDATE items SET current_stock = current_stock + $1, current_average_price = $2, updated_at = now() WHERE id = $3`,
-          [addedQty, newAvgPrice, item.item_id]
+          `UPDATE items 
+           SET current_stock = current_stock + $1, 
+               current_average_price = $2, 
+               last_purchase_price = $3,
+               updated_at = now() 
+           WHERE id = $4`,
+          [addedQty, newAvgPrice, newUnitPrice, item.item_id]
         );
       }
     }

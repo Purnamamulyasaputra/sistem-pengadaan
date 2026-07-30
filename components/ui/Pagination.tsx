@@ -16,7 +16,7 @@ export function Pagination({ currentPage, totalPages, totalItems, itemsPerPage, 
   return (
     <div className="pagination">
       <span className="info">
-        Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
+        Menampilkan {(currentPage - 1) * itemsPerPage + 1} sampai {Math.min(currentPage * itemsPerPage, totalItems)} dari total {totalItems} data
       </span>
       <div className="page-btns">
         <button className="page-btn" disabled={currentPage <= 1} onClick={() => onPageChange(currentPage - 1)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

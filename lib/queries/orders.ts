@@ -229,8 +229,8 @@ export async function autoFulfillPendingRequests(client: PoolClient, itemId: num
   let availableStock = currentStock;
 
   for (const row of pendingRes.rows) {
-    const neededQty = parseFloat(row.needed_qty);
-    if (availableStock >= neededQty) {
+    const neededQty = parseFloat(row.needed_qty || '0');
+    if (!isNaN(neededQty) && neededQty > 0 && availableStock >= neededQty) {
       // Stock cukup untuk fulfill request ini
       await client.query(`
         UPDATE order_items 

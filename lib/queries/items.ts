@@ -19,6 +19,8 @@ export interface Item {
   is_perishable: boolean;
   is_active: boolean;
   current_average_price: number;
+  /** Harga beli terakhir per satuan terkecil (diupdate saat penerimaan barang/PO selesai) */
+  last_purchase_price: number;
   created_at: string;
   updated_at: string;
   is_hpp?: boolean;
@@ -82,13 +84,14 @@ export async function createItem(data: {
   is_perishable: boolean;
   barcode?: string;
   current_average_price?: number;
+  last_purchase_price?: number;
   ingredient_id?: number | null;
 }) {
   const result = await query<Item>(
-    `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, ingredient_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING *`,
-    [data.name, data.category_id, data.purchase_unit, data.smallest_unit, data.conversion_ratio, data.minimum_threshold, data.target_stock ?? 0, data.threshold_type, data.is_perishable, data.barcode ?? null, data.current_average_price ?? 0, data.ingredient_id ?? null]
+    [data.name, data.category_id, data.purchase_unit, data.smallest_unit, data.conversion_ratio, data.minimum_threshold, data.target_stock ?? 0, data.threshold_type, data.is_perishable, data.barcode ?? null, data.current_average_price ?? 0, data.last_purchase_price ?? data.current_average_price ?? 0, data.ingredient_id ?? null]
   );
   return result.rows[0];
 }
@@ -106,6 +109,8 @@ export async function updateItem(id: number, data: Partial<{
   is_active: boolean;
   barcode: string;
   current_average_price: number;
+  /** Harga beli terakhir per satuan terkecil */
+  last_purchase_price: number;
   ingredient_id: number | null;
 }>) {
   const fields = Object.keys(data);
@@ -129,26 +134,21 @@ export async function deleteItem(id: number): Promise<boolean> {
     throw new Error('Penghapusan ditolak: Barang ini masih terdaftar secara aktif sebagai bahan resep di modul HPP.');
   }
 
-  // 2. Cascade delete manual untuk riwayat transaksi pergudangan
-  const tables = [
-    'inventory_logs',
-    'purchase_order_items',
-    'delivery_order_items',
-    'stock_opname_details',
-    'outlet_request_items',
-    'order_items'
-  ];
-
-  for (const tbl of tables) {
-    try {
-      await query(`DELETE FROM ${tbl} WHERE item_id = $1`, [id]);
-    } catch (e) {
-      // Abaikan jika tabel tidak ada
+  // 2. Gunakan transaction untuk membersihkan price_history (auto-generated)
+  // Tabel transaksional (seperti PO, log inventori) dibiarkan; jika item pernah dipakai,
+  // Foreign Key di database akan memicu error 23503 sehingga gagal dihapus.
+  try {
+    return await withTransaction(async (client) => {
+      await client.query(`DELETE FROM price_history WHERE item_id = $1`, [id]);
+      const result = await client.query(`DELETE FROM items WHERE id = $1`, [id]);
+      return (result.rowCount ?? 0) > 0;
+    });
+  } catch (e: any) {
+    if (e.code === '23503') {
+      throw new Error('Barang sudah dipakai ditransaksi. Silakan ubah ke Nonaktif.');
     }
+    throw e;
   }
-
-  const result = await query(`DELETE FROM items WHERE id = $1`, [id]);
-  return (result.rowCount ?? 0) > 0;
 }
 
 export async function generateBarcode(id: number): Promise<string> {

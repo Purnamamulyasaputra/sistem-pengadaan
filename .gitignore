@@ -50,3 +50,5 @@ AGENTS.md
 /scratch
 build_log.txt
 *.log
+
+/.agents

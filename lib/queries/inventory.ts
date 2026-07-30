@@ -181,7 +181,11 @@ export async function adjustStock(input: {
   if (qty_change < 0) {
     await checkAndCreateAlert(item_id, newBalance, client);
   } else if (qty_change > 0) {
-    await autoFulfillPendingRequests(client, item_id, newBalance);
+    try {
+      await autoFulfillPendingRequests(client, item_id, newBalance);
+    } catch (err) {
+      console.error('Error autoFulfillPendingRequests in adjustStock:', err);
+    }
   }
 
   return newBalance;

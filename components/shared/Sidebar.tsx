@@ -71,7 +71,6 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/settings/moka', label: 'Pengaturan Moka', icon: <Icon name="settings" /> },
 
   { section: 'LAPORAN & PENGATURAN' },
-  { href: '/reports/sales-analytics', label: 'Analitik Penjualan', icon: <Icon name="trend" /> },
   { href: '/reports', label: 'Laporan Sistem', icon: <Icon name="report" /> },
   { href: '/settings', label: 'Pengaturan Sistem', icon: <Icon name="settings" /> },
 ];
@@ -129,7 +128,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
 
   useEffect(() => {
     if (pathname === '/returns' && role === 'ADMIN_PUSAT') {
-      localStorage.setItem('lastSeenReturns', Date.now().toString());
+      // Reset badge segera saat halaman /returns dikunjungi
       setLiveReturnsCount(0);
     }
     if (pathname === '/outlet/receive-goods' && role === 'ADMIN_OUTLET') {
@@ -142,12 +141,11 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
     const fetchBadges = async () => {
       try {
         if (role === 'ADMIN_PUSAT') {
-          const lastSeenReturns = localStorage.getItem('lastSeenReturns') || '';
-          const returnsUrl = lastSeenReturns ? `/api/returns/pending-count?since=${lastSeenReturns}` : '/api/returns/pending-count';
           const [alertsRes, reqRes, returnsRes] = await Promise.all([
             fetch('/api/alerts/count', { cache: 'no-store' }),
             fetch('/api/orders/pending-count', { cache: 'no-store' }),
-            fetch(returnsUrl, { cache: 'no-store' })
+            // Selalu ambil total PENDING — badge hilang otomatis saat halaman /returns dibuka
+            fetch('/api/returns/pending-count', { cache: 'no-store' })
           ]);
           if (alertsRes.ok) {
             const data = await alertsRes.json();
@@ -157,7 +155,8 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             const data = await reqRes.json();
             setLiveRequestCount(data.count ?? 0);
           }
-          if (returnsRes.ok) {
+          // Jangan update badge saat sedang di halaman /returns (sudah di-reset di atas)
+          if (returnsRes.ok && pathname !== '/returns') {
             const data = await returnsRes.json();
             setLiveReturnsCount(data.count ?? 0);
           }
@@ -183,10 +182,10 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
     };
 
     fetchBadges();
-    // Poll every 30 seconds
+    // Poll semua badge setiap 30 detik
     const interval = setInterval(fetchBadges, 30000);
 
-    // Re-fetch immediately when user returns to this tab
+    // Re-fetch segera saat tab kembali aktif
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') fetchBadges();
     };
@@ -197,6 +196,25 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [role]);
+
+  // Polling khusus returns badge setiap 10 detik (real-time) — terpisah dari poll umum
+  useEffect(() => {
+    if (role !== 'ADMIN_PUSAT') return;
+
+    const fetchReturnsBadge = async () => {
+      if (pathname === '/returns') return; // sudah di-reset saat masuk halaman
+      try {
+        const res = await fetch('/api/returns/pending-count', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          setLiveReturnsCount(data.count ?? 0);
+        }
+      } catch { /* abaikan */ }
+    };
+
+    const interval = setInterval(fetchReturnsBadge, 10000);
+    return () => clearInterval(interval);
+  }, [role, pathname]);
 
   const getEffectiveBadge = (href: string, actualCount: number) => {
     // Hide badge if currently on this page or any sub-page
@@ -265,9 +283,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             if (item.href === '/reports') {
               isActive = pathname === '/reports' || pathname.startsWith('/reports/profit-projection') || pathname.startsWith('/price-history') || pathname.startsWith('/reports/inventory-value');
             }
-            if (item.href === '/reports/sales-analytics') {
-              isActive = pathname.startsWith('/reports/sales-analytics');
-            }
+
             if (item.href === '/master-data/items' && pathname.startsWith('/master-data/items')) isActive = true;
             if (item.href === '/hpp' && pathname.startsWith('/hpp')) isActive = true;
             if (item.href === '/outlet/sales') {

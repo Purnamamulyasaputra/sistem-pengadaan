@@ -41,7 +41,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
   const [searchQuery, setSearchQuery] = useState('');
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
-  const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
+  const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => { } });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type, isOpen: true });
@@ -107,12 +107,12 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
     if (submit) {
       const invalidDetails = details.filter(d => d.variance !== 0 && !d.reason_category);
       if (invalidDetails.length > 0) {
-        showToast('All items with a variance must have a Reason Category selected.', 'error');
+        showToast('Alasan wajib diisi untuk barang yang memiliki selisih stok.', 'error');
         return;
       }
       const invalidOthers = details.filter(d => d.reason_category === 'LAINNYA' && !String(d.reason_notes || '').trim());
       if (invalidOthers.length > 0) {
-        showToast('All items with reason "Other" must have a note filled in.', 'error');
+        showToast('Barang dengan alasan "Lainnya" wajib mengisi catatan/keterangan.', 'error');
         return;
       }
     }
@@ -157,7 +157,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat data opname...</div>;
   if (!header) return <div style={{ padding: 40, textAlign: 'center' }}>Sesi tidak ditemukan.</div>;
 
-  const filteredItems = items.filter((item: any) => 
+  const filteredItems = items.filter((item: any) =>
     !searchQuery || String(item.item_name).toLowerCase().includes(searchQuery.toLowerCase())
   );
   const paginatedItems = limit === 'all' ? filteredItems : filteredItems.slice((currentPage - 1) * limit, currentPage * limit);
@@ -170,7 +170,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
           <div>
             <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Detail Opname Pusat — {new Date(header.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</h3>
             <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
-               <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status}</Badge>
+              <Badge variant={isLocked ? 'green' : header.status === 'SUBMITTED' ? 'blue' : 'gray'}>{header.status === 'LOCKED' ? 'Selesai' : header.status === 'SUBMITTED' ? 'Diajukan' : header.status === 'DRAFT' ? 'Draf' : header.status}</Badge>
               <span className="muted" style={{ fontSize: 11 }}>
                 <span className="font-bold">Mulai:</span> {new Date(header.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -180,7 +180,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <input 
+            <input
               type="text"
               className="input"
               placeholder="Cari nama barang..."
@@ -239,7 +239,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                 <th className="right" style={{ padding: '12px 16px', fontSize: 10, width: 120 }}>Stok Sistem</th>
                 <th className="right" style={{ width: 140, padding: '12px 16px', fontSize: 10 }}>Stok Fisik</th>
                 <th className="right" style={{ width: 100, padding: '12px 16px', fontSize: 10 }}>Selisih</th>
-                <th className="right" style={{ width: 130, padding: '12px 16px', fontSize: 10 }}>Est. Biaya</th>
+                <th className="right" style={{ width: 130, padding: '12px 16px', fontSize: 10 }}>Est. Nilai Selisih</th>
                 <th style={{ width: 180, padding: '12px 16px', fontSize: 10 }}>Alasan</th>
                 <th style={{ width: 220, padding: '12px 16px', fontSize: 10 }}>Catatan</th>
               </tr>
@@ -253,10 +253,10 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                 const priceLarge = Number(item.current_average_price) * ratio;
 
                 const actualSmall = detail?.actual_physical_qty;
-                const actualLarge = actualSmall !== undefined ? Math.round(Number(actualSmall) / Number(ratio)) : '';
+                const actualLarge = actualSmall !== undefined && actualSmall !== null && actualSmall !== '' ? Math.round(Number(actualSmall) / Number(ratio)) : '';
 
-                const varianceSmall = detail?.variance ?? 0;
-                const varianceLarge = Math.round(Number(varianceSmall) / Number(ratio));
+                const varianceSmall = Number(detail?.variance ?? 0);
+                const varianceLarge = Math.round(varianceSmall / Number(ratio));
                 const varianceValue = Math.round(Math.abs(Number(varianceSmall)) * Number(item.current_average_price));
 
                 const sysBalLarge = Math.round(Number(item.system_balance) / Number(ratio));
@@ -298,8 +298,8 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                         </span>
                       ) : '-'}
                     </td>
-                    <td className="right num font-mono muted" style={{ padding: '8px 16px', fontSize: 11 }}>
-                      {varianceSmall !== 0 ? `Rp ${varianceValue.toLocaleString('id-ID')}` : '-'}
+                    <td className="right num font-mono" style={{ padding: '8px 16px', fontSize: 11, color: varianceSmall > 0 ? '#016e3f' : varianceSmall < 0 ? '#dc2626' : 'var(--muted)', fontWeight: varianceSmall !== 0 ? 600 : 400 }}>
+                      {varianceSmall > 0 ? `+Rp ${varianceValue.toLocaleString('id-ID')}` : varianceSmall < 0 ? `-Rp ${varianceValue.toLocaleString('id-ID')}` : '-'}
                     </td>
                     <td style={{ padding: '8px 16px' }}>
                       {varianceLarge !== 0 ? (

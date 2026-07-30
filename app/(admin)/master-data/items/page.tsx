@@ -16,7 +16,7 @@ interface Item {
   id: number; name: string; category_id: number; category_name: string; barcode?: string;
   purchase_unit: string; smallest_unit: string; conversion_ratio: number;
   minimum_threshold: number; target_stock: number; threshold_type: string; is_perishable: boolean;
-  is_active: boolean; current_average_price: number; current_stock?: number;
+  is_active: boolean; current_average_price: number; last_purchase_price?: number; current_stock?: number;
   is_hpp?: boolean;
   ingredient_id?: number | null;
   ingredient_name?: string;
@@ -25,6 +25,34 @@ interface Category { id: number; name: string; }
 interface Ingredient { id: number; name: string; }
 
 const fmtCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+
+const UNIT_ALIASES: Record<string, string> = {
+  'g': 'gr',
+  'l': 'liter',
+  'pc': 'pcs'
+};
+
+export function normalizeUnitAlias(u: string | null | undefined): string {
+  if (!u) return '';
+  const lower = u.toLowerCase();
+  return UNIT_ALIASES[lower] || u;
+}
+
+function getUniqueUnits(defaultUnits: string[], dynamicUnits: (string | null | undefined)[]) {
+  const allUnits = [...defaultUnits, ...dynamicUnits].filter(Boolean) as string[];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  
+  for (const u of allUnits) {
+    const canonical = normalizeUnitAlias(u);
+    const lower = canonical.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      result.push(canonical);
+    }
+  }
+  return result.map(u => ({ value: u, label: u }));
+}
 
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -83,10 +111,11 @@ export default function ItemsPage() {
 
   function openEdit(item: Item) {
     setEditing(item);
-    const hasConv = Number(item.conversion_ratio) > 1 && item.purchase_unit !== item.smallest_unit;
+    const hasConv = item.purchase_unit !== item.smallest_unit || Number(item.conversion_ratio) > 1;
     setForm({
-      name: item.name, barcode: item.barcode || '', category_id: String(item.category_id ?? ''), purchase_unit: item.purchase_unit, package_inner_size: '',
-      smallest_unit: item.smallest_unit, conversion_ratio: String(Number(item.conversion_ratio)),
+      name: item.name, barcode: item.barcode || '', category_id: String(item.category_id ?? ''), 
+      purchase_unit: normalizeUnitAlias(item.purchase_unit), package_inner_size: '',
+      smallest_unit: normalizeUnitAlias(item.smallest_unit), conversion_ratio: String(Number(item.conversion_ratio)),
       minimum_threshold: String(Number(item.minimum_threshold)), target_stock: String(Number(item.target_stock ?? 0)), threshold_type: item.threshold_type,
       is_perishable: item.is_perishable, is_active: item.is_active,
       purchase_price: String(Number(item.current_average_price ?? 0) * Number(item.conversion_ratio || 1)),
@@ -350,7 +379,7 @@ export default function ItemsPage() {
                     onChange={val => setForm(f => ({ ...f, purchase_unit: String(val) }))}
                     options={[
                       { value: '', label: 'Pilih...' },
-                      ...['Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Kg', 'Liter', 'Galon', 'Jerigen', 'Roll', 'Pcs'].map(u => ({ value: u, label: u }))
+                      ...getUniqueUnits(['Kg', 'gr', 'Liter', 'ml', 'Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Galon', 'Jerigen', 'Roll', 'Pcs'], items.map(i => i.purchase_unit))
                     ]}
                   />
                 </div>
@@ -363,7 +392,7 @@ export default function ItemsPage() {
                     disabled={!form.has_conversion}
                     options={[
                       { value: '', label: 'Pilih...' },
-                      ...['gr', 'ml', 'pcs', 'shoot', 'slice', 'lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks', 'Roll', 'Kg', 'Liter', 'Pack'].map(u => ({ value: u, label: u }))
+                      ...getUniqueUnits(['gr', 'ml', 'Pcs', 'Shoot', 'Slice', 'Lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks', 'Roll', 'Kg', 'Liter', 'Pack'], items.map(i => i.smallest_unit))
                     ]}
                   />
                 </div>
@@ -404,9 +433,17 @@ export default function ItemsPage() {
               </div>
 
               {form.has_conversion && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0 && (
-                <div style={{ fontSize: 12.5, color: '#0369a1', background: '#e0f2fe', padding: '8px 12px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-                  <span>Catatan sistem: 1 {form.purchase_unit} berisi {form.conversion_ratio} {form.smallest_unit}. Harga HPP / Stok Gudang adalah <strong>{fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per {form.smallest_unit}</strong>.</span>
+                <div style={{ fontSize: 12.5, color: '#0369a1', background: '#e0f2fe', padding: '8px 12px', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                    <span>1 {form.purchase_unit} berisi {form.conversion_ratio} {form.smallest_unit}.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingLeft: 22 }}>
+                    <span>🔵 <strong>Harga HPP (Moving Avg):</strong> {fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per {form.smallest_unit}</span>
+                    {editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0 && (
+                      <span>🟢 <strong>Harga Beli Terakhir:</strong> {fmtCurrency(Number(editing.last_purchase_price))} per {editing.smallest_unit} = {fmtCurrency(Number(editing.last_purchase_price) * Number(editing.conversion_ratio))} per {editing.purchase_unit}</span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

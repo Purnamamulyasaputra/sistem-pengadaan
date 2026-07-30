@@ -312,10 +312,7 @@ export function SyncSalesButton() {
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-                        <h3 className="text-sm font-bold text-gray-900 mb-1">Pilih Rentang Tanggal</h3>
-                        <p className="text-xs text-gray-500 mb-5">
-                            Tentukan tanggal mulai dan akhir untuk menarik data penjualan dari Moka POS.
-                        </p>
+                        <h3 className="text-sm font-bold text-gray-900 mb-3">Pilih Rentang Tanggal</h3>
 
                         <div className="space-y-4">
                             <div>
@@ -432,10 +429,7 @@ export function SyncTransactionsButton() {
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-                        <h3 className="text-sm font-bold text-gray-900 mb-1">Pilih Tanggal (Transaksi)</h3>
-                        <p className="text-xs text-gray-500 mb-5">
-                            Tentukan tanggal mulai dan akhir untuk menarik rincian data transaksi kasir dari Moka POS.
-                        </p>
+                        <h3 className="text-sm font-bold text-gray-900 mb-3">Pilih Rentang Tanggal</h3>
 
                         <div className="space-y-4">
                             <div>

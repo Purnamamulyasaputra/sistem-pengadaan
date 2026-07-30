@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Fragment } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Table } from '@/components/ui/Table';
 import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
 import { Toast } from '@/components/ui/Toast';
-import { RefreshCcw, Search, Truck, Info, Calendar, DollarSign, ChevronRight, X, Package, ShoppingCart, ClipboardList, BarChart2 } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { RefreshCcw, Search, Info, Calendar, DollarSign, Package, Download, Zap } from 'lucide-react';
 import { CombinedStockView } from './CombinedStockView';
 
-interface Outlet { 
-  id: number; 
-  name: string; 
+interface Outlet {
+  id: number;
+  name: string;
   last_request_date?: string | null;
   last_do_date?: string | null;
   last_sales_sync?: string | null;
@@ -47,27 +47,114 @@ interface OutletConsumptionSummary {
 }
 
 export default function StockMonitoringPage() {
-  const router = useRouter();
   const [data, setData] = useState<{
     outlets: Outlet[];
     items: Item[];
-    stockMatrix: Record<number, Record<number, number>>;
+    stockMatrix: Record<number, Record<number, any>>;
     categories: Category[];
     consumptionMap?: Record<number, OutletConsumptionSummary>;
   } | null>(null);
-  
-  const [activeTab, setActiveTab] = useState<'PER_OUTLET' | 'GABUNGAN' | 'AKTIVITAS'>('AKTIVITAS');
-  const [materialModal, setMaterialModal] = useState<{ outletName: string; materials: ConsumedMaterial[]; sinceDate: string } | null>(null);
-  const [productModal, setProductModal] = useState<{ outletName: string; products: SoldProduct[]; sinceDate: string } | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'PER_OUTLET' | 'GABUNGAN'>('PER_OUTLET');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ open: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOutlet, setFilterOutlet] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, KRITIS, AMAN
   const [filterCategory, setFilterCategory] = useState('ALL');
   const [showLegendTooltip, setShowLegendTooltip] = useState(false);
+  const [showAllMaterials, setShowAllMaterials] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // State untuk Sync Moka Modal
+  const [syncModal, setSyncModal] = useState(false);
+  const [syncFromDate, setSyncFromDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 10);
+  });
+  const [syncToDate, setSyncToDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 10);
+  });
+  const [syncing, setSyncing] = useState(false);
+
+  const [transferring, setTransferring] = useState(false);
+
+  const handleSyncMoka = async () => {
+    if (!syncFromDate || !syncToDate) {
+      setToast({ open: true, message: 'Tanggal Mulai dan Sampai harus diisi', type: 'error' });
+      return;
+    }
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/moka/sync/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_date: syncFromDate, end_date: syncToDate })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || 'Gagal menyinkronkan data Moka');
+      }
+      setToast({ open: true, message: json.message || 'Sinkronisasi berhasil!', type: 'success' });
+      setSyncModal(false);
+      await fetchData();
+    } catch (err: unknown) {
+      setToast({ open: true, message: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+
+  const handleTriggerAllOutlets = async () => {
+    const outletStatus = data?.outlets?.map(o => {
+      const lastDo = o.last_do_date
+        ? new Date(o.last_do_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+        : 'Belum ada pengiriman';
+      return `• ${o.name}: Terakhir pengiriman ${lastDo}`;
+    }).join('\n') || '';
+
+    setConfirmDialog({
+      open: true,
+      title: 'Trigger Semua Outlet',
+      message: `Proses seluruh pengiriman ke semua outlet sekarang?\n\n📅 Status Terakhir Pengiriman Pusat ke Outlet:\n${outletStatus}`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setTransferring(true);
+        try {
+          const res = await fetch('/api/outlet-monitoring/transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approve_all_outlets: true })
+          });
+          const json = await res.json();
+          if (!res.ok || !json.success) {
+            throw new Error(json.message || 'Gagal memproses pengiriman');
+          }
+          const nowStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+          setToast({ open: true, message: `${json.message || 'Semua pengiriman berhasil diproses!'} (Tanggal pengiriman diperbarui ke ${nowStr})`, type: 'success' });
+          await fetchData();
+        } catch (err: unknown) {
+          setToast({ open: true, message: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
+        } finally {
+          setTransferring(false);
+        }
+      }
+    });
+  };
 
   const fetchData = async () => {
     try {
@@ -107,27 +194,28 @@ export default function StockMonitoringPage() {
 
   // Filter Items
   const filteredItems = data?.items.filter((item: Item) => {
-    const matchSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                        (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+    const matchSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+
     if (!matchSearch) return false;
-    if (filterCategory !== 'ALL' && item.category_id !== Number(filterCategory)) return false;
-    
+    if (filterCategory !== 'ALL' && String(item.category_id) !== filterCategory) return false;
+
     // Check outlet usage
     if (filterOutlet !== 'ALL') {
       // Show all items, just treat as 0 if not exist
     }
-    
+
     if (filterStatus === 'ALL') return true;
 
     // Status filter
     let hasStatus = false;
-    const outletsToCheck = filterOutlet === 'ALL' 
-      ? data.outlets 
-      : data.outlets.filter((o: Outlet) => o.id === Number(filterOutlet));
-      
+    const outletsToCheck = filterOutlet === 'ALL'
+      ? data.outlets
+      : data.outlets.filter((o: Outlet) => String(o.id) === filterOutlet);
+
     for (const outlet of outletsToCheck) {
-      const qty = data.stockMatrix[item.id]?.[outlet.id] ?? 0;
+      const rawCell = data.stockMatrix[item.id]?.[outlet.id];
+      const qty = typeof rawCell === 'object' && rawCell !== null ? rawCell.stock_smallest : (typeof rawCell === 'number' ? rawCell : 0);
       const status = getStatus(qty, item.minimum_threshold);
       if (filterStatus === 'KRITIS' && (status === 'KRITIS' || status === 'MENIPIS')) {
         hasStatus = true;
@@ -138,24 +226,24 @@ export default function StockMonitoringPage() {
         break;
       }
     }
-    
+
     return hasStatus;
   });
 
   // Reset page when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterCategory, filterOutlet]);
+  }, [searchTerm, filterStatus, filterCategory, filterOutlet, itemsPerPage]);
 
-  const visibleOutlets = filterOutlet === 'ALL' 
-    ? (data?.outlets || []) 
-    : (data?.outlets?.filter((o: Outlet) => o.id === Number(filterOutlet)) || []);
+  const visibleOutlets = filterOutlet === 'ALL'
+    ? (data?.outlets || [])
+    : (data?.outlets?.filter((o: Outlet) => String(o.id) === filterOutlet) || []);
 
   const totalItems = filteredItems?.length || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const paginatedItems = filteredItems?.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const selectedOutletObj = filterOutlet !== 'ALL' ? data?.outlets?.find(o => o.id === Number(filterOutlet)) : undefined;
+  const selectedOutletObj = filterOutlet !== 'ALL' ? data?.outlets?.find(o => String(o.id) === filterOutlet) : undefined;
   const selectedSummary = selectedOutletObj ? data?.consumptionMap?.[selectedOutletObj.id] : undefined;
 
   return (
@@ -167,10 +255,8 @@ export default function StockMonitoringPage() {
               {activeTab === 'GABUNGAN' ? 'Laporan Stok Gabungan' : 'Pemantauan Stok'}
             </h3>
             <p className="text-gray-500 mt-1" style={{ fontSize: '12px', margin: '4px 0 0 0' }}>
-              {activeTab === 'GABUNGAN' 
-                ? 'Rekapitulasi stok keseluruhan di seluruh lokasi.' 
-                : activeTab === 'AKTIVITAS'
-                ? 'Pantau aktivitas pengadaan, penjualan & konsumsi bahan setiap outlet sejak DO terakhir.'
+              {activeTab === 'GABUNGAN'
+                ? 'Rekapitulasi stok keseluruhan di seluruh lokasi.'
                 : 'Pantau ketersediaan stok fisik secara live di seluruh cabang dan pusat.'}
             </p>
           </div>
@@ -185,19 +271,13 @@ export default function StockMonitoringPage() {
         </div>
 
         <div className="tabs" style={{ marginBottom: 0, padding: '0 20px', borderBottom: '1px solid var(--border)' }}>
-          <button 
-            onClick={() => setActiveTab('AKTIVITAS')}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'AKTIVITAS' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 13, fontWeight: activeTab === 'AKTIVITAS' ? 600 : 500, color: activeTab === 'AKTIVITAS' ? 'var(--primary)' : 'var(--muted)' }}
-          >
-            Aktivitas Outlet
-          </button>
-          <button 
+          <button
             onClick={() => setActiveTab('PER_OUTLET')}
             style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'PER_OUTLET' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 13, fontWeight: activeTab === 'PER_OUTLET' ? 600 : 500, color: activeTab === 'PER_OUTLET' ? 'var(--primary)' : 'var(--muted)' }}
           >
             Matriks Stok
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('GABUNGAN')}
             style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'GABUNGAN' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 13, fontWeight: activeTab === 'GABUNGAN' ? 600 : 500, color: activeTab === 'GABUNGAN' ? 'var(--primary)' : 'var(--muted)' }}
           >
@@ -205,556 +285,500 @@ export default function StockMonitoringPage() {
           </button>
         </div>
 
-      {activeTab === 'GABUNGAN' ? (
-        <CombinedStockView categories={data?.categories || []} />
-      ) : activeTab === 'AKTIVITAS' ? (
-        <>
-          <div style={{ padding: '20px' }}>
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', fontSize: 13, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                <RefreshCcw size={20} className="spin" style={{ color: '#016e3f' }} />
-                Memuat aktivitas outlet...
-              </div>
-            ) : !data || !data.consumptionMap ? (
-              <div style={{ textAlign: 'center', padding: 60, color: '#ef4444', fontSize: 13 }}>Gagal memuat data aktivitas.</div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
-                {data.outlets.map(outlet => {
-                  const s = data.consumptionMap![outlet.id];
-                  const daysSinceDO = outlet.last_do_date
-                    ? Math.floor((Date.now() - new Date(outlet.last_do_date).getTime()) / (1000 * 60 * 60 * 24))
-                    : null;
-                  const isLate = daysSinceDO !== null && daysSinceDO > 14;
-                  const hasMaterials = s?.consumed_materials && s.consumed_materials.length > 0;
-                  return (
-                    <div key={outlet.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                      {/* Card Header */}
-                      <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{outlet.name}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <ShoppingCart size={10} />
-                            Sync: {outlet.last_sales_sync ? new Date(outlet.last_sales_sync).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : 'Belum pernah'}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => router.push(`/delivery-orders/create?order_id=DIRECT&outlet_id=${outlet.id}`)}
-                          style={{ fontSize: 11, fontWeight: 600, color: '#016e3f', background: '#f0fdf4', border: '1px solid #d1fae5', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                        >
-                          <Truck size={11} />
-                          Kirim DO
-                        </button>
+        {activeTab === 'GABUNGAN' ? (
+          <CombinedStockView categories={data?.categories || []} />
+        ) : (
+          <div className="card-body p-0">
+            <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div className="text-gray-500 font-medium" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+                Matriks Stok Per Outlet
+                <div
+                  onMouseEnter={() => setShowLegendTooltip(true)}
+                  onMouseLeave={() => setShowLegendTooltip(false)}
+                  style={{ display: 'flex', alignItems: 'center' }}
+                >
+                  <Info size={14} style={{ cursor: 'help', color: '#94a3b8' }} />
+                  {showLegendTooltip && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      marginTop: 6,
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      padding: '10px 14px',
+                      borderRadius: 6,
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      zIndex: 50,
+                      width: 260,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Panduan Warna Teks</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#334155' }}>
+                        <span style={{ fontWeight: 600, color: '#0f172a' }}>100</span> Stok Aman
                       </div>
-
-                      {/* Stats */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid #f1f5f9' }}>
-                        <div style={{ padding: '12px 16px', borderRight: '1px solid #f1f5f9' }}>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                            <Calendar size={10} />
-                            DO Terakhir
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: isLate ? '#dc2626' : '#0f172a', lineHeight: 1.3 }}>
-                            {outlet.last_do_date
-                              ? new Date(outlet.last_do_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-                              : '—'}
-                          </div>
-                          <div style={{ fontSize: 10, color: isLate ? '#dc2626' : '#94a3b8', marginTop: 2 }}>
-                            {daysSinceDO !== null ? `${daysSinceDO} hari lalu` : 'Belum pernah'}
-                          </div>
-                        </div>
-                        <div style={{ padding: '12px 16px' }}>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                            <DollarSign size={10} />
-                            Penjualan
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>
-                            Rp {(s?.total_revenue || 0).toLocaleString('id-ID')}
-                          </div>
-                          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
-                            {s?.total_qty_sold || 0} porsi
-                          </div>
-                        </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#334155' }}>
+                        <span style={{ fontWeight: 600, color: '#eab308' }}>20</span> Stok Menipis (Hampir Kritis)
                       </div>
-
-                      {/* Card Footer: Materials + Products */}
-                      <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {/* Bahan dihabiskan */}
-                        <button
-                          onClick={() => hasMaterials && setMaterialModal({
-                            outletName: outlet.name,
-                            materials: s!.consumed_materials,
-                            sinceDate: s!.period_start_date
-                          })}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: hasMaterials ? 'pointer' : 'default' }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: hasMaterials ? '#475569' : '#94a3b8' }}>
-                            <Package size={12} style={{ color: hasMaterials ? '#016e3f' : '#94a3b8' }} />
-                            <span>{hasMaterials ? `${s!.consumed_materials.length} bahan dihabiskan` : 'Belum ada data konsumsi'}</span>
-                          </div>
-                          {hasMaterials && <ChevronRight size={13} style={{ color: '#94a3b8' }} />}
-                        </button>
-
-                        {/* Produk terjual */}
-                        {(() => {
-                          const hasProducts = s?.sold_products && s.sold_products.length > 0;
-                          return (
-                            <button
-                              onClick={() => hasProducts && setProductModal({
-                                outletName: outlet.name,
-                                products: s!.sold_products,
-                                sinceDate: s!.period_start_date
-                              })}
-                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: hasProducts ? 'pointer' : 'default' }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: hasProducts ? '#475569' : '#94a3b8' }}>
-                                <BarChart2 size={12} style={{ color: hasProducts ? '#2563eb' : '#94a3b8' }} />
-                                <span>{hasProducts ? `${s!.sold_products.length} produk terjual` : 'Belum ada data penjualan'}</span>
-                              </div>
-                              {hasProducts && <ChevronRight size={13} style={{ color: '#94a3b8' }} />}
-                            </button>
-                          );
-                        })()}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#334155' }}>
+                        <span style={{ fontWeight: 600, color: '#ef4444' }}>-5</span> Stok Kritis / Minus
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Modal Detail Bahan */}
-          {materialModal && (
-            <div
-              style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(2px)' }}
-              onClick={() => setMaterialModal(null)}
-            >
-              <div
-                style={{ background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 500, display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden', border: '1px solid #e2e8f0' }}
-                onClick={e => e.stopPropagation()}
-              >
-                {/* Modal Header */}
-                <div style={{ padding: '18px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>{materialModal.outletName}</div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Calendar size={12} style={{ color: '#016e3f' }} />
-                      <span>Sejak {new Date(materialModal.sinceDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                      <span style={{ color: '#cbd5e1' }}>•</span>
-                      <span style={{ color: '#016e3f', fontWeight: 600 }}>Auto-deduct Moka</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setMaterialModal(null)}
-                    style={{ background: '#f8fafc', border: '1px solid #e2e8f0', cursor: 'pointer', color: '#64748b', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                {/* Fixed Column Header Bar */}
-                <div style={{ padding: '9px 22px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Package size={13} />
-                    Bahan Baku Terpakai
-                  </div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                    Jumlah
-                  </div>
-                </div>
-
-                {/* Scrollable Materials List */}
-                <div style={{ overflowY: 'auto', maxHeight: '52vh', padding: '0 22px' }}>
-                  {materialModal.materials.map((m, idx) => (
-                    <div
-                      key={m.item_id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '12px 0',
-                        borderBottom: idx < materialModal.materials.length - 1 ? '1px solid #f1f5f9' : 'none'
-                      }}
-                    >
-                      <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>
-                        {m.item_name}
-                      </div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', background: '#f1f5f9', padding: '4px 10px', borderRadius: 6 }}>
-                        {m.consumed_display}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Modal Footer */}
-                <div style={{ padding: '12px 22px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                    Total <strong style={{ color: '#0f172a' }}>{materialModal.materials.length} jenis</strong> bahan dihabiskan
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Modal Produk Terjual */}
-          {productModal && (
-            <div
-              style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(2px)' }}
-              onClick={() => setProductModal(null)}
-            >
-              <div
-                style={{ background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden', border: '1px solid #e2e8f0', maxHeight: '85vh' }}
-                onClick={e => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div style={{ padding: '18px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>{productModal.outletName}</div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Calendar size={12} style={{ color: '#2563eb' }} />
-                      <span>Sejak {new Date(productModal.sinceDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                      <span style={{ color: '#cbd5e1' }}>•</span>
-                      <span style={{ color: '#2563eb', fontWeight: 600 }}>Data Moka POS</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setProductModal(null)}
-                    style={{ background: '#f8fafc', border: '1px solid #e2e8f0', cursor: 'pointer', color: '#64748b', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                {/* Column Header */}
-                <div style={{ padding: '9px 22px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <BarChart2 size={13} />
-                    Produk Terjual
-                  </div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                    Porsi
-                  </div>
-                </div>
-
-                {/* Scrollable Product List */}
-                <div style={{ overflowY: 'auto', flex: 1, padding: '0 22px' }}>
-                  {productModal.products.map((p, idx) => (
-                    <div
-                      key={`${p.name}-${idx}`}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '11px 0',
-                        borderBottom: idx < productModal.products.length - 1 ? '1px solid #f1f5f9' : 'none'
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {p.name}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>
-                          {p.category_name} · Rp {p.net_sales.toLocaleString('id-ID')}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1e40af', background: '#eff6ff', padding: '4px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>
-                        {p.item_sold} porsi
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Footer */}
-                <div style={{ padding: '12px 22px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                    Total <strong style={{ color: '#0f172a' }}>{productModal.products.length} produk</strong> terjual · Total <strong style={{ color: '#0f172a' }}>Rp {productModal.products.reduce((a, p) => a + p.net_sales, 0).toLocaleString('id-ID')}</strong>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-      <div className="card-body p-0">
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div className="text-gray-500 font-medium" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
-            Matriks Stok Per Outlet
-            <div 
-              onMouseEnter={() => setShowLegendTooltip(true)}
-              onMouseLeave={() => setShowLegendTooltip(false)}
-              style={{ display: 'flex', alignItems: 'center' }}
-            >
-              <Info size={14} style={{ cursor: 'help', color: '#94a3b8' }} />
-              {showLegendTooltip && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: 6,
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  padding: '10px 14px',
-                  borderRadius: 6,
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                  zIndex: 50,
-                  width: 260,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8
-                }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Panduan Warna Teks</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#334155' }}>
-                    <span style={{ fontWeight: 600, color: '#0f172a' }}>100</span> Stok Aman
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#334155' }}>
-                    <span style={{ fontWeight: 600, color: '#eab308' }}>20</span> Stok Menipis (Hampir Kritis)
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#334155' }}>
-                    <span style={{ fontWeight: 600, color: '#ef4444' }}>-5</span> Stok Kritis / Minus
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              <input 
-                type="text"
-                className="input"
-                placeholder="Cari barang/SKU..." 
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                style={{ width: 180, padding: '6px 12px 6px 30px', fontSize: 12 }}
-              />
-            </div>
-            <Select 
-              value={filterOutlet}
-              onChange={(val) => setFilterOutlet(String(val))}
-              options={[
-                { value: 'ALL', label: 'Semua Outlet' },
-                ...(data?.outlets?.map((outlet: Outlet) => ({ value: outlet.id.toString(), label: outlet.name })) || [])
-              ]}
-              style={{ width: 160 }}
-            />
-            <Select 
-              value={filterCategory}
-              onChange={(val) => setFilterCategory(String(val))}
-              options={[
-                { value: 'ALL', label: 'Semua Kategori' },
-                ...(data?.categories?.map((cat: { id: number, name: string }) => ({ value: cat.id.toString(), label: cat.name })) || [])
-              ]}
-              style={{ width: 160 }}
-            />
-            <Select 
-              value={filterStatus}
-              onChange={(val) => setFilterStatus(String(val))}
-              options={[
-                { value: 'ALL', label: 'Semua Kondisi' },
-                { value: 'KRITIS', label: 'Stok Kritis/Menipis' },
-                { value: 'AMAN', label: 'Stok Aman' }
-              ]}
-              style={{ width: 160 }}
-            />
-          </div>
-        </div>
-
-        {/* Panel Intelijen Stok & Konsumsi Outlet */}
-        {selectedOutletObj ? (
-          <div style={{ background: '#f8fafc', borderBottom: '1px solid var(--border)', padding: '14px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{selectedOutletObj.name}</span>
-                <span style={{ fontSize: 11, background: '#e2e8f0', color: '#475569', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
-                  Konsumsi Pasca-DO
-                </span>
-              </div>
-              <button
-                onClick={() => router.push(`/delivery-orders/create?order_id=DIRECT&outlet_id=${selectedOutletObj.id}`)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#016e3f] text-white rounded-md hover:bg-[#015832] transition-colors shadow-sm"
-              >
-                <Truck className="w-3.5 h-3.5" />
-                <span>+ Kirim DO</span>
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                  <Calendar className="w-3.5 h-3.5 text-[#016e3f]" />
-                  <span>DO TERAKHIR</span>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                  {selectedOutletObj.last_do_date 
-                    ? new Date(selectedOutletObj.last_do_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-                    : 'Belum ada DO'}
-                </div>
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
-                  Order: {selectedOutletObj.last_request_date ? new Date(selectedOutletObj.last_request_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}
-                </div>
-              </div>
-
-              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                  <DollarSign className="w-3.5 h-3.5 text-[#016e3f]" />
-                  <span>PENJUALAN MOKA</span>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                  Rp {(selectedSummary?.total_revenue || 0).toLocaleString('id-ID')}
-                </div>
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
-                  {selectedSummary?.total_qty_sold || 0} porsi menu
-                </div>
-              </div>
-
-              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', gridColumn: 'span 2 / auto' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                  <Package size={14} style={{ color: '#64748b' }} />
-                  <span>BAHAN DIHABISKAN (AUTO-DEDUCT MOKA)</span>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {selectedSummary?.consumed_materials && selectedSummary.consumed_materials.length > 0 ? (
-                    selectedSummary.consumed_materials.map((m) => (
-                      <span key={m.item_id} style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 5 }}>
-                        {m.item_name}: {m.consumed_display}
-                      </span>
-                    ))
-                  ) : (
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                      Belum ada pemakaian bahan sejak DO terakhir.
-                    </span>
                   )}
                 </div>
               </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSyncModal(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, borderColor: '#016e3f', color: '#016e3f' }}
+                >
+                  <RefreshCcw size={13} />
+                  Sync Moka
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open('/api/outlet-monitoring/export', '_blank')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, borderColor: '#016e3f', color: '#016e3f' }}
+                >
+                  <Download size={13} />
+                  Export Excel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleTriggerAllOutlets}
+                  disabled={transferring}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#016e3f', color: '#ffffff', fontWeight: 600 }}
+                  title="Otomatis proses & terima seluruh pengiriman ke semua outlet"
+                >
+                  <Zap size={13} />
+                  Trigger Semua Outlet
+                </Button>
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative' }}>
+                  <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Cari barang/SKU..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    style={{ width: 180, padding: '6px 12px 6px 30px', fontSize: 12 }}
+                  />
+                </div>
+                <Select
+                  value={filterOutlet}
+                  onChange={(val) => setFilterOutlet(String(val))}
+                  options={[
+                    { value: 'ALL', label: 'Semua Outlet' },
+                    ...(data?.outlets?.map((outlet: Outlet) => ({ value: outlet.id.toString(), label: outlet.name })) || [])
+                  ]}
+                  style={{ width: 160 }}
+                />
+                <Select
+                  value={filterCategory}
+                  onChange={(val) => setFilterCategory(String(val))}
+                  options={[
+                    { value: 'ALL', label: 'Semua Kategori' },
+                    ...(data?.categories?.map((cat: { id: number, name: string }) => ({ value: cat.id.toString(), label: cat.name })) || [])
+                  ]}
+                  style={{ width: 160 }}
+                />
+                <Select
+                  value={filterStatus}
+                  onChange={(val) => setFilterStatus(String(val))}
+                  options={[
+                    { value: 'ALL', label: 'Semua Kondisi' },
+                    { value: 'KRITIS', label: 'Stok Kritis/Menipis' },
+                    { value: 'AMAN', label: 'Stok Aman' }
+                  ]}
+                  style={{ width: 160 }}
+                />
+              </div>
             </div>
-          </div>
-        ) : (
-          <div style={{ background: '#f8fafc', borderBottom: '1px solid var(--border)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#475569' }}>
-              <Info className="w-3.5 h-3.5 text-[#016e3f]" />
-              <span>Pilih outlet di filter untuk melihat analisis konsumsi bahan & penjualan pasca-pengiriman.</span>
-            </div>
-            <button
-              onClick={() => router.push('/delivery-orders/create?order_id=DIRECT')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#016e3f] text-white rounded-md hover:bg-[#015832] transition-colors shadow-sm"
-            >
-              <Truck className="w-3.5 h-3.5" />
-              <span>+ Kirim DO</span>
-            </button>
-          </div>
-        )}
-        
-        <div className="card-body flush">
-          {loading ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Memuat matriks stok...</div>
-          ) : !data ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#ef4444' }}>Gagal memuat data.</div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <Table responsive={false}>
-                <thead>
-                  <tr>
-                    <th style={{ minWidth: 250, whiteSpace: 'nowrap' }}>Nama Barang</th>
-                    <th className="right" style={{ minWidth: 120, background: '#f8fafc', whiteSpace: 'nowrap' }}>Gudang Pusat</th>
-                    {visibleOutlets.map(outlet => {
-                      // Singkat nama outlet (contoh: ER COFFEELAB BANDUNG -> ER Bandung)
-                      // Handle typo seperti COFFELAB, COFFEE LAB, dan hapus koma
-                      const shortName = outlet.name
-                        .replace(/COFFE\s*E?\s*LAB/i, '')
-                        .replace(/,/g, '')
-                        .replace(/\s+/g, ' ')
-                        .trim();
-                      return (
-                        <th key={outlet.id} className="right" style={{ minWidth: 140, whiteSpace: 'nowrap' }}>{shortName}</th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedItems?.length === 0 ? (
-                    <tr>
-                      <td colSpan={visibleOutlets.length + 2} className="center muted">Tidak ada data ditemukan.</td>
-                    </tr>
-                  ) : (
-                    paginatedItems?.map(item => (
-                      <tr key={item.id} className="hover-row">
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          <div style={{ fontWeight: 600 }}>{item.name}</div>
-                        </td>
-                        
-                        {/* Gudang Pusat */}
-                        <td className="right" style={{ background: '#f8fafc', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                          {item.central_stock <= 0 ? (
-                            <span style={{ color: '#ef4444' }}>Kosong</span>
-                          ) : (
-                            <span>{formatQty(item.central_stock, item.conversion_ratio)} <span style={{ fontSize: 12, color: '#64748b' }}>{formatUnit(item.purchase_unit || item.smallest_unit)}</span></span>
+
+            {/* Panel Intelijen Stok & Konsumsi Outlet */}
+            {selectedOutletObj && (
+              <div style={{ background: '#f8fafc', borderBottom: '1px solid var(--border)', padding: '14px 20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{selectedOutletObj.name}</span>
+                    <span style={{ fontSize: 11, background: '#e2e8f0', color: '#475569', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+                      Konsumsi Pasca-DO
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                      <Calendar className="w-3.5 h-3.5 text-[#016e3f]" />
+                      <span>DO TERAKHIR</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                      {selectedOutletObj.last_do_date
+                        ? new Date(selectedOutletObj.last_do_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : 'Belum ada DO'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
+                      Order: {selectedOutletObj.last_request_date ? new Date(selectedOutletObj.last_request_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                      <DollarSign className="w-3.5 h-3.5 text-[#016e3f]" />
+                      <span>PENJUALAN MOKA</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                      Rp {(selectedSummary?.total_revenue || 0).toLocaleString('id-ID')}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                      {selectedSummary?.total_qty_sold || 0} porsi terjual
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', gridColumn: 'span 2 / auto' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                      <Package size={14} style={{ color: '#64748b' }} />
+                      <span>BAHAN DIHABISKAN (AUTO-DEDUCT MOKA)</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {selectedSummary?.consumed_materials && selectedSummary.consumed_materials.length > 0 ? (
+                        <>
+                          {selectedSummary.consumed_materials
+                            .slice(0, showAllMaterials ? undefined : 6)
+                            .map((m) => (
+                              <span key={m.item_id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 4 }}>
+                                {m.item_name}: <span style={{ color: '#0f172a' }}>{m.consumed_display}</span>
+                              </span>
+                            ))}
+                          {!showAllMaterials && selectedSummary.consumed_materials.length > 6 && (
+                            <button
+                              onClick={() => setShowAllMaterials(true)}
+                              style={{ background: '#f1f5f9', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 4, cursor: 'pointer', transition: 'all 0.2s' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.borderColor = '#94a3b8'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                            >
+                              + {selectedSummary.consumed_materials.length - 6} Lainnya
+                            </button>
                           )}
-                        </td>
+                          {showAllMaterials && selectedSummary.consumed_materials.length > 6 && (
+                            <button
+                              onClick={() => setShowAllMaterials(false)}
+                              style={{ background: 'transparent', border: 'none', color: '#016e3f', fontSize: 11, fontWeight: 600, padding: '3px 4px', cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                              Sembunyikan
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                          Belum ada pemakaian bahan sejak DO terakhir.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-                        {/* Tiap Outlet */}
+            <div className="card-body flush">
+              {loading ? (
+                <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Memuat matriks stok...</div>
+              ) : !data ? (
+                <div style={{ padding: 40, textAlign: 'center', color: '#ef4444' }}>Gagal memuat data.</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <Table responsive={false} style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                    <thead>
+                      <tr>
+                        <th rowSpan={3} style={{ width: 180, minWidth: 180, maxWidth: 180, verticalAlign: 'middle', background: '#ffffff', borderBottom: '2px solid #e2e8f0', borderRight: '1px solid #e2e8f0', position: 'sticky', left: 0, zIndex: 20 }}>
+                          Bahan / Produk
+                        </th>
+                        <th rowSpan={3} className="center" style={{ width: 120, minWidth: 120, maxWidth: 120, background: '#f8fafc', borderBottom: '2px solid #cbd5e1', borderRight: '2px solid #cbd5e1', fontWeight: 700, padding: '0 16px', position: 'sticky', left: 180, zIndex: 20, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>
+                          Gudang Pusat
+                        </th>
                         {visibleOutlets.map(outlet => {
-                          const qty = data.stockMatrix[item.id]?.[outlet.id] ?? 0;
-
-                          const status = getStatus(qty, item.minimum_threshold);
-                          let color = '#0f172a';
-                          let dotColor = '#22c55e'; // Aman
-                          let highlight = false;
-
-                          if (status === 'KRITIS') {
-                            color = '#ef4444';
-                            dotColor = '#ef4444';
-                            highlight = true;
-                          } else if (status === 'MENIPIS') {
-                            color = '#eab308';
-                            dotColor = '#eab308';
-                            highlight = true;
-                          }
-
+                          const shortName = outlet.name
+                            .replace(/COFFE\s*E?\s*LAB/i, '')
+                            .replace(/,/g, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                          const lastDoStr = outlet.last_do_date
+                            ? new Date(outlet.last_do_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                            : 'Belum ada DO';
                           return (
-                            <td key={outlet.id} className="right" style={{ whiteSpace: 'nowrap' }}>
-                              <div style={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: 6,
-                                cursor: highlight ? 'pointer' : 'default'
-                              }}
-                              onClick={() => {
-                                if (highlight) {
-                                  // Quick Action: Redirect to delivery order creation
-                                  router.push(`/delivery-orders/create?outlet_id=${outlet.id}&item_id=${item.id}`);
-                                }
-                              }}
-                              title={highlight ? "Klik untuk buat Draft Surat Jalan" : ""}
-                              >
-                                <span style={{ fontWeight: 600, color }}>{formatQty(qty, item.conversion_ratio)}</span>
-                                <span style={{ fontSize: 12, color: '#64748b' }}>{formatUnit(item.purchase_unit || item.smallest_unit)}</span>
+                            <th key={outlet.id} colSpan={7} className="center" style={{ borderBottom: '1px solid #cbd5e1', borderRight: '2px solid #cbd5e1', background: '#f8fafc', fontWeight: 700, padding: '8px 6px' }}>
+                              <div style={{ fontSize: 13, color: '#0f172a', letterSpacing: '0.02em' }}>{shortName}</div>
+                              <div style={{ fontSize: 10, fontWeight: 500, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                <Calendar size={10} />
+                                <span>DO Terakhir: {lastDoStr}</span>
                               </div>
-                            </td>
+                            </th>
                           );
                         })}
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </Table>
-            </div>
-          )}
-        </div>
+                      <tr>
+                        {visibleOutlets.map(outlet => (
+                          <Fragment key={outlet.id}>
+                            <th rowSpan={2} className="center" style={{ fontSize: 10, background: '#fafaf9', color: '#475569', minWidth: 85, padding: '8px 6px', borderBottom: '1px solid #cbd5e1', fontWeight: 700, borderRight: '1px solid #cbd5e1' }}>Opname<br/>Fisik</th>
+                            <th colSpan={2} className="center" style={{ fontSize: 10, background: '#ffffff', color: '#475569', padding: '4px', borderBottom: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1' }}>IN Satuan</th>
+                            <th colSpan={2} className="center" style={{ fontSize: 10, background: '#f9fafb', color: '#475569', padding: '4px', borderBottom: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1' }}>OUT Satuan</th>
+                            <th colSpan={2} className="center" style={{ fontSize: 10, background: '#f1f5f9', color: '#0f172a', padding: '4px', borderBottom: '1px solid #cbd5e1', borderRight: '2px solid #cbd5e1', fontWeight: 700 }}>LIVE STOCK</th>
+                          </Fragment>
+                        ))}
+                      </tr>
+                      <tr>
+                        {visibleOutlets.map(outlet => (
+                          <Fragment key={outlet.id}>
+                            <th className="right" style={{ fontSize: 10, background: '#ffffff', color: '#64748b', minWidth: 100, padding: '8px 6px', borderBottom: '2px solid #e2e8f0' }}>Terkecil</th>
+                            <th className="right" style={{ fontSize: 10, background: '#ffffff', color: '#64748b', minWidth: 100, padding: '8px 6px', borderBottom: '2px solid #e2e8f0', borderRight: '1px solid #cbd5e1' }}>Kemasan</th>
+                            <th className="right" style={{ fontSize: 10, background: '#f9fafb', color: '#64748b', minWidth: 110, padding: '8px 6px', borderBottom: '2px solid #e2e8f0' }}>Terkecil</th>
+                            <th className="right" style={{ fontSize: 10, background: '#f9fafb', color: '#64748b', minWidth: 120, padding: '8px 6px', borderBottom: '2px solid #e2e8f0', borderRight: '1px solid #cbd5e1' }}>Kemasan</th>
+                            <th className="right" style={{ fontSize: 10, background: '#f1f5f9', color: '#334155', minWidth: 110, padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: 600 }}>Terkecil</th>
+                            <th className="right" style={{ fontSize: 10, background: '#f1f5f9', color: '#334155', minWidth: 120, padding: '8px 6px', borderRight: '2px solid #cbd5e1', borderBottom: '2px solid #e2e8f0', fontWeight: 600 }}>Kemasan</th>
+                          </Fragment>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedItems?.length === 0 ? (
+                        <tr>
+                          <td colSpan={visibleOutlets.length * 7 + 2} className="center muted">Tidak ada data ditemukan.</td>
+                        </tr>
+                      ) : (
+                        paginatedItems?.map(item => {
+                          const ratio = Number(item.conversion_ratio) || 1;
+                          return (
+                            <tr key={item.id} className="hover-row">
+                              <td style={{ width: 180, minWidth: 180, maxWidth: 180, fontWeight: 600, borderRight: '1px solid #f1f5f9', background: '#ffffff', position: 'sticky', left: 0, zIndex: 10, whiteSpace: 'normal', wordWrap: 'break-word' }}>
+                                {item.name}
+                              </td>
 
-        <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, open: false })} />
-        
-        {!loading && data && totalPages > 1 && (
-          <div style={{ padding: '16px' }}>
-            <Pagination 
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={totalItems}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-            />
+                              {/* Gudang Pusat */}
+                              <td className="right" style={{ width: 120, minWidth: 120, maxWidth: 120, padding: '8px 12px', background: '#f8fafc', borderRight: '2px solid #cbd5e1', whiteSpace: 'nowrap', position: 'sticky', left: 180, zIndex: 10, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>
+                                {Number(item.central_stock) <= 0 ? (
+                                  <span style={{ color: '#ef4444', fontWeight: 600 }}>Kosong</span>
+                                ) : (
+                                  <>
+                                    <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                                      {(Number(item.central_stock) / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{formatUnit(item.purchase_unit || item.smallest_unit)}</span>
+                                    </div>
+                                    {ratio > 1 && (
+                                      <div style={{ marginTop: 2, fontSize: 11, color: '#64748b' }}>
+                                        {Number(item.central_stock).toLocaleString('id-ID', { maximumFractionDigits: 1 })} {item.smallest_unit}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </td>
+
+                              {/* Tiap Outlet (6 Kolom) */}
+                              {visibleOutlets.map(outlet => {
+                                const rawCell = data.stockMatrix[item.id]?.[outlet.id];
+                                const cell = typeof rawCell === 'object' && rawCell !== null ? rawCell : {
+                                  in_smallest: 0,
+                                  in_package: 0,
+                                  out_smallest: 0,
+                                  out_package: 0,
+                                  cups_sold: 0,
+                                  stock_smallest: typeof rawCell === 'number' ? rawCell : 0,
+                                  stock_package: (typeof rawCell === 'number' ? rawCell : 0) / ratio
+                                };
+
+                                const status = getStatus(cell.stock_smallest, item.minimum_threshold);
+                                let color = '#0f172a';
+                                if (status === 'KRITIS') color = '#ef4444';
+                                else if (status === 'MENIPIS') color = '#eab308';
+
+                                return (
+                                  <Fragment key={outlet.id}>
+                                    {/* 5. OPNAME: stok fisik aktual dari opname terakhir (Titik Nol harian) */}
+                                    <td className="right" style={{ padding: '8px 6px', background: '#fafaf9', borderRight: '1px solid #cbd5e1', whiteSpace: 'nowrap' }}
+                                      title={cell.has_opname
+                                        ? `Opname terakhir: ${new Date(cell.opname_date!).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} | IN sejak opname: +${cell.in_since_opname.toLocaleString('id-ID', { maximumFractionDigits: 1 })} | OUT sejak opname: -${cell.out_since_opname.toLocaleString('id-ID', { maximumFractionDigits: 1 })}`
+                                        : 'Belum ada data opname untuk item ini'}
+                                    >
+                                      {cell.has_opname ? (
+                                        <>
+                                          <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                                            {cell.opname_qty.toLocaleString('id-ID', { maximumFractionDigits: 1 })}
+                                          </span>{' '}
+                                          <span style={{ fontSize: 11, color: '#94a3b8' }}>{item.smallest_unit}</span>
+                                          {ratio > 1 && (
+                                            <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>
+                                              {cell.opname_qty_package.toLocaleString('id-ID', { maximumFractionDigits: 2 })} {formatUnit(item.purchase_unit || item.smallest_unit)}
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span>
+                                      )}
+                                    </td>
+                                    {/* 1. IN Terkecil */}
+                                    <td className="right" style={{ padding: '8px 6px', background: '#ffffff', whiteSpace: 'nowrap' }}>
+                                      <span style={{ fontWeight: 500, color: '#334155' }}>{cell.in_smallest.toLocaleString('id-ID', { maximumFractionDigits: 1 })}</span>{' '}
+                                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{item.smallest_unit}</span>
+                                    </td>
+                                    {/* 2. IN Kemasan */}
+                                    <td className="right" style={{ padding: '8px 6px', background: '#ffffff', borderRight: '1px solid #cbd5e1', whiteSpace: 'nowrap' }}>
+                                      <span style={{ fontWeight: 600, color: '#334155' }}>{cell.in_package.toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>{' '}
+                                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{formatUnit(item.purchase_unit || item.smallest_unit)}</span>
+                                    </td>
+                                    {/* 3. OUT Terkecil */}
+                                    <td className="right" style={{ padding: '8px 6px', background: '#f9fafb', whiteSpace: 'nowrap' }}>
+                                      <span style={{ fontWeight: 500, color: cell.out_smallest > 0 ? '#0f172a' : '#94a3b8' }}>
+                                        {cell.out_smallest.toLocaleString('id-ID', { maximumFractionDigits: 1 })}
+                                      </span>{' '}
+                                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{item.smallest_unit}</span>
+                                    </td>
+                                    {/* 4. OUT Kemasan + Cups */}
+                                    <td className="right" style={{ padding: '8px 6px', background: '#f9fafb', borderRight: '1px solid #cbd5e1', whiteSpace: 'nowrap' }}>
+                                      <div>
+                                        <span style={{ fontWeight: 600, color: cell.out_package > 0 ? '#0f172a' : '#94a3b8' }}>
+                                          {cell.out_package.toLocaleString('id-ID', { maximumFractionDigits: 2 })}
+                                        </span>{' '}
+                                        <span style={{ fontSize: 11, color: '#94a3b8' }}>{formatUnit(item.purchase_unit || item.smallest_unit)}</span>
+                                      </div>
+                                      {cell.cups_sold > 0 && (() => {
+                                        const labelConsumed = cell.unit_consumed > 0
+                                          ? `${cell.unit_consumed.toLocaleString('id-ID', { maximumFractionDigits: 2 })} ${item.smallest_unit}`
+                                          : null;
+                                        return (
+                                          <div style={{ fontSize: 10, fontWeight: 600, color: '#475569', background: '#e2e8f0', display: 'inline-block', padding: '2px 5px', borderRadius: 4, marginTop: 3 }} title={`${cell.unit_consumed.toLocaleString('id-ID', { maximumFractionDigits: 2 })} ${item.smallest_unit} terpakai dari ${cell.cups_sold} cup terjual`}>
+                                            {labelConsumed ? `${labelConsumed} → ` : ''}{cell.cups_sold} cup
+                                          </div>
+                                        );
+                                      })()}
+                                    </td>
+                                    {/* 6. Live Stock Terkecil */}
+                                    <td className="right" style={{ padding: '8px 6px', background: '#f1f5f9', whiteSpace: 'nowrap' }}>
+                                      <span style={{ fontWeight: 500, color }}>{cell.stock_smallest.toLocaleString('id-ID', { maximumFractionDigits: 1 })}</span>{' '}
+                                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{item.smallest_unit}</span>
+                                    </td>
+                                    {/* 7. Live Stock Kemasan */}
+                                    <td className="right" style={{ padding: '8px 6px', background: '#f1f5f9', borderRight: '2px solid #cbd5e1', whiteSpace: 'nowrap' }}>
+                                      <span style={{ fontWeight: 700, color }}>{cell.stock_package.toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>{' '}
+                                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{formatUnit(item.purchase_unit || item.smallest_unit)}</span>
+                                    </td>
+                                  </Fragment>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
+            </div>
+
+            <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, open: false })} />
+
+            {!loading && data && (
+              <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748b' }}>
+                  <span>Tampilkan</span>
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onChange={(val) => setItemsPerPage(Number(val))}
+                    options={[
+                      { value: '10', label: '10' },
+                      { value: '25', label: '25' },
+                      { value: '50', label: '50' },
+                      { value: '100', label: '100' }
+                    ]}
+                    style={{ width: 80, padding: '4px 8px', minHeight: 28 }}
+                  />
+                  <span>baris per halaman</span>
+                </div>
+                {totalPages > 1 && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={totalItems}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setCurrentPage}
+                  />
+                )}
+              </div>
+            )}
           </div>
         )}
-      </div>
-      )}
+
+        {/* Modal 1: Sync Sales Moka */}
+        <Modal
+          isOpen={syncModal}
+          onClose={() => setSyncModal(false)}
+          title="Sync Penjualan Moka"
+          maxWidth={400}
+        >
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
+              Pilih rentang tanggal sinkronisasi:
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                  Dari Tanggal
+                </label>
+                <input
+                  type="date"
+                  className="input"
+                  value={syncFromDate}
+                  onChange={e => setSyncFromDate(e.target.value)}
+                  style={{ width: '100%', fontSize: 13 }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                  Sampai Tanggal
+                </label>
+                <input
+                  type="date"
+                  className="input"
+                  value={syncToDate}
+                  onChange={e => setSyncToDate(e.target.value)}
+                  style={{ width: '100%', fontSize: 13 }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+              <Button variant="outline" onClick={() => setSyncModal(false)} disabled={syncing}>
+                Batal
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSyncMoka}
+                disabled={syncing}
+                style={{ background: '#016e3f', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <RefreshCcw size={14} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? 'Menyinkronkan...' : 'Sinkronkan'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+
+        <ConfirmDialog
+          open={confirmDialog.open}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText="Ya, Lanjutkan"
+          cancelText="Batal"
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+          loading={transferring}
+        />
 
       </div>
     </section>

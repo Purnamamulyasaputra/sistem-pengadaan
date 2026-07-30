@@ -68,7 +68,7 @@ export function ConfirmDialog({
         <h3 className="mb-2 text-[17px] font-bold" style={{ fontFamily: "'Cabin', sans-serif", color: "#12201a" }}>
           {title}
         </h3>
-        <p className="mb-7 text-[13px] leading-relaxed" style={{ color: "#65786f" }}>
+        <p className="mb-7 text-[13px] leading-relaxed" style={{ color: "#65786f", whiteSpace: "pre-line" }}>
           {message}
         </p>
 

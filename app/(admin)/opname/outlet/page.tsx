@@ -23,6 +23,7 @@ export default function OutletOpnamePage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [filterDate, setFilterDate] = useState('');
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
 
@@ -88,6 +89,8 @@ export default function OutletOpnamePage() {
     }
   };
 
+  const filteredSessions = filterDate ? sessions.filter(s => s.count_date.startsWith(filterDate)) : sessions;
+
   return (
     <section className="screen">
       <div className="card">
@@ -95,15 +98,22 @@ export default function OutletOpnamePage() {
           <a href="/opname/outlet" className="tab active" style={{ textDecoration: 'none' }}>Stock Opname</a>
           <a href="/outlet/items" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Item Reference</a>
         </div>
-        <div className="card-head" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Outlet Stock Opname & Usage</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Stock Opname Outlet</h3>
+            <input 
+              type="date" 
+              className="input" 
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              style={{ fontSize: 12, padding: '4px 8px', height: 32 }}
+            />
           </div>
           <Button variant="primary" size="sm" onClick={handleStartOpname} disabled={creating || !user?.outlet_id}>
             {creating ? 'Memulai...' : '+ Start Daily Report'}
           </Button>
         </div>
-        <div className="card-body flush" style={{ overflowY: 'auto' }}>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
           {loading ? (
             <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat riwayat opname...</div>
           ) : !user?.outlet_id ? (
@@ -123,12 +133,12 @@ export default function OutletOpnamePage() {
                   <th style={{ padding: '12px 16px', fontSize: 11 }}>Waktu Mulai</th>
                   <th style={{ padding: '12px 16px', fontSize: 11 }}>Terakhir Diubah</th>
                   <th style={{ padding: '12px 16px', fontSize: 11 }}>Dilakukan Oleh</th>
-                  <th className="right" style={{ padding: '12px 16px', fontSize: 11 }}>Est. Biaya Pemakaian</th>
+                  <th className="right" style={{ padding: '12px 16px', fontSize: 11 }}>Est. Selisih Nilai</th>
                   <th className="center" style={{ padding: '12px 16px', fontSize: 11 }}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {sessions.map(s => (
+                {filteredSessions.map(s => (
                   <tr key={s.id} onClick={() => router.push(`/opname/outlet/${s.id}`)} className="hover-row" style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
                     <td className="font-bold" style={{ padding: '12px 16px', fontSize: 12 }}>{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
                     <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>
@@ -138,12 +148,12 @@ export default function OutletOpnamePage() {
                       {new Date(s.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>{s.pic_name}</td>
-                    <td className="right font-mono font-bold" style={{ padding: '12px 16px', fontSize: 12, color: Number(s.total_value) > 0 ? '#dc2626' : 'var(--muted)' }}>
-                      Rp {Number(s.total_value).toLocaleString('id-ID')}
+                    <td className="right font-mono font-bold" style={{ padding: '12px 16px', fontSize: 12, color: Number(s.total_value) > 0 ? '#016e3f' : Number(s.total_value) < 0 ? '#dc2626' : 'var(--muted)' }}>
+                      {Number(s.total_value) > 0 ? '+Rp ' : Number(s.total_value) < 0 ? '-Rp ' : 'Rp '}{Math.abs(Number(s.total_value)).toLocaleString('id-ID')}
                     </td>
                     <td className="center" style={{ padding: '12px 16px' }}>
                       <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
-                        {s.status}
+                        {s.status === 'LOCKED' ? 'Selesai (Terkunci)' : s.status === 'SUBMITTED' ? 'Diajukan' : s.status === 'DRAFT' ? 'Draf' : s.status}
                       </Badge>
                     </td>
                   </tr>

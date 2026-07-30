@@ -79,25 +79,44 @@ export default function ReceiveGoodsPage() {
 
   const [requireBarcode, setRequireBarcode] = useState(true);
 
-  const fetchNotes = useCallback(async () => {
-    setLoading(true);
-    const [res, setRes] = await Promise.all([
-      fetch(`/api/delivery-notes`),
-      fetch('/api/settings')
-    ]);
-    const data = await res.json();
-    const allowed = (data.data ?? []).filter((d: DeliveryNote) => d.status === 'DIKIRIM' || d.status === 'DITERIMA' || d.status === 'DRAFT');
-    setDeliveryNotes(allowed);
+  const fetchNotes = useCallback(async (isQuiet = false) => {
+    if (!isQuiet) setLoading(true);
+    try {
+      const [res, setRes] = await Promise.all([
+        fetch(`/api/delivery-notes`, { cache: 'no-store' }),
+        fetch('/api/settings', { cache: 'no-store' })
+      ]);
+      if (res.ok) {
+        const data = await res.json();
+        const allowed = (data.data ?? []).filter((d: DeliveryNote) => d.status === 'DIKIRIM' || d.status === 'DITERIMA' || d.status === 'DRAFT');
+        setDeliveryNotes(allowed);
+      }
 
-    if (setRes.ok) {
-      const setData = await setRes.json();
-      setRequireBarcode(setData.data?.require_barcode_scan !== 'false');
+      if (setRes.ok) {
+        const setData = await setRes.json();
+        setRequireBarcode(setData.data?.require_barcode_scan !== 'false');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (!isQuiet) setLoading(false);
     }
-    
-    setLoading(false);
   }, []);
 
-  useEffect(() => { fetchNotes(); }, [fetchNotes]);
+  useEffect(() => { 
+    fetchNotes(false);
+    const interval = setInterval(() => {
+      fetchNotes(true);
+    }, 3000);
+    const handleFocus = () => {
+      fetchNotes(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fetchNotes]);
 
   useEffect(() => {
     if (deliveryNotes.length > 0 && scanParam && !initialScanHandled) {
@@ -274,7 +293,9 @@ export default function ReceiveGoodsPage() {
                   <tr key={dn.id} onClick={() => openScan(dn)} className="hover-row" style={{ cursor: 'pointer' }}>
                     <td className="font-mono text-primary font-bold">{dn.delivery_note_number}</td>
                     <td className="font-mono font-bold">
-                      PO-{new Date(dn.delivery_date).getFullYear()}-{String(dn.order_id).padStart(5, '0')}
+                      {dn.order_id 
+                        ? `PO-${new Date(dn.delivery_date).getFullYear()}-${String(dn.order_id).padStart(5, '0')}`
+                        : `PO-${new Date(dn.delivery_date).getFullYear()}-DIR${String(dn.id).padStart(3, '0')}`}
                     </td>
                     <td>{new Date(dn.delivery_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                     <td className="muted">{dn.driver_name || '-'}</td>

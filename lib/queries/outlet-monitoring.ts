@@ -1,4 +1,5 @@
-import { query } from '../db';
+import { query, withTransaction } from '../db';
+import { approveAndTransferDeliveryNote } from './delivery-notes';
 
 export interface OutletMonitoringOutlet {
   id: number;
@@ -25,6 +26,24 @@ export interface OutletMonitoringItem {
 export interface OutletMonitoringCategory {
   id: number;
   name: string;
+}
+
+export interface OutletStockMatrixCell {
+  in_smallest: number;
+  in_package: number;
+  out_smallest: number;
+  out_package: number;
+  cups_sold: number;
+  unit_consumed: number;   // total bahan terpakai (satuan terkecil), berdasarkan resep × cups_sold
+  // Opname: data stok fisik dari sesi opname terakhir (LOCKED)
+  opname_qty: number;          // qty fisik saat opname terakhir (satuan terkecil)
+  opname_qty_package: number;  // qty fisik saat opname (satuan kemasan)
+  opname_date: string | null;  // tanggal opname terakhir, untuk tooltip
+  has_opname: boolean;         // apakah ada data opname untuk item ini
+  in_since_opname: number;     // total IN setelah opname terakhir (satuan terkecil)
+  out_since_opname: number;    // total OUT setelah opname terakhir (satuan terkecil)
+  stock_smallest: number;
+  stock_package: number;
 }
 
 export interface ConsumedMaterial {
@@ -59,61 +78,228 @@ export interface OutletConsumptionSummary {
  * Mengambil data pemantauan stok outlet secara lengkap, termasuk waktu aktivitas terakhir per outlet.
  */
 export async function getOutletMonitoringData() {
-  // 1. Ambil semua outlet aktif (STORE) dengan tanggal aktivitas terakhir
-  const outletsRes = await query<OutletMonitoringOutlet>(`
-    SELECT 
-      o.id, 
-      o.name,
-      (SELECT MAX(created_at) FROM orders WHERE outlet_id = o.id) AS last_request_date,
-      (SELECT MAX(delivery_date) FROM delivery_notes WHERE outlet_id = o.id AND status != 'CANCELLED') AS last_do_date,
-      (SELECT MAX(period_end) FROM moka_item_sales WHERE outlet_id = o.id) AS last_sales_sync
-    FROM outlets o
-    WHERE o.type = 'STORE'
-    ORDER BY o.name ASC
-  `);
+  const [outletsRes, itemsRes, outletStocksRes, inRes, outRes, cupsRes, catRes, opnameRes] = await Promise.all([
+    query<OutletMonitoringOutlet>(`
+      SELECT 
+        o.id, 
+        o.name,
+        (SELECT MAX(created_at) FROM orders WHERE outlet_id = o.id) AS last_request_date,
+        (SELECT COALESCE(MAX(delivery_date), MAX(created_at)::date) FROM delivery_notes WHERE outlet_id = o.id AND status != 'CANCELLED') AS last_do_date,
+        (SELECT MAX(period_end) FROM moka_item_sales WHERE outlet_id = o.id) AS last_sales_sync
+      FROM outlets o
+      WHERE o.type = 'STORE'
+      ORDER BY o.name ASC
+    `),
+    query<OutletMonitoringItem>(`
+      SELECT 
+        i.id, 
+        i.name, 
+        i.barcode,
+        i.category_id,
+        i.purchase_unit, 
+        i.smallest_unit,
+        i.conversion_ratio,
+        i.minimum_threshold,
+        i.is_active,
+        COALESCE((
+          SELECT ending_balance 
+          FROM inventory_logs 
+          WHERE item_id = i.id 
+          ORDER BY created_at DESC 
+          LIMIT 1
+        ), 0) AS central_stock,
+        COALESCE(i.current_average_price, 0) AS current_average_price
+      FROM items i
+      WHERE i.is_active = TRUE
+      ORDER BY i.name ASC
+    `),
+    query<{ item_id: number; outlet_id: number; current_balance: string }>(`
+      SELECT item_id, outlet_id, current_balance FROM outlet_stocks
+    `),
+    // Total IN all-time per item per outlet (ditampilkan di kolom IN Terkecil/Kemasan)
+    query<{ item_id: number; outlet_id: number; total_in: string }>(`
+      SELECT item_id, outlet_id, COALESCE(SUM(qty_change), 0) AS total_in 
+      FROM outlet_inventory_logs 
+      WHERE qty_change > 0 
+      GROUP BY item_id, outlet_id
+    `),
+    // Total OUT all-time per item per outlet (ditampilkan di kolom OUT Terkecil/Kemasan)
+    query<{ item_id: number; outlet_id: number; total_out: string }>(`
+      SELECT item_id, outlet_id, COALESCE(ABS(SUM(qty_change)), 0) AS total_out 
+      FROM outlet_inventory_logs 
+      WHERE qty_change < 0 
+      GROUP BY item_id, outlet_id
+    `),
+    query<{ item_id: number; outlet_id: number; cups_sold: string; unit_consumed: string }>(`
+      SELECT 
+        ing.item_id,
+        mis.outlet_id,
+        COALESCE(SUM(mis.item_sold - COALESCE(mis.item_refunded, 0)), 0) AS cups_sold,
+        COALESCE(SUM((mis.item_sold - COALESCE(mis.item_refunded, 0)) * ri.quantity), 0) AS unit_consumed
+      FROM moka_item_sales mis
+      -- Hanya ambil periode sinkronisasi yang paling terakhir (sync_date terbaru) per outlet
+      INNER JOIN (
+        SELECT DISTINCT ON (outlet_id) outlet_id, period_start, period_end
+        FROM moka_item_sales
+        ORDER BY outlet_id, sync_date DESC
+      ) latest ON mis.outlet_id = latest.outlet_id 
+              AND mis.period_start = latest.period_start 
+              AND mis.period_end = latest.period_end
+      JOIN menus m ON (
+        -- 1. Exact match nama atau display_name
+        LOWER(TRIM(mis.name)) = LOWER(TRIM(m.name))
+        OR (m.display_name IS NOT NULL AND m.display_name <> '' AND LOWER(TRIM(mis.name)) = LOWER(TRIM(m.display_name)))
+        -- 2. Fuzzy match untuk varian yang disisipi kata (seperti 'Caffe Latte - Arabica Hot Medium'):
+        --    Harus cocok nama dasar DI DEPAN dan varian DI BELAKANG agar tidak menduplikasi ke semua varian
+        OR (
+          m.name IS NOT NULL AND m.name <> ''
+          AND m.variant IS NOT NULL AND m.variant <> ''
+          AND LOWER(TRIM(mis.name)) LIKE LOWER(TRIM(m.name)) || ' %'
+          AND LOWER(TRIM(mis.name)) LIKE '%' || LOWER(TRIM(m.variant))
+        )
+      )
+      JOIN recipes r ON r.menu_id = m.id
+      JOIN recipe_ingredients ri ON ri.recipe_id = r.id
+      JOIN ingredients ing ON ing.id = ri.ingredient_id
+      GROUP BY ing.item_id, mis.outlet_id
+    `),
+    query<OutletMonitoringCategory>(`SELECT id, name FROM categories ORDER BY name ASC`),
+    // Stok fisik dari sesi opname terakhir (LOCKED) per item per outlet.
+    // DISTINCT ON memastikan hanya satu baris per (outlet_id, item_id): yang paling baru.
+    query<{
+      outlet_id: number;
+      item_id: number;
+      opname_qty: string;
+      locked_at: string;
+      in_since: string;  // total IN sejak opname terakhir
+      out_since: string; // total OUT sejak opname terakhir
+    }>(`
+      SELECT
+        last_opname.outlet_id,
+        last_opname.item_id,
+        last_opname.opname_qty,
+        last_opname.locked_at,
+        -- Total IN sejak waktu opname terakhir dikunci
+        COALESCE((
+          SELECT SUM(oll.qty_change)
+          FROM outlet_inventory_logs oll
+          WHERE oll.outlet_id = last_opname.outlet_id
+            AND oll.item_id  = last_opname.item_id
+            AND oll.qty_change > 0
+            AND oll.created_at > last_opname.locked_at
+        ), 0) AS in_since,
+        -- Total OUT (absolut) sejak waktu opname terakhir dikunci
+        COALESCE((
+          SELECT ABS(SUM(oll.qty_change))
+          FROM outlet_inventory_logs oll
+          WHERE oll.outlet_id = last_opname.outlet_id
+            AND oll.item_id  = last_opname.item_id
+            AND oll.qty_change < 0
+            AND oll.created_at > last_opname.locked_at
+        ), 0) AS out_since
+      FROM (
+        SELECT DISTINCT ON (sch.location_id, scd.item_id)
+          sch.location_id AS outlet_id,
+          scd.item_id,
+          scd.actual_physical_qty AS opname_qty,
+          sch.updated_at AS locked_at
+        FROM stock_count_headers sch
+        JOIN stock_count_details scd ON scd.header_id = sch.id
+        WHERE sch.location_type = 'OUTLET'
+          AND sch.status = 'LOCKED'
+        ORDER BY sch.location_id, scd.item_id, sch.count_date DESC, sch.updated_at DESC
+      ) AS last_opname
+    `)
+  ]);
 
-  // 2. Ambil semua barang aktif beserta stok pusat saat ini
-  const itemsRes = await query<OutletMonitoringItem>(`
-    SELECT 
-      i.id, 
-      i.name, 
-      i.barcode,
-      i.category_id,
-      i.purchase_unit, 
-      i.smallest_unit,
-      i.conversion_ratio,
-      i.minimum_threshold,
-      i.is_active,
-      COALESCE((
-        SELECT ending_balance 
-        FROM inventory_logs 
-        WHERE item_id = i.id 
-        ORDER BY created_at DESC 
-        LIMIT 1
-      ), 0) AS central_stock,
-      COALESCE(i.current_average_price, 0) AS current_average_price
-    FROM items i
-    WHERE i.is_active = TRUE
-    ORDER BY i.name ASC
-  `);
+  const inMap: Record<number, Record<number, number>> = {};
+  const outMap: Record<number, Record<number, number>> = {};
+  const cupsMap: Record<number, Record<number, number>> = {};
+  const unitConsumedMap: Record<number, Record<number, number>> = {};
+  const balMap: Record<number, Record<number, number>> = {};
+  // opnameMap[item_id][outlet_id] = { opname_qty, locked_at, in_since, out_since }
+  const opnameMap: Record<number, Record<number, { opname_qty: number; locked_at: string; in_since: number; out_since: number }>> = {};
 
-  // 3. Ambil seluruh stok live outlet dari tabel outlet_stocks
-  const outletStocksRes = await query<{ item_id: number; outlet_id: number; current_balance: string }>(`
-    SELECT 
-      item_id, 
-      outlet_id, 
-      current_balance 
-    FROM outlet_stocks
-  `);
-
-  // Bentuk dictionary agar mudah dibaca di frontend: map[item_id][outlet_id] = current_balance
-  const stockMatrix: Record<number, Record<number, number>> = {};
-  for (const row of outletStocksRes.rows) {
-    if (!stockMatrix[row.item_id]) stockMatrix[row.item_id] = {};
-    stockMatrix[row.item_id][row.outlet_id] = parseFloat(row.current_balance);
+  for (const r of inRes.rows) {
+    if (!inMap[r.item_id]) inMap[r.item_id] = {};
+    inMap[r.item_id][r.outlet_id] = parseFloat(r.total_in || '0');
+  }
+  for (const r of outRes.rows) {
+    if (!outMap[r.item_id]) outMap[r.item_id] = {};
+    outMap[r.item_id][r.outlet_id] = parseFloat(r.total_out || '0');
+  }
+  for (const r of cupsRes.rows) {
+    if (!cupsMap[r.item_id]) cupsMap[r.item_id] = {};
+    cupsMap[r.item_id][r.outlet_id] = parseFloat(r.cups_sold || '0');
+    if (!unitConsumedMap[r.item_id]) unitConsumedMap[r.item_id] = {};
+    unitConsumedMap[r.item_id][r.outlet_id] = parseFloat(r.unit_consumed || '0');
+  }
+  for (const r of outletStocksRes.rows) {
+    if (!balMap[r.item_id]) balMap[r.item_id] = {};
+    balMap[r.item_id][r.outlet_id] = parseFloat(r.current_balance || '0');
+  }
+  for (const r of opnameRes.rows) {
+    if (!opnameMap[r.item_id]) opnameMap[r.item_id] = {};
+    opnameMap[r.item_id][r.outlet_id] = {
+      opname_qty: parseFloat(r.opname_qty || '0'),
+      locked_at: r.locked_at,
+      in_since: parseFloat(r.in_since || '0'),
+      out_since: parseFloat(r.out_since || '0'),
+    };
   }
 
-  const catRes = await query<OutletMonitoringCategory>(`SELECT id, name FROM categories ORDER BY name ASC`);
+  const stockMatrix: Record<number, Record<number, OutletStockMatrixCell>> = {};
+  for (const item of itemsRes.rows) {
+    const ratio = Number(item.conversion_ratio) || 1;
+    stockMatrix[item.id] = {};
+    for (const o of outletsRes.rows) {
+      const inSmall = inMap[item.id]?.[o.id] || 0;
+      const outSmall = outMap[item.id]?.[o.id] || 0;
+      const cups = cupsMap[item.id]?.[o.id] || 0;
+      const unitConsumed = unitConsumedMap[item.id]?.[o.id] || 0;
+
+      const opnameData = opnameMap[item.id]?.[o.id] ?? null;
+
+      let balSmall: number;
+      let opnameQty = 0;
+      let opnameDate: string | null = null;
+      let hasOpname = false;
+      let inSince = 0;
+      let outSince = 0;
+
+      if (opnameData) {
+        // Jika ada opname terakhir:
+        // LIVE = opname_qty + IN(sejak opname) - OUT(sejak opname)
+        // Ini adalah "Titik Nol" dari sore sebelumnya, lalu ditambah/dikurangi gerakan berikutnya.
+        opnameQty = opnameData.opname_qty;
+        opnameDate = opnameData.locked_at;
+        hasOpname = true;
+        inSince = opnameData.in_since;
+        outSince = opnameData.out_since;
+        balSmall = opnameQty + inSince - outSince;
+      } else {
+        // Fallback jika belum pernah opname: gunakan current_balance dari outlet_stocks
+        balSmall = balMap[item.id]?.[o.id] ?? (inSmall - outSmall);
+      }
+
+      stockMatrix[item.id][o.id] = {
+        in_smallest: inSmall,
+        in_package: inSmall / ratio,
+        out_smallest: outSmall,
+        out_package: outSmall / ratio,
+        cups_sold: cups,
+        unit_consumed: unitConsumed,
+        opname_qty: opnameQty,
+        opname_qty_package: opnameQty / ratio,
+        opname_date: opnameDate,
+        has_opname: hasOpname,
+        in_since_opname: inSince,
+        out_since_opname: outSince,
+        stock_smallest: balSmall,
+        stock_package: balSmall / ratio
+      };
+    }
+  }
 
   return {
     outlets: outletsRes.rows,
@@ -254,3 +440,134 @@ export async function getOutletConsumptionSinceLastRestock(outletId: number): Pr
     period_start_date: sinceDateStr
   };
 }
+
+/**
+ * Transfer stok langsung 1-Paket dari Gudang Pusat ke Gudang Outlet (Tanpa 2 Kondisi Terpisah).
+ * Memotong inventory_logs (OUT) di gudang pusat dan menambah outlet_stocks / outlet_inventory_logs (IN) secara atomic.
+ */
+export async function directTransferStockToOutlet(
+  outletId: number,
+  items: { item_id: number; qty: number }[],
+  adminId: number,
+  notes?: string
+) {
+  return withTransaction(async (client) => {
+    if (!items || items.length === 0) {
+      throw new Error('Daftar barang tidak boleh kosong');
+    }
+
+    // 1. Verifikasi outlet
+    const outletRes = await client.query(
+      `SELECT id, name FROM outlets WHERE id = $1 AND type = 'STORE'`,
+      [outletId]
+    );
+    if (outletRes.rows.length === 0) {
+      throw new Error('Outlet tidak ditemukan');
+    }
+
+    for (const item of items) {
+      const qty = Number(item.qty) || 0;
+      if (qty <= 0) continue;
+
+      // STEP 1: Potong stok dari Gudang Pusat (inventory_logs)
+      const balRes = await client.query(
+        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [item.item_id]
+      );
+      const centralOldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
+      const centralNewBalance = centralOldBalance - qty;
+
+      await client.query(
+        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id, notes)
+         VALUES ($1, 'OUT', $2, $3, 'DIRECT_TRANSFER', $4, $5)`,
+        [item.item_id, -qty, centralNewBalance, outletId, notes || 'Transfer Langsung 1-Paket (Monitoring)']
+      );
+
+      // STEP 2: Tambahkan stok ke Gudang Outlet (outlet_stocks & outlet_inventory_logs)
+      const stockRes = await client.query(
+        `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
+        [outletId, item.item_id]
+      );
+
+      let outletOldBalance = 0;
+      if (stockRes.rows.length > 0) {
+        outletOldBalance = parseFloat(stockRes.rows[0].current_balance);
+        const outletNewBalance = outletOldBalance + qty;
+        await client.query(
+          `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() WHERE outlet_id = $2 AND item_id = $3`,
+          [outletNewBalance, outletId, item.item_id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
+          [outletId, item.item_id, qty]
+        );
+      }
+
+      const outletLogBalance = outletOldBalance + qty;
+      await client.query(
+        `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id, notes)
+         VALUES ($1, $2, 'IN', $3, $4, 'DIRECT_TRANSFER', $5, $6)`,
+        [outletId, item.item_id, qty, outletLogBalance, adminId, notes || 'Transfer Langsung 1-Paket (Monitoring)']
+      );
+    }
+
+    return { success: true };
+  });
+}
+
+export async function getPendingDOsForOutlet(outletId: number) {
+  const res = await query<{
+    id: number;
+    do_number: string;
+    status: string;
+    created_at: string;
+    notes: string;
+    items_count: string;
+  }>(`
+    SELECT 
+      dn.id, 
+      dn.delivery_note_number AS do_number, 
+      dn.status, 
+      dn.created_at, 
+      COALESCE(dn.notes, '') AS notes,
+      (SELECT COUNT(*) FROM delivery_note_items dni WHERE dni.delivery_note_id = dn.id)::TEXT AS items_count
+    FROM delivery_notes dn
+    WHERE dn.outlet_id = $1 AND dn.status = 'DIKIRIM'
+    ORDER BY dn.created_at ASC
+  `, [outletId]);
+  return res.rows;
+}
+
+export async function approveAllPendingDOsForOutlet(outletId: number, adminId: number) {
+  const pending = await getPendingDOsForOutlet(outletId);
+  let count = 0;
+  for (const dn of pending) {
+    await approveAndTransferDeliveryNote(dn.id, adminId);
+    count++;
+  }
+  return { success: true, count };
+}
+
+export async function approveAllPendingDOsAllOutlets(adminId: number) {
+  const res = await query<{
+    id: number;
+    do_number: string;
+    outlet_id: number;
+  }>(`
+    SELECT id, delivery_note_number AS do_number, outlet_id
+    FROM delivery_notes
+    WHERE status = 'DIKIRIM'
+    ORDER BY created_at ASC
+  `);
+
+  let count = 0;
+  const outletIds = new Set<number>();
+  for (const dn of res.rows) {
+    await approveAndTransferDeliveryNote(dn.id, adminId);
+    count++;
+    outletIds.add(dn.outlet_id);
+  }
+  return { success: true, count, outlets_count: outletIds.size };
+}
+

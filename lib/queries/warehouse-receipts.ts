@@ -92,10 +92,16 @@ export async function createGoodsReceipt(data: {
       const newValue = unitPriceInSmallestUnit * qtyInSmallestUnit;
       const newAvgPrice = newStock > 0 ? (oldValue + newValue) / newStock : 0;
 
-      // Update price cache in items
+      // Update price cache in items:
+      // - current_average_price: Moving Average (untuk HPP & laporan keuangan)
+      // - last_purchase_price: Harga beli terakhir per satuan terkecil (untuk pre-fill PO baru)
       await client.query(
-        `UPDATE items SET current_average_price = $1, updated_at = now() WHERE id = $2`,
-        [newAvgPrice, item.item_id]
+        `UPDATE items 
+         SET current_average_price = $1, 
+             last_purchase_price = $2, 
+             updated_at = now() 
+         WHERE id = $3`,
+        [newAvgPrice, unitPriceInSmallestUnit, item.item_id]
       );
       
       // Insert inventory log

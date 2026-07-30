@@ -21,7 +21,7 @@ async function getDashboardStats(role: string, outletId: number | null) {
         role === 'ADMIN_PUSAT' ? [] : [outletId]
       ),
       role === 'ADMIN_PUSAT' 
-        ? query(`SELECT COUNT(*)::int AS cnt FROM purchase_orders WHERE status IN ('DRAFT', 'RFQ_TERKIRIM')`) 
+        ? query(`SELECT COUNT(*)::int AS cnt FROM purchase_orders WHERE status IN ('RFQ', 'RFQ_TERKIRIM')`) 
         : Promise.resolve({ rows: [{ cnt: 0 }] }),
       query(`SELECT COUNT(*)::int AS cnt FROM items WHERE is_active = TRUE`),
       role === 'ADMIN_PUSAT' ? query(`SELECT COUNT(*)::int AS cnt FROM stock_alerts WHERE is_resolved = FALSE`) : Promise.resolve({ rows: [{ cnt: 0 }] }),
@@ -89,7 +89,7 @@ async function getIncomingPOs() {
       `SELECT po.id, po.po_number, v.name as vendor_name, po.order_deadline, po.status 
        FROM purchase_orders po 
        LEFT JOIN vendors v ON v.id = po.vendor_id 
-       WHERE po.status IN ('DRAFT', 'RFQ_TERKIRIM') 
+       WHERE po.status IN ('RFQ', 'RFQ_TERKIRIM') 
        ORDER BY po.order_deadline ASC NULLS LAST LIMIT 5`
     );
     return result.rows;

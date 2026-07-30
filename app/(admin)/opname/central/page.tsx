@@ -22,6 +22,7 @@ export default function CentralOpnamePage() {
   const [sessions, setSessions] = useState<OpnameSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [filterDate, setFilterDate] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -46,7 +47,7 @@ export default function CentralOpnamePage() {
         count_date: new Date().toISOString().split('T')[0],
         general_notes: 'Central Warehouse Stock Opname'
       };
-      
+
       const res = await fetch('/api/opname', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,22 +66,33 @@ export default function CentralOpnamePage() {
     }
   };
 
+  const filteredSessions = filterDate ? sessions.filter(s => s.count_date.startsWith(filterDate)) : sessions;
+
   return (
-    <section style={{ margin: '-16px -20px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)' }}>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)' }}>
+    <section className="screen">
+      <div className="card">
+        <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div>
-            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Stock Opname Pusat</h3>
+            <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Stock Opname Pusat</h3>
           </div>
-          <Button variant="primary" size="sm" onClick={handleStartOpname} disabled={creating}>
-            {creating ? 'Memulai...' : '+ Mulai Opname'}
-          </Button>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="date"
+              className="input"
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              style={{ fontSize: 13, height: 34, minWidth: 140 }}
+            />
+            <Button variant="primary" style={{ height: 34, padding: '0 16px', fontSize: 13, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }} onClick={handleStartOpname} disabled={creating}>
+              {creating ? 'Memulai...' : '+ Mulai Opname'}
+            </Button>
+          </div>
         </div>
-        
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+
+        <div className="card-body flush" style={{ overflowY: 'auto' }}>
           {loading ? (
             <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat riwayat opname...</div>
-          ) : sessions.length === 0 ? (
+          ) : filteredSessions.length === 0 ? (
             <div className="empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
               <h4>Belum ada riwayat opname</h4>
@@ -91,31 +103,31 @@ export default function CentralOpnamePage() {
             <Table>
               <thead>
                 <tr>
-                  <th style={{ padding: '12px 16px', fontSize: 10 }}>Tanggal Opname</th>
-                  <th style={{ padding: '12px 16px', fontSize: 10 }}>Waktu Mulai</th>
-                  <th style={{ padding: '12px 16px', fontSize: 10 }}>Terakhir Diubah</th>
-                  <th style={{ padding: '12px 16px', fontSize: 10 }}>Dilakukan Oleh</th>
-                  <th className="right" style={{ padding: '12px 16px', fontSize: 10 }}>Est. Biaya Pemakaian</th>
-                  <th className="center" style={{ padding: '12px 16px', fontSize: 10 }}>Status</th>
+                  <th>Tanggal Opname</th>
+                  <th>Waktu Mulai</th>
+                  <th>Terakhir Diubah</th>
+                  <th>Dilakukan Oleh</th>
+                  <th className="right">Est. Selisih Nilai</th>
+                  <th className="center">Status</th>
                 </tr>
               </thead>
-              <tbody>
-                {sessions.map(s => (
-                  <tr key={s.id} onClick={() => router.push(`/opname/central/${s.id}`)} className="hover-row" style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
-                    <td className="font-bold" style={{ padding: '12px 16px', fontSize: 11 }}>{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 11 }}>
+              <tbody style={{ fontSize: 13 }}>
+                {filteredSessions.map(s => (
+                  <tr key={s.id} onClick={() => router.push(`/opname/central/${s.id}`)} className="hover-row" style={{ cursor: 'pointer' }}>
+                    <td className="font-bold">{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
+                    <td className="muted">
                       {new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 11 }}>
+                    <td className="muted">
                       {new Date(s.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 11 }}>{s.pic_name}</td>
-                    <td className="right font-mono font-bold" style={{ padding: '12px 16px', fontSize: 11, color: Number(s.total_value) > 0 ? '#dc2626' : 'var(--muted)' }}>
-                      Rp {Number(s.total_value).toLocaleString('id-ID')}
+                    <td className="muted">{s.pic_name}</td>
+                    <td className="right font-mono font-bold" style={{ color: Number(s.total_value) > 0 ? '#016e3f' : Number(s.total_value) < 0 ? '#dc2626' : 'var(--muted)' }}>
+                      {Number(s.total_value) > 0 ? '+Rp ' : Number(s.total_value) < 0 ? '-Rp ' : 'Rp '}{Math.abs(Number(s.total_value)).toLocaleString('id-ID')}
                     </td>
-                    <td className="center" style={{ padding: '12px 16px' }}>
+                    <td className="center">
                       <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
-                        {s.status}
+                        {s.status === 'LOCKED' ? 'Selesai' : s.status === 'SUBMITTED' ? 'Diajukan' : s.status === 'DRAFT' ? 'Draf' : s.status}
                       </Badge>
                     </td>
                   </tr>

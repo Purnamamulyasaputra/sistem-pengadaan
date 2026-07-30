@@ -18,11 +18,11 @@ interface Outlet { id: number; name: string; is_active?: boolean; }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   RFQ: { label: 'RFQ', bg: '#f1f5f9', text: '#475569' },
-  RFQ_TERKIRIM: { label: 'RFQ Sent', bg: '#dbeafe', text: '#1d4ed8' },
+  RFQ_TERKIRIM: { label: 'RFQ Terkirim', bg: '#dbeafe', text: '#1d4ed8' },
   PURCHASE_ORDER: { label: 'Purchase Order', bg: '#e0e7ff', text: '#4338ca' },
-  DITERIMA_SEBAGIAN: { label: 'Partially Received', bg: '#fefce8', text: '#a16207' },
-  SELESAI: { label: 'Completed', bg: '#dcfce7', text: '#15803d' },
-  DIBATALKAN: { label: 'Cancelled', bg: '#fee2e2', text: '#b91c1c' },
+  DITERIMA_SEBAGIAN: { label: 'Diterima Sebagian', bg: '#fefce8', text: '#a16207' },
+  SELESAI: { label: 'Selesai', bg: '#dcfce7', text: '#15803d' },
+  DIBATALKAN: { label: 'Dibatalkan', bg: '#fee2e2', text: '#b91c1c' },
 };
 
 const fmtCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -46,7 +46,7 @@ export default function PurchaseOrdersPage() {
   const [form, setForm] = useState({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
   const [lines, setLines] = useState<{ type: string; item_id: string | number; description: string; qty: string | number; unit_price: string | number; tax_percent: string | number; disc_percent: string | number }[]>([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
   const [draftPO, setDraftPO] = useState<PO | null>(null);
-  const [activeTab, setActiveTab] = useState('Ingredients');
+  const [activeTab, setActiveTab] = useState('Bahan / Produk');
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [deliverToFocused, setDeliverToFocused] = useState(false);
 
@@ -109,9 +109,11 @@ export default function PurchaseOrdersPage() {
       if (data.success && data.data) {
         const suggestions = data.data;
         if (suggestions.length === 0) {
+          setToast({ isOpen: true, message: 'Saat ini tidak ada barang yang berada di bawah batas minimum (stok aman).', type: 'success' });
           return;
         }
 
+        setToast({ isOpen: true, message: `Berhasil menambahkan ${suggestions.length} barang ke dalam daftar.`, type: 'success' });
         setLines(current => {
           const valid = current.filter(l => l.description || l.item_id || (l.type === 'note' && l.description));
           const newLines = suggestions.map((a: any) => {
@@ -147,7 +149,13 @@ export default function PurchaseOrdersPage() {
   function handleItemTextChange(lineIdx: number, text: string) {
     const item = items.find(i => i.name === text);
     if (item) {
-      setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: String(item.id), description: text, unit_price: String(Math.round(item.current_average_price * (item.conversion_ratio || 1))), purchase_unit: item.purchase_unit || '', package_qty: '', package_inner_size: '', conversion_ratio: item.conversion_ratio ? String(item.conversion_ratio) : '' } : line));
+      // Pre-fill dari last_purchase_price (harga beli terakhir ke vendor).
+      // Fallback ke current_average_price (Moving Average) jika last_purchase_price belum ada.
+      const lastPrice = (item as any).last_purchase_price;
+      const prefillPricePerUnit = lastPrice && Number(lastPrice) > 0
+        ? Math.round(Number(lastPrice) * (item.conversion_ratio || 1))
+        : Math.round(item.current_average_price * (item.conversion_ratio || 1));
+      setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: String(item.id), description: text, unit_price: String(prefillPricePerUnit), purchase_unit: item.purchase_unit || '', package_qty: '', package_inner_size: '', conversion_ratio: item.conversion_ratio ? String(item.conversion_ratio) : '' } : line));
     } else {
       setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: '', description: text } : line));
     }
@@ -255,6 +263,7 @@ export default function PurchaseOrdersPage() {
     }));
 
     setLines(fetchedLines.length ? fetchedLines : [{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
+    setActiveTab('Bahan / Produk');
     setShowModal(true);
   }
 
@@ -470,9 +479,8 @@ export default function PurchaseOrdersPage() {
               setDraftPO(null);
               setForm({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
               setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' } as any]);
+              setActiveTab('Bahan / Produk');
               setShowModal(true);
-              // otomatis masukkan saran reorder
-              setTimeout(() => autoFillLowStock(), 100);
             }}>Buat PO</button>
           </div>
 
@@ -670,7 +678,7 @@ export default function PurchaseOrdersPage() {
 
           <div style={{ padding: '24px 24px 0', display: 'flex', alignItems: 'center', gap: 16, background: '#fff' }}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-            <h1 style={{ fontSize: 32, fontWeight: 800, color: 'var(--primary)', margin: 0, lineHeight: 1 }}>{draftPO ? draftPO.po_number : 'New'}</h1>
+            <h1 style={{ fontSize: 32, fontWeight: 800, color: 'var(--primary)', margin: 0, lineHeight: 1 }}>{draftPO ? draftPO.po_number : 'PO Baru'}</h1>
             <div style={{ flex: 1 }} />
 
           </div>
@@ -877,9 +885,10 @@ export default function PurchaseOrdersPage() {
                       </div>
 
                       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>Tambah bahan/produk</button>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }}>Tambah bagian</button>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600 }} onClick={addNote}>Tambah catatan</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>+ Produk</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={autoFillLowStock}>+ Auto-fill Stok</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }}>+ Bagian</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addNote}>+ Catatan</button>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', marginTop: 32 }}>

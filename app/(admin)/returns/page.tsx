@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
-import { AlertOctagon, Check, X, Image as ImageIcon } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { Image as ImageIcon } from 'lucide-react';
 
 interface ReturnIssue {
   id: number;
@@ -16,7 +16,6 @@ interface ReturnIssue {
   qty_issue: number | string;
   qty_shipped: number | string;
   purchase_unit: string;
-  smallest_unit?: string;
   conversion_ratio: number | string | null;
   reason: string;
   photo_url: string | null;
@@ -29,54 +28,85 @@ export default function ReturnsPage() {
   const router = useRouter();
   const [issues, setIssues] = useState<ReturnIssue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'PENDING' | 'RESOLVED'>('PENDING');
   const [resolvingId, setResolvingId] = useState<number | null>(null);
-
-  const [confirmState, setConfirmState] = useState<{ isOpen: boolean; id: number | null; action: 'REPLACE' | 'WRITE_OFF' | null; notes: string }>({ isOpen: false, id: null, action: null, notes: '' });
+  const [pendingCount, setPendingCount] = useState(0); // selalu jumlah PENDING, tidak berubah saat pindah tab
+  const [newCount, setNewCount] = useState(0); // jumlah tiket baru sejak halaman dibuka
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean; id: number | null; action: 'REPLACE' | 'WRITE_OFF' | null; notes: string;
+  }>({ isOpen: false, id: null, action: null, notes: '' });
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const lastCountRef = useRef<number | null>(null);
 
-  const fetchIssues = async () => {
+  const fetchIssues = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/delivery-note-issues?status=${activeTab}`);
-      if (!res.ok) throw new Error('Gagal mengambil data tiket retur');
+      const res = await fetch(`/api/delivery-note-issues?status=${activeTab}`, { cache: 'no-store' });
       const data = await res.json();
-      setIssues(data);
-    } catch (err: unknown) {
-      setError((err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
-  };
+      const list = Array.isArray(data) ? data : [];
+      setIssues(list);
+      if (activeTab === 'PENDING') {
+        setPendingCount(list.length);
+        lastCountRef.current = list.length;
+      }
+    } catch { setIssues([]); }
+    finally { setLoading(false); }
+  }, [activeTab]);
+
+  // Silent refresh tanpa loading spinner — hanya untuk tab PENDING
+  const fetchIssuesSilent = useCallback(async () => {
+    try {
+      const res = await fetch('/api/delivery-note-issues?status=PENDING', { cache: 'no-store' });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : [];
+      // Deteksi tiket baru
+      if (lastCountRef.current !== null && list.length > lastCountRef.current) {
+        setNewCount(prev => prev + (list.length - lastCountRef.current!));
+      }
+      lastCountRef.current = list.length;
+      setPendingCount(list.length); // selalu update count badge PENDING
+      // Update daftar hanya jika sedang di tab PENDING
+      if (activeTab === 'PENDING') setIssues(list);
+    } catch { /* abaikan */ }
+  }, [activeTab]);
 
   useEffect(() => {
+    setNewCount(0);
     fetchIssues();
-  }, [activeTab]);
+  }, [fetchIssues]);
+
+  // Polling real-time setiap 15 detik + saat tab kembali aktif
+  useEffect(() => {
+    const interval = setInterval(fetchIssuesSilent, 15000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchIssuesSilent();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchIssuesSilent]);
 
   const handleResolve = async () => {
     if (!confirmState.id || !confirmState.action) return;
     setResolvingId(confirmState.id);
-    setConfirmState({ ...confirmState, isOpen: false });
-
+    setConfirmState(s => ({ ...s, isOpen: false }));
     try {
       const res = await fetch(`/api/delivery-note-issues/${confirmState.id}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: confirmState.action, notes: confirmState.notes })
+        body: JSON.stringify({ action: confirmState.action, notes: confirmState.notes }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Gagal memproses tiket');
-      
       if (confirmState.action === 'REPLACE' && data.new_dn_id) {
         router.push(`/delivery-orders/${data.new_dn_id}`);
-        return; // do not refresh or clear loading state, let the navigation take over
+        return;
       }
-
-      // refresh
       await fetchIssues();
     } catch (err: unknown) {
-      alert((err instanceof Error ? err.message : 'Unknown error'));
+      alert(err instanceof Error ? err.message : 'Error');
     } finally {
       setResolvingId(null);
     }
@@ -85,185 +115,205 @@ export default function ReturnsPage() {
   return (
     <section className="screen">
       <div className="card">
-        <div className="card-head" style={{ padding: '16px 20px', borderBottom: 'none' }}>
-          <div>
-            <h3 className="flex items-center gap-2 text-gray-900" style={{ fontSize: '15px', margin: 0 }}>
-              <AlertOctagon className="text-red-600" size={16} />
-              Tiket Masalah / Retur
-            </h3>
-            <p className="text-gray-500 mt-1" style={{ fontSize: '12px', margin: '4px 0 0 0' }}>Kelola laporan barang rusak/kurang dari outlet</p>
+        {/* Tabs */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
+          <div style={{ display: 'flex' }}>
+            {(['PENDING', 'RESOLVED'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  background: 'none', border: 'none',
+                  borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent',
+                  padding: '12px 14px', fontSize: 12,
+                  fontWeight: activeTab === tab ? 700 : 400,
+                  color: activeTab === tab ? 'var(--primary)' : 'var(--muted)',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {tab === 'PENDING' ? 'Menunggu Tindakan' : 'Riwayat'}
+                {tab === 'PENDING' && pendingCount > 0 && (
+                  <span style={{
+                    background: '#ef4444', color: '#fff',
+                    borderRadius: 99, fontSize: 10, fontWeight: 700,
+                    padding: '0px 5px', lineHeight: '16px', display: 'inline-block',
+                  }}>
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          {/* Indikator live & notif tiket baru */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {newCount > 0 && (
+              <span style={{
+                fontSize: 11, color: '#dc2626', fontWeight: 600,
+                background: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: 6, padding: '3px 8px',
+              }}>
+                {newCount} tiket baru masuk
+              </span>
+            )}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--muted)' }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: '#22c55e',
+                display: 'inline-block',
+                boxShadow: '0 0 0 2px #bbf7d0',
+                animation: 'pulse 2s infinite',
+              }} />
+              Live
+            </span>
           </div>
         </div>
 
-        <div className="tabs" style={{ marginBottom: 0, padding: '0 20px', borderBottom: '1px solid var(--border)' }}>
-          <button 
-            className={`tab ${activeTab === 'PENDING' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('PENDING')}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'PENDING' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 12, fontWeight: activeTab === 'PENDING' ? 600 : 500, color: activeTab === 'PENDING' ? 'var(--primary)' : 'var(--muted)' }}
-          >
-            Menunggu Tindakan
-          </button>
-          <button 
-            className={`tab ${activeTab === 'RESOLVED' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('RESOLVED')}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'RESOLVED' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 12, fontWeight: activeTab === 'RESOLVED' ? 600 : 500, color: activeTab === 'RESOLVED' ? 'var(--primary)' : 'var(--muted)' }}
-          >
-            Riwayat Selesai
-          </button>
-        </div>
+        {/* Table */}
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Memuat...</div>
+        ) : issues.length === 0 ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+            {activeTab === 'PENDING' ? 'Tidak ada laporan masalah saat ini.' : 'Belum ada riwayat tindakan.'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Surat Jalan</th>
+                  <th>Item</th>
+                  <th>Masalah</th>
+                  {activeTab === 'RESOLVED' && <th>Resolusi</th>}
+                  <th style={{ textAlign: 'center', width: 70 }}>Foto</th>
+                  {activeTab === 'PENDING' && <th style={{ textAlign: 'right', width: 200 }}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {issues.map(issue => {
+                  const conv = Number(issue.conversion_ratio) || 1;
+                  const qtyIssue = (Number(issue.qty_issue) / conv).toLocaleString('id-ID');
+                  const qtyShipped = (Number(issue.qty_shipped) / conv).toLocaleString('id-ID');
+                  const photo = issue.photo_url || issue.dn_proof_url;
+                  const tgl = new Date(issue.reported_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                  const jam = new Date(issue.reported_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-        <div className="card-body p-0">
-          {error && (
-            <div className="bg-red-50 text-red-700 p-3 m-4 rounded border border-red-200 text-sm">
-              {error}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="p-6 text-center text-gray-500 text-sm">Memuat data...</div>
-          ) : issues.length === 0 ? (
-            <div className="p-8 text-center flex flex-col items-center justify-center">
-              <div className="w-10 h-10 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-3">
-                <Check size={20} />
-              </div>
-              <h4 className="font-semibold text-gray-900 m-0" style={{ fontSize: '15px' }}>Semua Aman!</h4>
-              <p className="text-gray-500 text-sm mt-1">
-                {activeTab === 'PENDING' ? 'Tidak ada laporan barang bermasalah dari outlet saat ini.' : 'Belum ada riwayat tiket yang diselesaikan.'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <thead>
-                  <tr>
-                    <th>Laporan</th>
-                    <th>Ref. Surat Jalan</th>
-                    <th>Barang (Dikirim)</th>
-                    <th>Detail Masalah</th>
-                    {activeTab === 'RESOLVED' ? <th>Resolusi</th> : null}
-                    <th className="text-center">Foto Bukti</th>
-                    {activeTab === 'PENDING' ? <th className="text-right">Aksi Tindakan</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {issues.map(issue => {
-                    const conv = Number(issue.conversion_ratio) || 1;
-
-                    const qtyShipped = Number(issue.qty_shipped) / conv;
-                    const qtyIssue = Number(issue.qty_issue) / conv;
-
-                    const displayPhoto = issue.photo_url || issue.dn_proof_url;
-
-                    return (
-                      <tr key={issue.id}>
+                  return (
+                    <tr key={issue.id}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{tgl}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{jam} WIB</div>
+                      </td>
+                      <td>
+                        <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: 'var(--primary)' }}>
+                          {issue.delivery_note_number}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{issue.outlet_name}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{issue.item_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>Dikirim: {qtyShipped} {issue.purchase_unit}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#dc2626' }}>
+                          {qtyIssue} {issue.purchase_unit}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 200 }}>{issue.reason}</div>
+                      </td>
+                      {activeTab === 'RESOLVED' && (
                         <td>
-                          <div className="font-semibold text-[12px] text-gray-900">{new Date(issue.reported_at).toLocaleDateString('id-ID')}</div>
-                          <div className="text-[10px] text-gray-500 mt-1">{new Date(issue.reported_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</div>
-                        </td>
-                        <td>
-                          <div className="font-mono text-primary font-bold text-[12px]">{issue.delivery_note_number}</div>
-                          <div className="text-[10px] text-gray-600 mt-1">{issue.outlet_name}</div>
-                        </td>
-                        <td>
-                          <div className="font-semibold text-[12px] text-gray-900">{issue.item_name}</div>
-                          <div className="text-[10px] text-gray-500 mt-1">Dikirim: {qtyShipped.toLocaleString('id-ID')} {issue.purchase_unit}</div>
-                        </td>
-                        <td>
-                          <div className="text-[12px] font-bold text-gray-900 mb-0.5">
-                            {qtyIssue.toLocaleString('id-ID')} {issue.purchase_unit}
-                          </div>
-                          <div className="text-[10px] text-gray-600 max-w-[180px] leading-snug">
-                            <span className="font-medium text-gray-500">Catatan:</span> {issue.reason}
-                          </div>
-                        </td>
-                        {activeTab === 'RESOLVED' ? (
-                          <td>
-                            <div className={`font-semibold text-[12px] ${issue.status === 'APPROVED_REPLACE' ? 'text-primary' : 'text-amber-600'}`}>
-                              {issue.status === 'APPROVED_REPLACE' ? 'Ganti Barang' : 'Catat Kerugian'}
-                            </div>
-                            <div className="text-[10px] text-gray-500 mt-1 max-w-[180px] leading-snug">
-                              {(issue as any).resolution_notes || '-'}
-                            </div>
-                          </td>
-                        ) : null}
-                        <td className="text-center">
-                          {displayPhoto ? (
-                            <button onClick={() => setPreviewPhoto(displayPhoto)} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2 py-1 rounded border border-gray-200 hover:bg-gray-200 transition-colors text-[10px] font-semibold">
-                              <ImageIcon size={11} /> Buka Foto
-                            </button>
-                          ) : (
-                            <span className="text-gray-400 text-[10px] italic">Tidak ada foto</span>
+                          <span style={{
+                            fontSize: 11, fontWeight: 600,
+                            color: issue.status === 'APPROVED_REPLACE' ? 'var(--primary)' : '#92400e',
+                          }}>
+                            {issue.status === 'APPROVED_REPLACE' ? 'Ganti Barang' : 'Catat Kerugian'}
+                          </span>
+                          {(issue as any).resolution_notes && (
+                            <div style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 180 }}>{(issue as any).resolution_notes}</div>
                           )}
                         </td>
-                        {activeTab === 'PENDING' ? (
-                          <td className="text-right whitespace-nowrap">
-                            <div className="flex justify-end gap-1.5">
-                              <Button
-                                variant="outline" size="sm"
-                                onClick={() => setConfirmState({ isOpen: true, id: issue.id, action: 'WRITE_OFF', notes: '' })}
-                                disabled={resolvingId === issue.id}
-                                style={{ fontSize: '10px', padding: '2px 6px', height: 'auto' }}
-                              >
-                                Catat Kerugian
-                              </Button>
-                              <Button
-                                variant="primary" size="sm"
-                                onClick={() => setConfirmState({ isOpen: true, id: issue.id, action: 'REPLACE', notes: '' })}
-                                disabled={resolvingId === issue.id}
-                                style={{ fontSize: '10px', padding: '2px 6px', height: 'auto' }}
-                              >
-                                Ganti Barang
-                              </Button>
-                            </div>
-                          </td>
-                        ) : null}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </div>
-          )}
-        </div>
+                      )}
+                      <td style={{ textAlign: 'center' }}>
+                        {photo ? (
+                          <button
+                            onClick={() => setPreviewPhoto(photo)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              background: 'none', border: '1px solid var(--border)',
+                              borderRadius: 5, padding: '3px 8px', fontSize: 11,
+                              color: 'var(--text)', cursor: 'pointer',
+                            }}
+                          >
+                            <ImageIcon size={10} /> Lihat
+                          </button>
+                        ) : <span style={{ fontSize: 11, color: 'var(--muted)' }}>—</span>}
+                      </td>
+                      {activeTab === 'PENDING' && (
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                            <Button
+                              variant="outline" size="sm"
+                              onClick={() => setConfirmState({ isOpen: true, id: issue.id, action: 'WRITE_OFF', notes: '' })}
+                              disabled={resolvingId === issue.id}
+                              style={{ fontSize: 11, padding: '3px 10px', height: 'auto' }}
+                            >
+                              Catat Kerugian
+                            </Button>
+                            <Button
+                              variant="primary" size="sm"
+                              onClick={() => setConfirmState({ isOpen: true, id: issue.id, action: 'REPLACE', notes: '' })}
+                              disabled={resolvingId === issue.id}
+                              style={{ fontSize: 11, padding: '3px 10px', height: 'auto' }}
+                            >
+                              Ganti Barang
+                            </Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </div>
+        )}
       </div>
 
-      <Modal 
-        isOpen={confirmState.isOpen} 
-        onClose={() => setConfirmState({ ...confirmState, isOpen: false })} 
-        title={confirmState.action === 'REPLACE' ? 'Konfirmasi Penggantian Barang' : 'Konfirmasi Pencatatan Kerugian'}
+      {/* Modal Konfirmasi */}
+      <Modal
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState(s => ({ ...s, isOpen: false }))}
+        title={confirmState.action === 'REPLACE' ? 'Ganti Barang' : 'Catat Kerugian'}
+        maxWidth={440}
       >
         <div style={{ padding: '16px 20px' }}>
-          <p style={{ margin: '0 0 16px 0', color: '#475569', fontSize: 14 }}>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
             {confirmState.action === 'REPLACE'
-              ? 'Sistem akan otomatis membuat draft Surat Jalan baru untuk mengganti barang ini. Lanjutkan?'
-              : 'Barang yang rusak ini akan dianggap sebagai penyusutan (write-off) dalam pengiriman dan tidak akan diganti. Lanjutkan?'}
+              ? 'Surat Jalan baru akan otomatis dibuat untuk mengganti barang ini. Lanjutkan?'
+              : 'Barang akan dicatat sebagai write-off dan tidak akan diganti. Lanjutkan?'}
           </p>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 6 }}>
-              Catatan Tindakan (Opsional)
-            </label>
-            <textarea
-              className="input"
-              rows={3}
-              placeholder="Tuliskan catatan mengapa kerugian atau penggantian ini dilakukan..."
-              value={confirmState.notes}
-              onChange={(e) => setConfirmState({ ...confirmState, notes: e.target.value })}
-              style={{ width: '100%', resize: 'vertical' }}
-            />
-          </div>
+          <textarea
+            className="input"
+            rows={2}
+            placeholder="Catatan (opsional)"
+            value={confirmState.notes}
+            onChange={e => setConfirmState(s => ({ ...s, notes: e.target.value }))}
+            style={{ width: '100%', resize: 'none', fontSize: 13, marginBottom: 14 }}
+          />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Button variant="outline" onClick={() => setConfirmState({ ...confirmState, isOpen: false })}>Batal</Button>
-            <Button variant="primary" onClick={handleResolve} disabled={resolvingId === confirmState.id}>
-              {resolvingId === confirmState.id ? 'Memproses...' : 'Konfirmasi'}
+            <Button variant="outline" onClick={() => setConfirmState(s => ({ ...s, isOpen: false }))}>Batal</Button>
+            <Button variant="primary" onClick={handleResolve} disabled={resolvingId !== null}>
+              {resolvingId !== null ? 'Memproses...' : 'Konfirmasi'}
             </Button>
           </div>
         </div>
       </Modal>
 
+      {/* Modal Foto */}
       <Modal isOpen={!!previewPhoto} onClose={() => setPreviewPhoto(null)} title="Foto Bukti" maxWidth={500}>
         {previewPhoto && (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', height: '400px', width: '100%', backgroundColor: '#f8fafc' }}>
-            <img src={previewPhoto} alt="Bukti Masalah" style={{ width: '100%', height: '100%', borderRadius: '8px', objectFit: 'contain' }} />
+          <div style={{ padding: 16, background: '#f8fafc', display: 'flex', justifyContent: 'center' }}>
+            <img src={previewPhoto} alt="Bukti" style={{ maxWidth: '100%', maxHeight: 400, borderRadius: 6, objectFit: 'contain' }} />
           </div>
         )}
       </Modal>

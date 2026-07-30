@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, use } from 'react';
+
 import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
@@ -95,9 +96,11 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
   const [confirmBulk, setConfirmBulk] = useState<{ open: boolean; type: 'OUT' | 'IN' | null }>({ open: false, type: null });
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmShipAll, setConfirmShipAll] = useState(false);
+  const [confirmApprove, setConfirmApprove] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState(false);
   const [requireBarcode, setRequireBarcode] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dnStatusRef = useRef<string | null>(null);
 
   const fetchDn = useCallback(async () => {
     setLoading(true);
@@ -105,10 +108,10 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
       fetch(`/api/delivery-notes/${id}`),
       fetch('/api/settings')
     ]);
-
     if (res.ok) {
       const data = await res.json();
       setDn(data.data);
+      dnStatusRef.current = data.data?.status ?? null;
     }
     if (setRes.ok) {
       const setData = await setRes.json();
@@ -117,7 +120,39 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
     setLoading(false);
   }, [id]);
 
+  // Silent refresh tanpa loading spinner — untuk polling real-time
+  const fetchDnSilent = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/delivery-notes/${id}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setDn(data.data);
+        dnStatusRef.current = data.data?.status ?? null;
+      }
+    } catch { /* abaikan error polling */ }
+  }, [id]);
+
   useEffect(() => { fetchDn(); }, [fetchDn]);
+
+  // Polling real-time: refresh setiap 3 detik dan saat tab kembali aktif
+  // Berhenti otomatis jika DO sudah final (DITERIMA)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (dnStatusRef.current !== 'DITERIMA') fetchDnSilent();
+    }, 3000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && dnStatusRef.current !== 'DITERIMA') {
+        fetchDnSilent();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchDnSilent]);
 
   // Keep focus on input for physical barcode scanner guns
   useEffect(() => {
@@ -208,6 +243,24 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
     setScanning(true);
     try {
       const res = await fetch(`/api/delivery-notes/${id}/ship-all`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+
+      setScanMessage({ type: 'success', text: data.message });
+      await fetchDn();
+    } catch (err: unknown) {
+      setScanMessage({ type: 'error', text: (err instanceof Error ? err.message : 'Unknown error') });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleApproveAndTransfer = async () => {
+    setConfirmApprove(false);
+    setScanning(true);
+    setScanMessage(null);
+    try {
+      const res = await fetch(`/api/delivery-notes/${id}/approve-transfer`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
@@ -325,16 +378,25 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
           {dn.status === 'DIKIRIM' && (
             <div style={{ padding: 24, background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-              <h4 style={{ marginBottom: 12 }}>Pemindai Barcode (IN) - Outlet</h4>
-              <div style={{ padding: '12px 16px', background: '#e0f2fe', color: '#0369a1', borderRadius: 6, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center' }}>
+              <h4 style={{ marginBottom: 12 }}>Approve & Transfer Stok (Pusat ➔ Outlet)</h4>
+              <div style={{ padding: '12px 16px', background: '#ecfdf5', color: '#065f46', borderRadius: 6, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8, flexShrink: 0 }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                <span><strong>Status: DIKIRIM (Dalam Perjalanan).</strong> Menunggu Outlet Tujuan untuk menerima barang dan melakukan Scan IN.</span>
+                <span><strong>Status: DIKIRIM (Dalam Perjalanan).</strong> Tekan tombol di bawah untuk menyetujui seluruh barang, mengurangi stok Gudang Pusat, dan menambahkan stok ke Gudang Outlet secara otomatis dalam 1 transaksi.</span>
               </div>
 
-              <div style={{ display: 'flex', gap: 12, maxWidth: 600 }}>
-                <Button type="button" variant="primary" onClick={() => setConfirmBulk({ open: true, type: 'IN' })} disabled={scanning} style={{ display: 'flex', alignItems: 'center' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                  Validasi Semua Diterima (Lewati)
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <Button 
+                  type="button" 
+                  variant="primary" 
+                  onClick={() => setConfirmApprove(true)} 
+                  disabled={scanning} 
+                  style={{ display: 'flex', alignItems: 'center', background: '#016e3f', color: '#fff', border: 'none', fontWeight: 600 }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  {scanning ? 'Memproses Transfer...' : 'Approve & Transfer Stok (Pusat ➔ Outlet)'}
                 </Button>
               </div>
             </div>
@@ -473,6 +535,15 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
         message="Apakah Anda yakin ingin langsung mengirim?"
         onConfirm={handleShipAll}
         onCancel={() => setConfirmShipAll(false)}
+        loading={scanning}
+      />
+
+      <ConfirmDialog
+        open={confirmApprove}
+        title="Approve & Transfer Stok"
+        message="Setujui pengiriman barang ke outlet ini?"
+        onConfirm={handleApproveAndTransfer}
+        onCancel={() => setConfirmApprove(false)}
         loading={scanning}
       />
 

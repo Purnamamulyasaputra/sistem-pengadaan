@@ -20,7 +20,7 @@ interface CombinedStock {
   current_average_price: string;
 }
 
-export function CombinedStockView({ categories = [] }: { categories?: {id: number, name: string}[] }) {
+export function CombinedStockView({ categories = [] }: { categories?: { id: number, name: string }[] }) {
   const [data, setData] = useState<CombinedStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -51,23 +51,23 @@ export function CombinedStockView({ categories = [] }: { categories?: {id: numbe
     // Search
     const matchSearch = item.item_name.toLowerCase().includes(search.toLowerCase());
     if (!matchSearch) return false;
-    
+
     // Category
-    if (filterCategory !== 'ALL' && item.category_id !== Number(filterCategory)) return false;
-    
+    if (filterCategory !== 'ALL' && String(item.category_id) !== filterCategory) return false;
+
     // Status
     if (filterStatus !== 'ALL') {
       const central = Number(item.central_stock);
       const outlet = Number(item.outlet_stock);
       const total = central + outlet;
-      
+
       let status = 'AMAN';
       const minStock = Number(item.minimum_threshold);
       if (minStock > 0) {
         if (total <= minStock) status = 'KRITIS';
         else if (total <= minStock * 1.5) status = 'MENIPIS';
       }
-      
+
       if (filterStatus === 'KRITIS' && (status === 'KRITIS' || status === 'MENIPIS')) {
         return true;
       }
@@ -76,7 +76,7 @@ export function CombinedStockView({ categories = [] }: { categories?: {id: numbe
       }
       return false;
     }
-    
+
     return true;
   });
 
@@ -132,7 +132,7 @@ export function CombinedStockView({ categories = [] }: { categories?: {id: numbe
                 style={{ width: 180, padding: '6px 12px 6px 30px', fontSize: 12 }}
               />
             </div>
-            <Select 
+            <Select
               value={filterCategory}
               onChange={(val) => setFilterCategory(String(val))}
               options={[
@@ -141,12 +141,12 @@ export function CombinedStockView({ categories = [] }: { categories?: {id: numbe
               ]}
               style={{ width: 160 }}
             />
-            <Select 
+            <Select
               value={filterStatus}
               onChange={(val) => setFilterStatus(String(val))}
               options={[
                 { value: 'ALL', label: 'Semua Kondisi' },
-                { value: 'KRITIS', label: 'Stok Kritis/Menipis' },
+                { value: 'KRITIS', label: 'Stok Menipis' },
                 { value: 'AMAN', label: 'Stok Aman' }
               ]}
               style={{ width: 160 }}
@@ -169,7 +169,7 @@ export function CombinedStockView({ categories = [] }: { categories?: {id: numbe
                 <Table>
                   <thead>
                     <tr>
-                      <th style={{ minWidth: 200, whiteSpace: 'nowrap' }}>Nama Barang</th>
+                      <th style={{ minWidth: 150, maxWidth: 200 }}>Bahan / Produk</th>
                       <th style={{ whiteSpace: 'nowrap' }}>Kategori</th>
                       <th className="right" style={{ whiteSpace: 'nowrap' }}>Stok Pusat</th>
                       <th className="right" style={{ whiteSpace: 'nowrap' }}>Nilai Pusat (Rp)</th>
@@ -219,7 +219,7 @@ export function CombinedStockView({ categories = [] }: { categories?: {id: numbe
 
                       return (
                         <tr key={item.id}>
-                          <td className="font-bold" style={{ whiteSpace: 'nowrap' }}>{item.item_name}</td>
+                          <td className="font-bold" style={{ whiteSpace: 'normal', wordWrap: 'break-word', maxWidth: 200 }}>{item.item_name}</td>
                           <td className="muted" style={{ whiteSpace: 'nowrap' }}>{item.category_name}</td>
                           <td className="right">{fmt(central)}</td>
                           <td className="right">{fmtRupiah(valPusat)}</td>
