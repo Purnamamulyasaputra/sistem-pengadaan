@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       purchase_order_id: body.purchase_order_id,
       vendor_delivery_note: body.vendor_delivery_note,
       received_by: session.userId,
+      received_date: body.received_date,
       items: body.items,
     });
     

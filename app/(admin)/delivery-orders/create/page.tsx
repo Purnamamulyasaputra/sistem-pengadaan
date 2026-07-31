@@ -15,6 +15,7 @@ interface RawOrderItem {
   item_id: number;
   item_name: string;
   item_status: string;
+  purchase_unit?: string;
   smallest_unit?: string;
   conversion_ratio?: string | number;
   qty_request: number;
@@ -136,12 +137,7 @@ export default function CreateDeliveryOrderPage() {
       setTargetOutletId(String(selected.outlet_id));
       setOrderItems(selected.items.map((i: RawOrderItem) => ({
         ...i,
-        qty_shipped: (() => {
-          const u = (String(i.smallest_unit || '')).toLowerCase();
-          const ratio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
-          const inSmallest = i.qty_request * (Number(i.conversion_ratio) || 1);
-          return parseFloat(Number(inSmallest / ratio).toFixed(3));
-        })(),
+        qty_shipped: i.qty_request,
         current_stock: parseFloat(String(i.current_stock ?? '0')),
         selected: i.item_status === 'READY_DI_GUDANG',
         keterangan: ''
@@ -266,7 +262,7 @@ export default function CreateDeliveryOrderPage() {
     });
     if (overStockItems.length > 0) {
       const names = overStockItems.map(i => i.item_name).join(', ');
-      setError(`Stok tidak mencukupi untuk: ${names}.`);
+      setError(`Stok tidak mencukupi untuk: ${names}. (Atau stok sedang direservasi untuk pesanan lain. Coba muat ulang halaman untuk update realtime).`);
       return;
     }
 
@@ -426,12 +422,12 @@ export default function CreateDeliveryOrderPage() {
                 </thead>
                 <tbody>
                   {orderItems.map(item => {
-                    const u = (String(item.smallest_unit || '')).toLowerCase();
-                    const centralRatio = (u === 'ml' || u === 'gr' || u === 'g') ? 1000 : 1;
-                    const centralUnit = u === 'ml' ? 'Liter' : (u === 'gr' || u === 'g') ? 'Kg' : item.smallest_unit;
+                    const ratio = parseFloat(String(item.conversion_ratio || '1'));
                     const parsedQty = parseLocalNumber(item.qty_shipped);
-                    const roundedStock = parseFloat((item.current_stock / centralRatio).toFixed(3));
+                    const roundedStock = parseFloat((item.current_stock / ratio).toFixed(3));
                     const isExceeded = parsedQty > roundedStock;
+                    const unitLabel = item.purchase_unit || item.smallest_unit || '';
+
                     return (
                       <tr
                         key={String(item.order_item_id)}
@@ -463,11 +459,17 @@ export default function CreateDeliveryOrderPage() {
                           ) : (
                             <>
                               <div>{item.item_name}</div>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--foreground)' }}>{unitLabel}</span>
                             </>
                           )}
                         </td>
                         <td className="center num font-bold">
-                          {parseFloat(Number((item.qty_request * (Number(item.conversion_ratio) || 1)) / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
+                          {parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {unitLabel}
+                          {ratio > 1 && (
+                            <div className="muted" style={{ fontSize: 11, marginTop: 4, fontWeight: 500 }}>
+                              ({(parseFloat(Number(item.qty_request).toFixed(3)) * ratio).toLocaleString('id-ID')} {item.smallest_unit})
+                            </div>
+                          )}
                         </td>
                         <td className="center">
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
@@ -486,11 +488,21 @@ export default function CreateDeliveryOrderPage() {
                                 color: isExceeded ? 'var(--danger)' : 'inherit'
                               }}
                             />
-                            <span className="muted font-bold" style={{ fontSize: 12, width: 35, textAlign: 'left' }}>{centralUnit}</span>
+                            <span className="muted font-bold" style={{ fontSize: 12, width: 35, textAlign: 'left' }}>{unitLabel}</span>
                           </div>
+                          {ratio > 1 && (
+                            <div className="muted" style={{ fontSize: 11, marginTop: 4, fontWeight: 500, textAlign: 'center' }}>
+                              ({(parsedQty * ratio).toLocaleString('id-ID')} {item.smallest_unit})
+                            </div>
+                          )}
                         </td>
                         <td className="center num font-bold" style={{ color: isExceeded ? 'var(--danger)' : 'var(--muted)' }}>
-                          {parseFloat((item.current_stock / centralRatio).toFixed(3)).toLocaleString('id-ID')} {centralUnit}
+                          {roundedStock.toLocaleString('id-ID')} {unitLabel}
+                          {ratio > 1 && (
+                            <div style={{ fontSize: 11, marginTop: 4, fontWeight: 500, color: isExceeded ? 'var(--danger)' : 'var(--muted)' }}>
+                              ({item.current_stock.toLocaleString('id-ID')} {item.smallest_unit})
+                            </div>
+                          )}
                         </td>
                         <td className="center">
                           <input

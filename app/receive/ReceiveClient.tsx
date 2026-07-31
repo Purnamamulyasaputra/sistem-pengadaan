@@ -126,7 +126,7 @@ export default function PublicReceiveClient() {
       formData.append('items', JSON.stringify(items.map(i => ({
         delivery_note_item_id: i.delivery_note_item_id,
         order_item_id: i.order_item_id,
-        qty_received: i.qty_received_display * i.ratio,
+        qty_received: i.qty_received_display,
         receive_notes: i.receive_notes,
         has_issue: i.has_issue,
         qty_issue: i.qty_issue,

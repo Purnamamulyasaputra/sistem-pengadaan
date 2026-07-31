@@ -50,7 +50,7 @@ export async function createDeliveryNote(data: {
     for (const item of data.items) {
       // Validate physical stock
       const balRes = await client.query(
-        `SELECT log.ending_balance, i.name as item_name, i.smallest_unit 
+        `SELECT log.ending_balance, i.name as item_name, i.smallest_unit, i.purchase_unit, i.conversion_ratio 
          FROM inventory_logs log
          JOIN items i ON i.id = log.item_id 
          WHERE log.item_id = $1 
@@ -59,11 +59,12 @@ export async function createDeliveryNote(data: {
       );
       const currentStock = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
       const itemName = balRes.rows[0]?.item_name ?? 'Unknown Item';
-      const smallestUnit = (balRes.rows[0]?.smallest_unit || '').toLowerCase();
+      const smallestUnit = balRes.rows[0]?.smallest_unit ?? '';
+      const purchaseUnit = balRes.rows[0]?.purchase_unit ?? '';
+      const conversionRatio = parseFloat(balRes.rows[0]?.conversion_ratio ?? '1');
 
-      // Auto-detect central ratio: ml->Liter (÷1000), gr->Kg (÷1000), others->no conversion
-      const centralRatio = (smallestUnit === 'ml' || smallestUnit === 'gr' || smallestUnit === 'g') ? 1000 : 1;
-      const actualQtyShipped = item.qty_shipped * centralRatio;
+      // qty_shipped is in purchase_unit. Convert it to smallest_unit.
+      const actualQtyShipped = item.qty_shipped * conversionRatio;
 
       // Check reserved qty for pending/draft DOs
       const reservedRes = await client.query(
@@ -77,7 +78,7 @@ export async function createDeliveryNote(data: {
       const availableStock = currentStock - reservedStock;
 
       if (actualQtyShipped > availableStock) {
-        throw new Error(`Stok ${itemName} tidak mencukupi. Dikirim: ${item.qty_shipped} (= ${actualQtyShipped} ${balRes.rows[0]?.smallest_unit}), Tersedia: ${(availableStock / centralRatio).toFixed(2)} ${centralRatio === 1000 ? (smallestUnit === 'ml' ? 'Liter' : 'Kg') : smallestUnit} (Tereservasi: ${reservedStock})`);
+        throw new Error(`Stok ${itemName} tidak mencukupi. Dikirim: ${item.qty_shipped} ${purchaseUnit}, Tersedia: ${Math.floor(availableStock / conversionRatio)} ${purchaseUnit}`);
       }
 
       let finalOrderItemId: number | null = item.order_item_id;
@@ -231,14 +232,13 @@ export async function processPublicReceive(data: {
     // Update Delivery Note Items
     for (const item of data.items) {
       const unitRes = await client.query(
-        `SELECT i.smallest_unit FROM delivery_note_items dni 
+        `SELECT i.conversion_ratio FROM delivery_note_items dni 
          JOIN items i ON i.id = dni.item_id 
          WHERE dni.id = $1`, [item.delivery_note_item_id]
       );
-      const smallestUnit = (unitRes.rows[0]?.smallest_unit || '').toLowerCase();
-      const centralRatio = (smallestUnit === 'ml' || smallestUnit === 'gr' || smallestUnit === 'g') ? 1000 : 1;
-      const actualQtyReceived = item.qty_received * centralRatio;
-      const actualQtyIssue = (item.qty_issue || 0) * centralRatio;
+      const conversionRatio = parseFloat(unitRes.rows[0]?.conversion_ratio ?? '1');
+      const actualQtyReceived = item.qty_received * conversionRatio;
+      const actualQtyIssue = (item.qty_issue || 0) * conversionRatio;
 
       const updateRes = await client.query(
         `UPDATE delivery_note_items 

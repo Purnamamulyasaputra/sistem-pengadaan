@@ -116,18 +116,18 @@ export async function getOutletMonitoringData() {
     query<{ item_id: number; outlet_id: number; current_balance: string }>(`
       SELECT item_id, outlet_id, current_balance FROM outlet_stocks
     `),
-    // Total IN all-time per item per outlet (ditampilkan di kolom IN Terkecil/Kemasan)
+    // Total IN hari ini per item per outlet (ditampilkan di kolom IN Terkecil/Kemasan)
     query<{ item_id: number; outlet_id: number; total_in: string }>(`
       SELECT item_id, outlet_id, COALESCE(SUM(qty_change), 0) AS total_in 
       FROM outlet_inventory_logs 
-      WHERE qty_change > 0 
+      WHERE qty_change > 0 AND (created_at AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date
       GROUP BY item_id, outlet_id
     `),
-    // Total OUT all-time per item per outlet (ditampilkan di kolom OUT Terkecil/Kemasan)
+    // Total OUT hari ini per item per outlet (ditampilkan di kolom OUT Terkecil/Kemasan)
     query<{ item_id: number; outlet_id: number; total_out: string }>(`
       SELECT item_id, outlet_id, COALESCE(ABS(SUM(qty_change)), 0) AS total_out 
       FROM outlet_inventory_logs 
-      WHERE qty_change < 0 
+      WHERE qty_change < 0 AND (created_at AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date
       GROUP BY item_id, outlet_id
     `),
     query<{ item_id: number; outlet_id: number; cups_sold: string; unit_consumed: string }>(`
@@ -141,6 +141,7 @@ export async function getOutletMonitoringData() {
       INNER JOIN (
         SELECT DISTINCT ON (outlet_id) outlet_id, period_start, period_end
         FROM moka_item_sales
+        WHERE (sync_date AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date
         ORDER BY outlet_id, sync_date DESC
       ) latest ON mis.outlet_id = latest.outlet_id 
               AND mis.period_start = latest.period_start 

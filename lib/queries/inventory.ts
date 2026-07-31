@@ -197,7 +197,7 @@ export async function getInventoryReport(month: number, year: number) {
        i.name AS item_name,
        c.name AS category_name,
        SUM(CASE WHEN il.movement_type = 'IN' THEN il.qty_change ELSE 0 END) AS total_in_qty,
-       SUM(CASE WHEN il.movement_type = 'OUT' AND il.reference_type IN ('BARCODE_SCAN', 'BULK_SHIP') THEN ABS(il.qty_change) ELSE 0 END) AS total_distribution_qty,
+       SUM(CASE WHEN il.movement_type = 'OUT' AND il.reference_type IN ('BARCODE_SCAN', 'BULK_SHIP', 'ATOMIC_TRANSFER', 'PUBLIC_SCAN_OUT') THEN ABS(il.qty_change) ELSE 0 END) AS total_distribution_qty,
        SUM(CASE WHEN il.movement_type = 'ADJ' THEN il.qty_change ELSE 0 END) AS total_adj_qty,
        i.current_average_price,
        (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_balance

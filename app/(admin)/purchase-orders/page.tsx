@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Toast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
+import { FullScreenLoader } from '@/components/ui/FullScreenLoader';
 interface PO {
   id: number; po_number: string; vendor_name: string; vendor_id?: number | string; order_date: string;
   order_deadline?: string; status: string; total: number; buyer_name: string;
@@ -41,6 +42,7 @@ export default function PurchaseOrdersPage() {
   const ITEMS_PER_PAGE = 20;
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Memproses...');
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
@@ -106,11 +108,11 @@ export default function PurchaseOrdersPage() {
   }, []);
 
   function addLine() {
-    setLines(l => [...l, { type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
+    setLines(l => [{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }, ...l]);
   }
 
   function addNote() {
-    setLines(l => [...l, { type: 'note', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '0', disc_percent: '0' }]);
+    setLines(l => [{ type: 'note', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '0', disc_percent: '0' }, ...l]);
   }
 
   function removeLine(i: number) {
@@ -154,7 +156,7 @@ export default function PurchaseOrdersPage() {
               purchase_unit: item ? item.purchase_unit : a.smallest_unit,
             };
           });
-          return [...valid, ...newLines];
+          return [...newLines, ...valid];
         });
       }
     } catch (e) {
@@ -289,15 +291,25 @@ export default function PurchaseOrdersPage() {
   }
 
   async function handleUpdateStatus(poId: number, status: string) {
-    await fetch(`/api/purchase-orders/${poId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    const res = await fetch(`/api/purchase-orders/${poId}`);
-    const data = await res.json();
-    setDraftPO(data.data);
-    fetchPOs();
+    if (status === 'PURCHASE_ORDER') setLoadingLabel('Mengkonfirmasi Order...');
+    else if (status === 'DIBATALKAN') setLoadingLabel('Membatalkan Order...');
+    else setLoadingLabel('Memproses...');
+    
+    setSaving(true);
+    try {
+      await fetch(`/api/purchase-orders/${poId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const res = await fetch(`/api/purchase-orders/${poId}`);
+      const data = await res.json();
+      setDraftPO(data.data);
+      fetchPOs();
+    } finally {
+      setSaving(false);
+      setLoadingLabel('Memproses...');
+    }
   }
 
   function generatePDFBase64(): string {
@@ -474,7 +486,8 @@ export default function PurchaseOrdersPage() {
 
   return (
     <section className="screen">
-      <Toast {...toast} onClose={() => setToast(t => ({ ...t, isOpen: false }))} />
+      <Toast {...toast} duration={1500} onClose={() => setToast(t => ({ ...t, isOpen: false }))} />
+      <FullScreenLoader open={saving || sendingEmail} label={sendingEmail ? 'Mengirim email...' : loadingLabel} />
 
       <ConfirmDialog
         open={confirmCancel}
@@ -771,7 +784,7 @@ export default function PurchaseOrdersPage() {
                 {/* Odoo Style Tabs */}
                 <div style={{ marginTop: 20 }}>
                   <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border)', paddingBottom: 0, marginBottom: 16 }}>
-                    {['Bahan / Produk', 'Info Lainnya', 'Alternatif'].map(tab => (
+                    {['Bahan / Produk', 'Info Lainnya'].map(tab => (
                       <div key={tab}
                         onClick={() => setActiveTab(tab)}
                         style={{
@@ -789,6 +802,11 @@ export default function PurchaseOrdersPage() {
 
                   {activeTab === 'Bahan / Produk' && (
                     <div>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>+ Produk</button>
+                        <button type="button" className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => autoFillLowStock()}>+ Auto-fill Stok</button>
+                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addNote}>+ Catatan</button>
+                      </div>
                       <div className="table-responsive" style={{ overflow: 'visible' }}>
                         <table style={{ margin: 0, width: '100%' }}>
                           <thead>
@@ -796,10 +814,10 @@ export default function PurchaseOrdersPage() {
                               <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200 }}>Bahan / Produk</th>
                               <th className="right" style={{ minWidth: 80 }}>Kuantitas</th>
                               <th className="center" style={{ minWidth: 220 }}>Satuan</th>
-                              <th className="right" style={{ minWidth: 100 }}>Harga Satuan</th>
+                              <th className="right" style={{ minWidth: 130 }}>Harga Satuan</th>
                               <th className="right" style={{ minWidth: 70 }}>Pajak %</th>
                               <th className="right" style={{ minWidth: 70 }}>Diskon %</th>
-                              <th className="right" style={{ minWidth: 100 }}>Jumlah</th>
+                              <th className="right" style={{ minWidth: 140 }}>Jumlah</th>
                               <th style={{ width: 40 }}></th>
                             </tr>
                           </thead>
@@ -905,12 +923,7 @@ export default function PurchaseOrdersPage() {
                         </table>
                       </div>
 
-                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>+ Produk</button>
-                        <button type="button" className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => autoFillLowStock()}>+ Auto-fill Stok</button>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }}>+ Bagian</button>
-                        <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addNote}>+ Catatan</button>
-                      </div>
+
 
                       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', marginTop: 32 }}>
                         <div style={{ minWidth: 300 }}>

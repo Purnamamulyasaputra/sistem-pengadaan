@@ -6,6 +6,7 @@ import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Toast } from '@/components/ui/Toast';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface OpnameSession {
   id: number;
@@ -20,11 +21,12 @@ interface OpnameSession {
 export default function OutletOpnamePage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<OpnameSession[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const [filterDate, setFilterDate] = useState('');
-
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit, setLimit] = useState<number | 'all'>(15);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -98,18 +100,18 @@ export default function OutletOpnamePage() {
           <a href="/opname/outlet" className="tab active" style={{ textDecoration: 'none' }}>Stock Opname</a>
           <a href="/outlet/items" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Item Reference</a>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700 }}>Stock Opname Outlet</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexWrap: 'nowrap', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'nowrap' }}>
+            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>Stock Opname Outlet</h3>
             <input 
               type="date" 
               className="input" 
               value={filterDate}
               onChange={e => setFilterDate(e.target.value)}
-              style={{ fontSize: 12, padding: '4px 8px', height: 32 }}
+              style={{ fontSize: 12, padding: '4px 8px', height: 28, width: 'auto' }}
             />
           </div>
-          <Button variant="primary" size="sm" onClick={handleStartOpname} disabled={creating || !user?.outlet_id}>
+          <Button variant="primary" size="sm" onClick={handleStartOpname} disabled={creating || !user?.outlet_id} style={{ whiteSpace: 'nowrap', height: 28, padding: '0 12px', fontSize: 12 }}>
             {creating ? 'Memulai...' : '+ Start Daily Report'}
           </Button>
         </div>
@@ -126,40 +128,90 @@ export default function OutletOpnamePage() {
               <Button variant="primary" size="sm" onClick={handleStartOpname} style={{ marginTop: 12 }}>Mulai Opname Pertama</Button>
             </div>
           ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Tanggal Opname</th>
-                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Waktu Mulai</th>
-                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Terakhir Diubah</th>
-                  <th style={{ padding: '12px 16px', fontSize: 11 }}>Dilakukan Oleh</th>
-                  <th className="right" style={{ padding: '12px 16px', fontSize: 11 }}>Est. Selisih Nilai</th>
-                  <th className="center" style={{ padding: '12px 16px', fontSize: 11 }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSessions.map(s => (
-                  <tr key={s.id} onClick={() => router.push(`/opname/outlet/${s.id}`)} className="hover-row" style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
-                    <td className="font-bold" style={{ padding: '12px 16px', fontSize: 12 }}>{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>
-                      {new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>
-                      {new Date(s.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>{s.pic_name}</td>
-                    <td className="right font-mono font-bold" style={{ padding: '12px 16px', fontSize: 12, color: Number(s.total_value) > 0 ? '#016e3f' : Number(s.total_value) < 0 ? '#dc2626' : 'var(--muted)' }}>
-                      {Number(s.total_value) > 0 ? '+Rp ' : Number(s.total_value) < 0 ? '-Rp ' : 'Rp '}{Math.abs(Number(s.total_value)).toLocaleString('id-ID')}
-                    </td>
-                    <td className="center" style={{ padding: '12px 16px' }}>
-                      <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
-                        {s.status === 'LOCKED' ? 'Selesai (Terkunci)' : s.status === 'SUBMITTED' ? 'Diajukan' : s.status === 'DRAFT' ? 'Draf' : s.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            <div style={{ padding: '24px 20px 20px' }}>
+              {(() => {
+                const displayedSessions = limit === 'all' ? filteredSessions : filteredSessions.slice((currentPage - 1) * limit, currentPage * limit);
+                const groupedSessions = displayedSessions.reduce((acc, session) => {
+                  const dateStr = session.count_date.split('T')[0];
+                  if (!acc[dateStr]) acc[dateStr] = [];
+                  acc[dateStr].push(session);
+                  return acc;
+                }, {} as Record<string, OpnameSession[]>);
+
+                const sortedDates = Object.keys(groupedSessions).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+                return sortedDates.map(date => (
+                  <div key={date} style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+                      <div style={{ background: '#016e3f', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, boxShadow: '0 2px 4px rgba(1, 110, 63, 0.2)' }}>
+                        {new Date(date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
+                      <div style={{ flex: 1, height: 1, background: '#e2e8f0', marginLeft: 16 }}></div>
+                    </div>
+                    <div style={{ display: 'grid', gap: 8, paddingLeft: 8 }}>
+                      {groupedSessions[date].map(s => (
+                        <div 
+                          key={s.id} 
+                          onClick={() => router.push(`/opname/outlet/${s.id}`)}
+                          style={{ 
+                            display: 'flex', alignItems: 'center', padding: '8px 12px', 
+                            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, 
+                            cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                            position: 'relative'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#cbd5e1';
+                            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#e2e8f0';
+                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
+                            e.currentTarget.style.transform = 'none';
+                          }}
+                        >
+                          <div style={{ width: 4, height: '70%', background: s.status === 'LOCKED' ? '#016e3f' : s.status === 'SUBMITTED' ? '#3b82f6' : '#cbd5e1', position: 'absolute', left: 0, top: '15%', borderRadius: '0 4px 4px 0' }}></div>
+                          <div style={{ width: 130, paddingLeft: 12 }}>
+                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Waktu Mulai</div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </div>
+                          
+                          <div style={{ width: 180 }}>
+                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Dilakukan Oleh</div>
+                            <div style={{ fontWeight: 600, fontSize: 12, color: '#334155' }}>{s.pic_name}</div>
+                          </div>
+              
+                          <div style={{ flex: 1, textAlign: 'right', paddingRight: 32 }}>
+                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Estimasi Selisih Nilai</div>
+                            <div className="font-mono font-bold" style={{ fontSize: 13, color: Number(s.total_value) > 0 ? '#016e3f' : Number(s.total_value) < 0 ? '#dc2626' : '#94a3b8' }}>
+                              {Number(s.total_value) > 0 ? '+Rp ' : Number(s.total_value) < 0 ? '-Rp ' : 'Rp '}{Math.abs(Number(s.total_value)).toLocaleString('id-ID')}
+                            </div>
+                          </div>
+              
+                          <div style={{ width: 140, textAlign: 'right' }}>
+                            <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
+                              {s.status === 'LOCKED' ? 'Selesai (Terkunci)' : s.status === 'SUBMITTED' ? 'Diajukan' : s.status === 'DRAFT' ? 'Draf' : s.status}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+          
+          {limit !== 'all' && filteredSessions.length > (limit as number) && (
+            <div style={{ padding: '0 20px 20px' }}>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={Math.ceil(filteredSessions.length / (limit as number))}
+                totalItems={filteredSessions.length}
+                itemsPerPage={limit as number}
+                onPageChange={setCurrentPage}
+              />
+            </div>
           )}
         </div>
       </div>

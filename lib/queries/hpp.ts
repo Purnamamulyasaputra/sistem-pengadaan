@@ -266,7 +266,7 @@ export async function getHppRecipeDetail(recipeId: number): Promise<{
       ri.ingredient_id, 
       COALESCE(it.name, i.name) AS ingredient_name,
       COALESCE(it.smallest_unit, i.default_unit) AS default_unit,
-      COALESCE((it.current_average_price / NULLIF(it.conversion_ratio, 0)), i.standard_cost_per_unit) AS standard_cost_per_unit,
+      COALESCE(it.current_average_price, i.standard_cost_per_unit) AS standard_cost_per_unit,
       ri.quantity, ri.unit, ri.cost_per_unit, ri.extension, ri.sort_order
     FROM recipe_ingredients ri
     JOIN ingredients i ON i.id = ri.ingredient_id
@@ -313,7 +313,7 @@ export async function getHppIngredients(opts?: {
       i.id, i.item_id, 
       COALESCE(it.name, i.name) AS name,
       COALESCE(it.smallest_unit, i.default_unit) AS default_unit,
-      COALESCE((it.current_average_price / NULLIF(it.conversion_ratio, 0)), i.standard_cost_per_unit) AS standard_cost_per_unit,
+      COALESCE(it.current_average_price, i.standard_cost_per_unit) AS standard_cost_per_unit,
       i.description,
       COALESCE(COUNT(ri.id)::int, 0) AS used_in_recipes,
       (it.id IS NOT NULL) AS is_linked
@@ -434,6 +434,7 @@ export async function createRecipe(data: {
   yield_amount: number;
   yield_unit?: string;
   x_factor_pct: number;
+  sale_price?: number;
   ingredients: { ingredient_id: number; quantity: number; unit?: string; cost_per_unit: number }[];
 }) {
   return await withTransaction(async (client) => {
@@ -443,10 +444,10 @@ export async function createRecipe(data: {
 
     // 2. Insert recipe
     const recRes = await client.query(`
-      INSERT INTO recipes (name, venue_id, source_sheet, yield, yield_unit, subtotal, x_factor_pct, total_cost)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO recipes (name, venue_id, source_sheet, yield, yield_unit, subtotal, x_factor_pct, total_cost, sale_price)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
-    `, [data.name, data.venue_id, data.source_sheet, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost]);
+    `, [data.name, data.venue_id, data.source_sheet, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost, data.sale_price ?? null]);
     
     const recipeId = recRes.rows[0].id;
 
@@ -487,6 +488,7 @@ export async function updateRecipe(id: number, data: {
   yield_amount: number;
   yield_unit?: string;
   x_factor_pct: number;
+  sale_price?: number;
   ingredients: { ingredient_id: number; quantity: number; unit?: string; cost_per_unit: number }[];
 }) {
   return await withTransaction(async (client) => {
@@ -498,9 +500,9 @@ export async function updateRecipe(id: number, data: {
     await client.query(`
       UPDATE recipes 
       SET name = $1, venue_id = $2, source_sheet = $3, yield = $4, yield_unit = $5, 
-          subtotal = $6, x_factor_pct = $7, total_cost = $8, revision_date = CURRENT_DATE
-      WHERE id = $9
-    `, [data.name, data.venue_id, data.source_sheet, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost, id]);
+          subtotal = $6, x_factor_pct = $7, total_cost = $8, sale_price = COALESCE($9, sale_price), revision_date = CURRENT_DATE
+      WHERE id = $10
+    `, [data.name, data.venue_id, data.source_sheet, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost, data.sale_price ?? null, id]);
 
     // 3. Delete old ingredients
     await client.query(`DELETE FROM recipe_ingredients WHERE recipe_id = $1`, [id]);
@@ -522,14 +524,14 @@ export async function updateRecipe(id: number, data: {
       WHERE id = $1
     `, [id, data.name]);
 
-    await client.query(`
-      UPDATE menus
-      SET 
-        hpp = r.total_cost / NULLIF(r.yield, 0),
-        hpp_ratio = (r.total_cost / NULLIF(r.yield, 0)) / NULLIF(menus.sale_price, 0)
-      FROM recipes r
-      WHERE r.id = $1 AND menus.id = r.menu_id
-    `, [id]);
+    if (data.sale_price) {
+      await client.query(`
+        UPDATE menus 
+        SET sale_price = $1,
+            hpp_ratio = hpp / NULLIF($1, 0)
+        WHERE id = (SELECT menu_id FROM recipes WHERE id = $2)
+      `, [data.sale_price, id]);
+    }
 
     return id;
   });

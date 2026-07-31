@@ -199,12 +199,14 @@ button {
   justify-content: center;
 }
 
-.app.collapsed .brand-text {
-  display: none;
+.app.collapsed .brand-text,
+.app.collapsed .sunburst {
+  display: none !important;
 }
 
-.sidebar.collapsed .brand-text {
-  display: none;
+.sidebar.collapsed .brand-text,
+.sidebar.collapsed .sunburst {
+  display: none !important;
 }
 
 .role-switch {

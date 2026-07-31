@@ -44,15 +44,20 @@ export async function createGoodsReceipt(data: {
   purchase_order_id: number;
   vendor_delivery_note?: string;
   received_by: number;
-  items: { purchase_order_item_id: number; item_id: number; qty_received: number }[];
+  received_date?: string;
+  items: {
+    purchase_order_item_id: number;
+    item_id: number;
+    qty_received: number;
+  }[];
 }) {
   return withTransaction(async (client) => {
     const receiptNumber = await generateReceiptNumber();
     
     const receiptRes = await client.query(
-      `INSERT INTO goods_receipts (purchase_order_id, receipt_number, vendor_delivery_note, received_by, status)
-       VALUES ($1, $2, $3, $4, 'DONE') RETURNING *`,
-      [data.purchase_order_id, receiptNumber, data.vendor_delivery_note || null, data.received_by]
+      `INSERT INTO goods_receipts (purchase_order_id, receipt_number, vendor_delivery_note, received_by, received_date, status)
+       VALUES ($1, $2, $3, $4, COALESCE($5, now()), 'DONE') RETURNING *`,
+      [data.purchase_order_id, receiptNumber, data.vendor_delivery_note || null, data.received_by, data.received_date || null]
     );
     const receipt = receiptRes.rows[0];
 

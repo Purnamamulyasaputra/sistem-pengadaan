@@ -26,13 +26,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     // 2. Get ingredients used in this menu's recipes across all venues
     const ingredientsRes = await query(`
       SELECT 
-        ri.id, ri.quantity AS qty, ri.unit, 
-        ri.cost_per_unit, ri.extension AS cost,
-        i.name AS ingredient_name,
+        ri.id, ri.quantity AS qty, 
+        COALESCE(it.smallest_unit, i.default_unit, ri.unit) AS unit, 
+        COALESCE(it.current_average_price, i.standard_cost_per_unit, ri.cost_per_unit) AS cost_per_unit, 
+        (ri.quantity * COALESCE(it.current_average_price, i.standard_cost_per_unit, ri.cost_per_unit)) AS cost,
+        COALESCE(it.name, i.name) AS ingredient_name,
         r.venue_id, r.id AS recipe_id, r.name AS recipe_name
       FROM recipe_ingredients ri
       JOIN recipes r ON r.id = ri.recipe_id
       JOIN ingredients i ON i.id = ri.ingredient_id
+      LEFT JOIN items it ON it.id = i.item_id
       WHERE r.menu_id = $1
       ORDER BY ri.sort_order, i.name
     `, [menuId]);

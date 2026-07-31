@@ -27,6 +27,7 @@ const [form, setForm] = useState({
   yield_amount: '1',
   yield_unit: 'pcs',
   x_factor_pct: '10', // as integer percentage for UI
+  sale_price: '0',
 });
 
 const [ingredients, setIngredients] = useState<{
@@ -63,6 +64,7 @@ const loadRecipe = async () => {
       yield_amount: String(data.recipe.yield),
       yield_unit: data.recipe.yield_unit || '',
       x_factor_pct: String((Number(data.recipe.x_factor_pct) * 100).toFixed(0)),
+      sale_price: data.recipe.sale_price ? String(Math.round(Number(data.recipe.sale_price))) : '0',
     });
 
     setIngredients(data.ingredients.map((ing: any) => ({
@@ -70,9 +72,9 @@ const loadRecipe = async () => {
       ingredient_id: String(ing.ingredient_id),
       ingredient_name: ing.ingredient_name || '',
       quantity: String(ing.quantity),
-      unit: ing.unit || '',
-      cost_per_unit: Number(ing.cost_per_unit),
-      extension: Number(ing.extension),
+      unit: ing.default_unit || ing.unit || '',
+      cost_per_unit: Number(ing.standard_cost_per_unit ?? ing.cost_per_unit),
+      extension: Number(ing.quantity) * Number(ing.standard_cost_per_unit ?? ing.cost_per_unit),
     })));
   } catch (err: unknown) {
     setError((err instanceof Error ? err.message : 'Unknown error'));
@@ -156,6 +158,7 @@ const handleIngredientChange = (id: string, field: string, value: string) => {
     venue_id: Number(form.venue_id),
     yield_amount: Number(form.yield_amount),
     x_factor_pct: Number(form.x_factor_pct) / 100,
+    sale_price: Number(form.sale_price) || 0,
     ingredients: ingredients.map(ing => ({
       ingredient_id: Number(ing.ingredient_id),
       quantity: Number(ing.quantity),
@@ -186,173 +189,191 @@ const handleIngredientChange = (id: string, field: string, value: string) => {
 if (loading) return <div style={{ padding: 40, textAlign: 'center' }} className="muted">Memuat resep...</div>;
 
 return (
-  <section className="screen" style={{ paddingBottom: 100 }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-      <button className="btn" onClick={() => router.push('/hpp')} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px' }}>
-        <ChevronLeft size={18} /> Kembali
+  <section className="screen" style={{ paddingBottom: 40 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button className="btn" onClick={() => router.push('/hpp')} style={{ display: 'flex', alignItems: 'center', padding: '4px 10px', fontSize: 12, height: 30 }}>
+          <ChevronLeft size={16} /> Kembali
+        </button>
+        <h2 style={{ margin: 0, color: 'var(--foreground)', fontSize: 18 }}>{isNew ? 'Buat Resep Baru' : 'Edit Resep'}</h2>
+      </div>
+
+      <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 12, height: 30, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }} onClick={handleSave} disabled={saving}>
+        <Save size={14} />
+        {saving ? 'Menyimpan...' : 'Simpan Resep'}
       </button>
-      <h2 style={{ margin: 0, color: 'var(--foreground)' }}>{isNew ? 'Buat Resep Baru' : 'Edit Resep'}</h2>
     </div>
 
     {error && <div className="alert-banner alert-danger" style={{ marginBottom: 20 }}>{error}</div>}
 
-    <div className="card" style={{ marginBottom: 24 }}>
-      <div className="card-head"><h3>Detail Resep</h3></div>
-      <div className="card-body">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 24px', alignItems: 'flex-start' }}>
-          <div style={{ flex: '1 1 300px', minWidth: 300 }}>
-            <Input label="Nama Resep" required placeholder="misal. Iced Caramel Latte" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+    <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'flex-start' }}>
+      {/* LEFT COLUMN: Metadata */}
+      <div className="card">
+        <div className="card-head" style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
+          <h3 style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Detail Resep</h3>
+        </div>
+        <div className="card-body" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Input label="Nama Resep" required placeholder="misal. Americano - Hot Medium" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="form-group">
+              <label className="req" style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, display: 'block', color: 'var(--muted)' }}>Lokasi (Venue)</label>
+              <select className="input" style={{ width: '100%', height: 34, fontSize: 12 }} value={form.venue_id} onChange={e => setForm(f => ({ ...f, venue_id: e.target.value }))}>
+                <option value="">Pilih...</option>
+                {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="req" style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, display: 'block', color: 'var(--muted)' }}>Grup Sumber</label>
+              <select className="input" style={{ width: '100%', height: 34, fontSize: 12 }} value={form.source_sheet} onChange={e => setForm(f => ({ ...f, source_sheet: e.target.value }))}>
+                <option value="Bar 1">Bar 1</option>
+                <option value="Bar 2">Bar 2</option>
+                <option value="Kitchen 2025">Kitchen 2025</option>
+                <option value="Turangga">Turangga</option>
+              </select>
+            </div>
           </div>
-          <div className="form-group" style={{ flex: '1 1 200px', minWidth: 200 }}>
-            <label className="req" style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'block', color: 'var(--muted)' }}>Lokasi (Venue)</label>
-            <select className="input" style={{ width: '100%' }} value={form.venue_id} onChange={e => setForm(f => ({ ...f, venue_id: e.target.value }))}>
-              <option value="">Pilih Lokasi...</option>
-              {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-          </div>
-          <div className="form-group" style={{ flex: '1 1 200px', minWidth: 200 }}>
-            <label className="req" style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'block', color: 'var(--muted)' }}>Grup Sumber (Sheet)</label>
-            <select className="input" style={{ width: '100%' }} value={form.source_sheet} onChange={e => setForm(f => ({ ...f, source_sheet: e.target.value }))}>
-              <option value="Bar 1">Bar 1</option>
-              <option value="Bar 2">Bar 2</option>
-              <option value="Kitchen 2025">Kitchen 2025</option>
-              <option value="Turangga">Turangga</option>
-            </select>
-          </div>
-          <div style={{ flex: '1 1 150px', minWidth: 150 }}>
-            <Input label="Jumlah Hasil (Yield)" type="number" min="0.1" step="0.1" required value={form.yield_amount} onChange={e => setForm(f => ({ ...f, yield_amount: e.target.value }))} />
-          </div>
-          <div style={{ flex: '1 1 150px', minWidth: 150 }}>
-            <Input label="Satuan Hasil" placeholder="misal. pcs, gr, ml" value={form.yield_unit} onChange={e => setForm(f => ({ ...f, yield_unit: e.target.value }))} />
-          </div>
-          <div style={{ flex: '1 1 150px', minWidth: 150 }}>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <Input label="Hasil (Yield)" type="number" min="0.1" step="0.1" required value={form.yield_amount} onChange={e => setForm(f => ({ ...f, yield_amount: e.target.value }))} />
+            <Input label="Satuan" placeholder="portion, pcs" value={form.yield_unit} onChange={e => setForm(f => ({ ...f, yield_unit: e.target.value }))} />
             <Input label="X-Factor (%)" type="number" min="0" step="1" required value={form.x_factor_pct} onChange={e => setForm(f => ({ ...f, x_factor_pct: e.target.value }))} />
           </div>
+
+          <Input label="Harga Jual (Rp)" type="number" min="0" step="500" placeholder="misal. 35000" value={form.sale_price} onChange={e => setForm(f => ({ ...f, sale_price: e.target.value }))} />
+        </div>
+      </div>
+
+      {/* RIGHT COLUMN: Komposisi Bahan Baku Table */}
+      <div className="card" style={{ overflow: 'visible' }}>
+        <div className="card-head" style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Komposisi Bahan Baku</h3>
+          </div>
+          <button className="btn" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 10px', height: 28, background: '#edf7f2', color: '#016e3f', border: '1px solid #a8dab5', fontWeight: 600 }} onClick={handleAddIngredient}>
+            <Plus size={13} /> Tambah Bahan
+          </button>
+        </div>
+
+        <div className="card-body flush" style={{ overflow: 'visible' }}>
+          <Table responsive={false} style={{ overflow: 'visible' }}>
+            <thead>
+              <tr style={{ fontSize: 12, background: '#f8fafc' }}>
+                <th style={{ width: '38%', padding: '10px 14px' }}>Bahan Baku</th>
+                <th style={{ width: '100px', padding: '10px 8px' }}>Jumlah</th>
+                <th style={{ width: '80px', padding: '10px 8px' }}>Satuan</th>
+                <th className="right" style={{ width: '120px', padding: '10px 8px' }}>Harga / Satuan</th>
+                <th className="right" style={{ width: '130px', padding: '10px 14px' }}>Total Biaya</th>
+                <th style={{ width: '40px', padding: '10px 4px' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {ingredients.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: 40 }} className="muted">
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>Belum ada bahan baku</div>
+                    <div style={{ fontSize: 12, marginTop: 4 }}>Klik tombol <strong>"+ Tambah Bahan"</strong> di atas untuk memasukkan bahan resep.</div>
+                  </td>
+                </tr>
+              ) : (
+                ingredients.map((ing, idx) => (
+                  <tr key={ing.id}>
+                    <td style={{ position: 'relative', padding: '8px 14px' }}>
+                      <input
+                        className="input"
+                        placeholder="Ketik nama bahan..."
+                        style={{ width: '100%', background: '#fff', height: 36, fontSize: 13, padding: '6px 10px' }}
+                        value={ing.ingredient_name}
+                        onChange={e => handleIngredientChange(ing.id, 'ingredient_name', e.target.value)}
+                        onFocus={() => setActiveDropdown(ing.id)}
+                        onBlur={() => setTimeout(() => setActiveDropdown(null), 200)}
+                      />
+                      {activeDropdown === ing.id && (
+                        <div style={{
+                          position: 'absolute', bottom: '100%', left: 14, right: 14,
+                          background: '#fff', border: '1px solid var(--border)',
+                          boxShadow: '0 -6px 12px -2px rgb(0 0 0 / 0.12)', zIndex: 50,
+                          maxHeight: 200, overflowY: 'auto', borderRadius: 6,
+                          marginBottom: 4
+                        }}>
+                          {availableIngredients
+                            .filter(a => a.name.toLowerCase().includes(ing.ingredient_name.toLowerCase()))
+                            .map(a => (
+                              <div
+                                key={a.id}
+                                style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f1f5f9' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
+                                onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleIngredientChange(ing.id, 'ingredient_name', a.name);
+                                  setActiveDropdown(null);
+                                }}
+                              >
+                                <div style={{ fontWeight: 600 }}>{a.name}</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>Satuan: {a.default_unit || '-'} | Harga: Rp {Math.round(Number(a.standard_cost_per_unit || 0)).toLocaleString('id-ID')} / {a.default_unit || 'unit'}</div>
+                              </div>
+                            ))}
+                          {availableIngredients.filter(a => a.name.toLowerCase().includes(ing.ingredient_name.toLowerCase())).length === 0 && (
+                            <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--muted)' }}>Bahan tidak ditemukan di Master Barang.</div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '8px 8px' }}>
+                      <input className="input" type="number" min="0" step="0.1" style={{ width: '100%', height: 36, fontSize: 13, padding: '6px 8px' }} value={ing.quantity} onChange={e => handleIngredientChange(ing.id, 'quantity', e.target.value)} />
+                    </td>
+                    <td style={{ padding: '8px 8px' }}>
+                      <input className="input" type="text" style={{ width: '100%', height: 36, fontSize: 13, padding: '6px 8px' }} value={ing.unit} onChange={e => handleIngredientChange(ing.id, 'unit', e.target.value)} />
+                    </td>
+                    <td className="right" style={{ padding: '8px 8px' }}>
+                      <input className="input right" type="number" min="0" step="1" style={{ width: '100%', height: 36, fontSize: 13, padding: '6px 8px' }} value={ing.cost_per_unit} onChange={e => handleIngredientChange(ing.id, 'cost_per_unit', e.target.value)} />
+                    </td>
+                    <td className="right" style={{ fontWeight: 600, fontSize: 13, padding: '8px 14px', color: '#1e293b' }}>
+                      Rp {Math.round(ing.extension).toLocaleString('id-ID')}
+                    </td>
+                    <td style={{ padding: '8px 4px', textAlign: 'center' }}>
+                      <button className="btn" style={{ padding: 6, color: '#dc2626', borderRadius: 4 }} onClick={() => handleRemoveIngredient(ing.id)} title="Hapus bahan">
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {ingredients.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan={4} className="right" style={{ fontWeight: 600, padding: '8px 14px', fontSize: 13, color: '#1e293b' }}>Subtotal Bahan:</td>
+                  <td className="right" style={{ fontWeight: 600, padding: '8px 14px', fontSize: 13, color: '#1e293b' }}>Rp {Math.round(subtotal).toLocaleString('id-ID')}</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colSpan={4} className="right" style={{ fontWeight: 600, padding: '6px 14px', fontSize: 13, color: '#1e293b' }}>X-Factor ({form.x_factor_pct}%):</td>
+                  <td className="right" style={{ fontWeight: 600, padding: '6px 14px', fontSize: 13, color: '#1e293b' }}>Rp {Math.round(xFactorValue).toLocaleString('id-ID')}</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colSpan={4} className="right" style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', padding: '8px 14px' }}>Total Biaya Resep:</td>
+                  <td className="right" style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', padding: '8px 14px' }}>Rp {Math.round(totalCost).toLocaleString('id-ID')}</td>
+                  <td></td>
+                </tr>
+                <tr style={{ background: '#f8fafc' }}>
+                  <td colSpan={4} className="right" style={{ fontWeight: 700, fontSize: 13, color: '#016e3f', padding: '10px 14px' }}>
+                    Total HPP per {form.yield_unit || 'portion'}:
+                  </td>
+                  <td className="right" style={{ fontWeight: 700, fontSize: 13, color: '#016e3f', padding: '10px 14px' }}>
+                    Rp {Math.round(totalCost / (Number(form.yield_amount) || 1)).toLocaleString('id-ID')}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
+          </Table>
         </div>
       </div>
     </div>
 
-    <div className="card" style={{ overflow: 'visible' }}>
-      <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3>Komposisi Bahan Baku</h3>
-        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '6px 12px' }} onClick={handleAddIngredient}>
-          <Plus size={16} /> Tambah Bahan
-        </button>
-      </div>
-      <div className="card-body flush" style={{ overflow: 'visible' }}>
-        <Table responsive={false} style={{ overflow: 'visible' }}>
-          <thead>
-            <tr>
-              <th style={{ width: '40%' }}>Bahan Baku</th>
-              <th style={{ width: '15%' }}>Jml</th>
-              <th style={{ width: '15%' }}>Satuan</th>
-              <th className="right" style={{ width: '15%' }}>Harga/Satuan</th>
-              <th className="right" style={{ width: '15%' }}>Total Biaya</th>
-              <th style={{ width: '50px' }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {ingredients.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: 40 }} className="muted">
-                  Belum ada bahan baku. Klik "Tambah Bahan" untuk memulai.
-                </td>
-              </tr>
-            ) : (
-              ingredients.map((ing, idx) => (
-                <tr key={ing.id}>
-                  <td style={{ position: 'relative' }}>
-                    <input
-                      className="input"
-                      placeholder="Ketik nama bahan..."
-                      style={{ width: '100%', background: '#fff' }}
-                      value={ing.ingredient_name}
-                      onChange={e => handleIngredientChange(ing.id, 'ingredient_name', e.target.value)}
-                      onFocus={() => setActiveDropdown(ing.id)}
-                      onBlur={() => setTimeout(() => setActiveDropdown(null), 200)}
-                    />
-                    {activeDropdown === ing.id && (
-                      <div style={{
-                        position: 'absolute', bottom: '100%', left: 16, right: 16,
-                        background: '#fff', border: '1px solid var(--border)',
-                        boxShadow: '0 -4px 6px -1px rgb(0 0 0 / 0.1)', zIndex: 50,
-                        maxHeight: 200, overflowY: 'auto', borderRadius: 4,
-                        marginBottom: 4
-                      }}>
-                        {availableIngredients
-                          .filter(a => a.name.toLowerCase().includes(ing.ingredient_name.toLowerCase()))
-                          .map(a => (
-                            <div
-                              key={a.id}
-                              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b' }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-                              onMouseLeave={e => e.currentTarget.style.background = '#fff'}
-                              onMouseDown={(e) => {
-                                e.preventDefault(); // Prevent onBlur from firing before onClick
-                                handleIngredientChange(ing.id, 'ingredient_name', a.name);
-                                setActiveDropdown(null);
-                              }}
-                            >
-                              {a.name}
-                            </div>
-                          ))}
-                        {availableIngredients.filter(a => a.name.toLowerCase().includes(ing.ingredient_name.toLowerCase())).length === 0 && (
-                          <div style={{ padding: '8px 12px', fontSize: 13, color: 'var(--muted)' }}>Bahan tidak ditemukan.</div>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    <input className="input" type="number" min="0" step="0.1" style={{ width: '100%' }} value={ing.quantity} onChange={e => handleIngredientChange(ing.id, 'quantity', e.target.value)} />
-                  </td>
-                  <td>
-                    <input className="input" type="text" style={{ width: '100%' }} value={ing.unit} onChange={e => handleIngredientChange(ing.id, 'unit', e.target.value)} />
-                  </td>
-                  <td className="right">
-                    <input className="input right" type="number" min="0" step="1" style={{ width: '100px', marginLeft: 'auto' }} value={ing.cost_per_unit} onChange={e => handleIngredientChange(ing.id, 'cost_per_unit', e.target.value)} />
-                  </td>
-                  <td className="right" style={{ fontWeight: 600 }}>
-                    Rp {Math.round(ing.extension).toLocaleString('id-ID')}
-                  </td>
-                  <td>
-                    <button className="btn" style={{ padding: 6, color: '#dc2626' }} onClick={() => handleRemoveIngredient(ing.id)}>
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          {ingredients.length > 0 && (
-            <tfoot>
-              <tr>
-                <td colSpan={4} className="right" style={{ fontWeight: 600 }}>Subtotal:</td>
-                <td className="right" style={{ fontWeight: 600 }}>Rp {Math.round(subtotal).toLocaleString('id-ID')}</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td colSpan={4} className="right muted">X-Factor ({form.x_factor_pct}%):</td>
-                <td className="right muted">Rp {Math.round(xFactorValue).toLocaleString('id-ID')}</td>
-                <td></td>
-              </tr>
-              <tr style={{ background: '#f8fafc' }}>
-                <td colSpan={4} className="right" style={{ fontWeight: 700, fontSize: 16, color: '#016e3f' }}>Total HPP:</td>
-                <td className="right" style={{ fontWeight: 700, fontSize: 16, color: '#016e3f' }}>Rp {Math.round(totalCost).toLocaleString('id-ID')}</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          )}
-        </Table>
-      </div>
-    </div>
-
-    {/* Floating Save Button */}
-    <div style={{ position: 'fixed', bottom: 0, left: 240, right: 0, background: '#fff', borderTop: '1px solid var(--border)', padding: '16px 32px', display: 'flex', justifyContent: 'flex-end', zIndex: 100, boxShadow: '0 -4px 6px -1px rgb(0 0 0 / 0.05)' }}>
-      <button className="btn btn-primary" style={{ padding: '10px 24px', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }} onClick={handleSave} disabled={saving}>
-        <Save size={18} />
-        {saving ? 'Menyimpan...' : 'Simpan Resep'}
-      </button>
-    </div>
   </section>
 );
 }

@@ -85,20 +85,20 @@ export default function OutletOpnamePage() {
           <div style={{ flex: '1 1 auto', minWidth: 200 }}>
             <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>Stock Opname Outlet</h3>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'nowrap' }}>
             <input 
               type="date" 
               className="input" 
               value={filterDate}
               onChange={e => setFilterDate(e.target.value)}
-              style={{ fontSize: 13, padding: '0 12px', height: 34, minWidth: 140 }}
+              style={{ fontSize: 12, padding: '0 12px', height: 28, minWidth: 120, width: 'auto' }}
             />
-            <select className="input" style={{ width: 90, height: 34, fontSize: 13 }} value={limit} onChange={(e) => { setLimit(e.target.value === 'all' ? 'all' : Number(e.target.value)); setCurrentPage(1); }}>
+            <select className="input" style={{ width: 'auto', height: 28, fontSize: 12, padding: '0 8px' }} value={limit} onChange={(e) => { setLimit(e.target.value === 'all' ? 'all' : Number(e.target.value)); setCurrentPage(1); }}>
               <option value="all">Semua</option>
               <option value="8">8</option>
               <option value="32">32</option>
             </select>
-            <Button variant="primary" style={{ height: 34, padding: '0 16px', fontSize: 13, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }} onClick={handleStartOpname} disabled={creating || !outletId}>
+            <Button variant="primary" style={{ height: 28, padding: '0 12px', fontSize: 12, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }} onClick={handleStartOpname} disabled={creating || !outletId}>
               {creating ? 'Memulai...' : '+ Mulai Sesi Opname'}
             </Button>
           </div>
@@ -116,40 +116,78 @@ export default function OutletOpnamePage() {
             </div>
           ) : (
             <>
-            <Table>
-              <thead>
-                <tr>
-                  <th>Tanggal Opname</th>
-                  <th>Waktu Mulai</th>
-                  <th>Terakhir Diubah</th>
-                  <th>Dilakukan Oleh</th>
-                  <th className="right">Est. Selisih Nilai</th>
-                  <th className="center">Status</th>
-                </tr>
-              </thead>
-              <tbody style={{ fontSize: 13 }}>
-                {(limit === 'all' ? filteredSessions : filteredSessions.slice((currentPage - 1) * limit, currentPage * limit)).map(s => (
-                  <tr key={s.id} onClick={() => router.push(`/outlet/opname/${s.id}`)} className="hover-row" style={{ cursor: 'pointer' }}>
-                    <td className="font-bold">{new Date(s.count_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
-                    <td className="muted">
-                      {new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="muted">
-                      {new Date(s.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="muted">{s.pic_name}</td>
-                    <td className="right font-mono font-bold" style={{ color: Number(s.total_value) > 0 ? '#016e3f' : Number(s.total_value) < 0 ? '#dc2626' : 'var(--muted)' }}>
-                      {Number(s.total_value) > 0 ? '+Rp ' : Number(s.total_value) < 0 ? '-Rp ' : 'Rp '}{Math.abs(Number(s.total_value)).toLocaleString('id-ID')}
-                    </td>
-                    <td className="center">
-                      <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
-                        {s.status === 'LOCKED' ? 'Selesai (Terkunci)' : s.status === 'SUBMITTED' ? 'Diajukan' : s.status === 'DRAFT' ? 'Draf' : s.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            <div style={{ padding: '24px 20px 20px' }}>
+              {(() => {
+                const displayedSessions = limit === 'all' ? filteredSessions : filteredSessions.slice((currentPage - 1) * limit, currentPage * limit);
+                const groupedSessions = displayedSessions.reduce((acc, session) => {
+                  const dateStr = session.count_date.split('T')[0];
+                  if (!acc[dateStr]) acc[dateStr] = [];
+                  acc[dateStr].push(session);
+                  return acc;
+                }, {} as Record<string, OpnameSession[]>);
+
+                const sortedDates = Object.keys(groupedSessions).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+                return sortedDates.map(date => (
+                  <div key={date} style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+                      <div style={{ background: '#016e3f', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, boxShadow: '0 2px 4px rgba(1, 110, 63, 0.2)' }}>
+                        {new Date(date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
+                      <div style={{ flex: 1, height: 1, background: '#e2e8f0', marginLeft: 16 }}></div>
+                    </div>
+                    <div style={{ display: 'grid', gap: 8, paddingLeft: 8 }}>
+                      {groupedSessions[date].map(s => (
+                        <div 
+                          key={s.id} 
+                          onClick={() => router.push(`/outlet/opname/${s.id}`)}
+                          style={{ 
+                            display: 'flex', alignItems: 'center', padding: '8px 12px', 
+                            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, 
+                            cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                            position: 'relative'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#cbd5e1';
+                            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#e2e8f0';
+                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
+                            e.currentTarget.style.transform = 'none';
+                          }}
+                        >
+                          <div style={{ width: 4, height: '70%', background: s.status === 'LOCKED' ? '#016e3f' : s.status === 'SUBMITTED' ? '#3b82f6' : '#cbd5e1', position: 'absolute', left: 0, top: '15%', borderRadius: '0 4px 4px 0' }}></div>
+                          <div style={{ width: 130, paddingLeft: 12 }}>
+                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Waktu Mulai</div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </div>
+                          
+                          <div style={{ width: 180 }}>
+                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Dilakukan Oleh</div>
+                            <div style={{ fontWeight: 600, fontSize: 12, color: '#334155' }}>{s.pic_name}</div>
+                          </div>
+              
+                          <div style={{ flex: 1, textAlign: 'right', paddingRight: 32 }}>
+                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Estimasi Selisih Nilai</div>
+                            <div className="font-mono font-bold" style={{ fontSize: 13, color: Number(s.total_value) > 0 ? '#016e3f' : Number(s.total_value) < 0 ? '#dc2626' : '#94a3b8' }}>
+                              {Number(s.total_value) > 0 ? '+Rp ' : Number(s.total_value) < 0 ? '-Rp ' : 'Rp '}{Math.abs(Number(s.total_value)).toLocaleString('id-ID')}
+                            </div>
+                          </div>
+              
+                          <div style={{ width: 140, textAlign: 'right' }}>
+                            <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
+                              {s.status === 'LOCKED' ? 'Selesai (Terkunci)' : s.status === 'SUBMITTED' ? 'Diajukan' : s.status === 'DRAFT' ? 'Draf' : s.status}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
             
             {limit !== 'all' && filteredSessions.length > (limit as number) && (
               <Pagination

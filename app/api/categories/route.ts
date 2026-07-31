@@ -29,6 +29,13 @@ export async function DELETE(req: NextRequest) {
   const session = await getSession();
   if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ success: false, message: 'Forbidden', data: null }, { status: 403 });
   const { searchParams } = new URL(req.url);
-  await deleteCategory(Number(searchParams.get('id')));
-  return NextResponse.json({ success: true, message: 'Kategori berhasil dihapus', data: null });
+  try {
+    await deleteCategory(Number(searchParams.get('id')));
+    return NextResponse.json({ success: true, message: 'Kategori berhasil dihapus', data: null });
+  } catch (error: any) {
+    if (error.code === '23503' || (error.message && error.message.includes('foreign key constraint'))) {
+      return NextResponse.json({ success: false, message: 'Kategori tidak dapat dihapus kategori.', data: null }, { status: 400 });
+    }
+    return NextResponse.json({ success: false, message: 'Terjadi kesalahan saat menghapus kategori.', data: null }, { status: 500 });
+  }
 }
