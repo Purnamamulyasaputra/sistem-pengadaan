@@ -51,7 +51,7 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/master-data/items', label: 'Master Barang', icon: <Icon name="db" /> },
   { href: '/hpp', label: 'Master Menu & HPP', icon: <Icon name="hpp" /> },
   { href: '/stock-card', label: 'Stok Pusat', icon: <Icon name="clipboard" /> },
-  { href: '/stock-monitoring', label: 'Stok Seluruh Outlet', icon: <LayoutGrid size={15} /> },
+  { href: '/stock-monitoring', label: 'Monitoring Stok Terpadu', icon: <LayoutGrid size={15} /> },
   { href: '/opname/central', label: 'Stock Opname', icon: <Icon name="package" /> },
 
   { section: 'DISTRIBUSI KE OUTLET' },

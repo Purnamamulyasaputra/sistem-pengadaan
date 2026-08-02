@@ -24,6 +24,8 @@ export type OutletStockRow = {
   barcode: string | null;
   incoming_balance?: number;
   conversion_ratio?: number;
+  has_stock_history?: boolean;
+  is_custom_threshold?: boolean;
 };
 
 export async function getOutletStocks(outletId: number): Promise<OutletStockRow[]> {
@@ -38,6 +40,8 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
       i.barcode,
       i.target_stock,
       COALESCE(os.current_balance, 0)::numeric AS current_balance,
+      (os.outlet_id IS NOT NULL) AS has_stock_history,
+      (ois.minimum_threshold IS NOT NULL) AS is_custom_threshold,
       COALESCE(ois.minimum_threshold, i.minimum_threshold) AS minimum_threshold,
       (
         SELECT COALESCE(SUM(COALESCE(oi.approved_smallest_qty, oi.smallest_unit_qty)), 0)

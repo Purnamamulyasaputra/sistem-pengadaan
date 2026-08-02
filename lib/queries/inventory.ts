@@ -78,6 +78,9 @@ export async function receiveGoods(input: {
     // Auto fulfill pending outlet requests if stock arrived
     await autoFulfillPendingRequests(client, item_id, newBalance);
 
+    // Check reorder point to resolve any open alerts
+    await checkAndCreateAlert(item_id, newBalance, client);
+
     // 5. Insert price history
     await client.query(
       `INSERT INTO price_history (item_id, vendor_id, purchase_date, purchase_qty, unit_purchase_price, new_average_price, purchase_order_item_id)
@@ -188,6 +191,7 @@ export async function adjustStock(input: {
     } catch (err) {
       console.error('Error autoFulfillPendingRequests in adjustStock:', err);
     }
+    await checkAndCreateAlert(item_id, newBalance, client);
   }
 
   return newBalance;
