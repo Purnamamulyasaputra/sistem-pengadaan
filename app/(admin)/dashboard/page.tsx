@@ -197,15 +197,12 @@ export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const [stats, recentOrders, recentAlerts, incomingPOs, fastMoving, pendingIssues, outletIssues, outletLowStock, outletTrend] = await Promise.all([
+  const [stats, recentOrders, fastMoving, pendingIssues, outletIssues, outletTrend] = await Promise.all([
     getDashboardStats(session.role, session.outletId),
     getRecentOrders(session.role, session.outletId),
-    session.role === 'ADMIN_PUSAT' ? getRecentAlerts() : Promise.resolve([]),
-    session.role === 'ADMIN_PUSAT' ? getIncomingPOs() : Promise.resolve([]),
     session.role === 'ADMIN_PUSAT' ? getFastMovingItems() : Promise.resolve([]),
     session.role === 'ADMIN_PUSAT' ? getPendingIssues() : Promise.resolve([]),
     session.role !== 'ADMIN_PUSAT' ? getOutletIssues(session.outletId) : Promise.resolve([]),
-    session.role !== 'ADMIN_PUSAT' ? getOutletLowStock(session.outletId) : Promise.resolve([]),
     session.role !== 'ADMIN_PUSAT' ? getOutletOrderTrend(session.outletId) : Promise.resolve([]),
   ]);
 
@@ -279,20 +276,7 @@ export default async function DashboardPage() {
         {/* KOLOM KIRI: Beban Kerja, Rekap Outlet, Retur */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
-          {/* 1. Simulator Beban Kerja (PUSAT) */}
-          {isCentral && (stats.ordersPending > 0 || stats.ordersProcessing > 0) && (
-            <div className="card" style={{ margin: 0, borderLeft: '4px solid var(--red)' }}>
-              <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ background: 'var(--red-light)', color: 'var(--red)', width: '48px', height: '48px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '24px', fontFamily: 'Cabin, sans-serif', flexShrink: 0 }}>
-                  {stats.ordersPending + stats.ordersProcessing}
-                </div>
-                <div>
-                  <div style={{ color: 'var(--ink)', fontWeight: 700, fontSize: '14px' }}>Beban Kerja Surat Jalan</div>
-                  <div style={{ color: 'var(--muted)', fontSize: '12.5px', marginTop: '4px' }}>Menunggu untuk disiapkan dan dikirim ke outlet.</div>
-                </div>
-              </div>
-            </div>
-          )}
+
 
           {/* 2. Rekap Status Order */}
           <div className="card" style={{ margin: 0 }}>
@@ -368,47 +352,7 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          {/* 4. Stok Outlet Menipis (OUTLET) */}
-          {!isCentral && (
-            <div className="card" style={{ margin: 0 }}>
-              <div className="card-head">
-                <div>
-                  <h3 style={{ color: 'var(--red)' }}>Peringatan Stok Dapur</h3>
-                  <p>Bahan yang hampir habis di outlet Anda.</p>
-                </div>
-              </div>
-              <div className="card-body flush">
-                {outletLowStock.length === 0 ? (
-                  <div className="empty-state" style={{ padding: '32px 0' }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 13l4 4L19 7"/></svg>
-                    <h4>Stok Dapur Aman</h4>
-                    <p>Semua bahan baku Anda di atas batas minimum.</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <thead>
-                      <tr>
-                        <th>Barang</th>
-                        <th>Sisa</th>
-                        <th>Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {outletLowStock.map((stock: any) => (
-                        <tr key={stock.id}>
-                          <td className="font-bold">{stock.name}</td>
-                          <td style={{ color: 'var(--red)', fontWeight: 'bold' }}>{stock.current_balance} {stock.smallest_unit}</td>
-                          <td>
-                            <Link href="/requests/new" className="btn btn-primary btn-sm">+ Pesan</Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                )}
-              </div>
-            </div>
-          )}
+
 
         </div>
 
@@ -494,69 +438,7 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            {/* 5. Incoming Deliveries (Vendor) */}
-            <div className="card" style={{ margin: 0 }}>
-              <div className="card-head">
-                <div>
-                  <h3>Kedatangan Barang (Vendor)</h3>
-                </div>
-              </div>
-              <div className="card-body flush">
-                {incomingPOs.length === 0 ? (
-                  <div style={{ padding: '16px', fontSize: '13px' }} className="muted">Tidak ada jadwal kedatangan barang terdekat.</div>
-                ) : (
-                  <Table>
-                    <thead>
-                      <tr>
-                        <th>No PO</th>
-                        <th>Vendor</th>
-                        <th>Tenggat</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {incomingPOs.map((po: any) => (
-                        <TableRowLink key={po.id} href={`/purchase-orders/${po.id}`}>
-                          <td className="font-mono text-primary font-bold">{po.po_number}</td>
-                          <td className="font-bold">{po.vendor_name || 'Tanpa Vendor'}</td>
-                          <td className="muted">{po.order_deadline ? fmtDate(po.order_deadline) : '-'}</td>
-                        </TableRowLink>
-                      ))}
-                    </tbody>
-                  </Table>
-                )}
-              </div>
-            </div>
 
-            {/* 8. Stok Kritis (PUSAT) */}
-            {recentAlerts.length > 0 && (
-              <div className="card" style={{ margin: 0, border: '1px solid #fed7aa' }}>
-                <div className="card-head" style={{ background: '#fff7ed' }}>
-                  <div>
-                    <h3 style={{ color: '#c2410c' }}>Peringatan Stok Kritis Pusat</h3>
-                  </div>
-                </div>
-                <div className="card-body flush">
-                  <Table>
-                    <thead>
-                      <tr>
-                        <th>Barang</th>
-                        <th>Sisa Stok</th>
-                        <th>Batas Min</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentAlerts.map((alert: any) => (
-                        <tr key={alert.id}>
-                          <td className="font-bold">{alert.item_name}</td>
-                          <td style={{ color: 'var(--red)', fontWeight: 'bold' }}>{alert.current_balance} {alert.smallest_unit}</td>
-                          <td className="muted">{alert.min_stock} {alert.smallest_unit}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </div>
-              </div>
-            )}
 
           </>
         )}

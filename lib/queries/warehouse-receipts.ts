@@ -92,10 +92,12 @@ export async function createGoodsReceipt(data: {
       const currentStock = stockRes.rows.length > 0 ? parseFloat(stockRes.rows[0].ending_balance) : 0;
       const newStock = currentStock + qtyInSmallestUnit;
       
-      // Calculate new Moving Average
-      const oldValue = oldAvg * currentStock;
+      // Calculate new Moving Average (abaikan stok negatif dalam perhitungan rata-rata tertimbang)
+      const effectiveOldStock = currentStock > 0 ? currentStock : 0;
+      const effectiveNewStock = effectiveOldStock + qtyInSmallestUnit;
+      const oldValue = oldAvg * effectiveOldStock;
       const newValue = unitPriceInSmallestUnit * qtyInSmallestUnit;
-      const newAvgPrice = newStock > 0 ? (oldValue + newValue) / newStock : 0;
+      const newAvgPrice = effectiveNewStock > 0 ? (oldValue + newValue) / effectiveNewStock : unitPriceInSmallestUnit;
 
       // Update price cache in items:
       // - current_average_price: Moving Average (untuk HPP & laporan keuangan)

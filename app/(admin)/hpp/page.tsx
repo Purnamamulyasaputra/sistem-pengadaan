@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Pagination } from '@/components/ui/Pagination';
+import { Toast } from '@/components/ui/Toast';
 
 // ─── Types ───────────────────────────────────────────────────
 type Category = { id: number; name: string };
@@ -23,7 +24,7 @@ type RecipeRow = {
   subtotal: number | null; total_cost: number | null; sale_price: number | null;
 };
 type IngRow = {
-  id: number; name: string; default_unit: string | null;
+  id: number; item_id?: number | null; name: string; default_unit: string | null;
   standard_cost_per_unit: number | null; description: string | null;
   used_in_recipes: number;
 };
@@ -78,6 +79,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
   const [catId, setCatId] = useState('');
   const [marginFlag, setMarginFlag] = useState('');
   const [page, setPage] = useState(1);
+  const [toastInfo, setToastInfo] = useState<{show: boolean; msg: string; type: 'success'|'error'|'info'}>({ show: false, msg: '', type: 'info' });
   const limit = 20;
 
   const [detailModal, setDetailModal] = useState<number | null>(null);
@@ -116,7 +118,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
   const handleSavePrice = async () => {
     if (!detailModal || !detailData) return;
     const sale_price = parseFloat(newPrice);
-    if (isNaN(sale_price) || sale_price < 0) return alert('Nominal harga tidak valid');
+    if (isNaN(sale_price) || sale_price < 0) return setToastInfo({ show: true, msg: 'Nominal harga tidak valid', type: 'error' });
 
     try {
       const res = await fetch(`/api/hpp/menus/${detailModal}`, {
@@ -126,13 +128,14 @@ function MenusTab({ categories }: { categories: Category[] }) {
       });
       if (res.ok) {
         setDetailModal(null);
+        setToastInfo({ show: true, msg: 'Harga jual berhasil disimpan', type: 'success' });
         load();
       } else {
         const err = await res.json();
-        alert('Gagal: ' + (err.error || 'Unknown error'));
+        setToastInfo({ show: true, msg: 'Gagal: ' + (err.error || 'Unknown error'), type: 'error' });
       }
     } catch (e: unknown) {
-      alert((e instanceof Error ? e.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: e instanceof Error ? e.message : 'Unknown error', type: 'error' });
     }
   };
 
@@ -342,6 +345,8 @@ function MenusTab({ categories }: { categories: Category[] }) {
           <div style={{ padding: 20, textAlign: 'center', color: 'red' }}>Gagal memuat data.</div>
         )}
       </Modal>
+
+      <Toast isOpen={toastInfo.show} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />
     </>
   );
 }
@@ -563,10 +568,35 @@ function IngredientsTab() {
   const [deleting, setDeleting] = useState(false);
   const limit = 20;
 
+  const [toastInfo, setToastInfo] = useState<{show: boolean; msg: string; type: 'success'|'error'|'info'}>({ show: false, msg: '', type: 'info' });
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', default_unit: '', standard_cost_per_unit: '', description: '' });
+  const [form, setForm] = useState({ item_id: null as number | null, name: '', default_unit: '', standard_cost_per_unit: '', description: '' });
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [masterItems, setMasterItems] = useState<{
+    id: number;
+    name: string;
+    smallest_unit: string;
+    conversion_ratio: number;
+    current_average_price: number;
+    last_purchase_price?: number;
+  }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/items?limit=1000&active_only=true')
+      .then(r => r.json())
+      .then(d => setMasterItems(d.data ?? []))
+      .catch(() => {});
+  }, []);
+
+  const getCostPerSmallestUnit = (item: {
+    current_average_price?: number | string;
+    last_purchase_price?: number | string;
+  }) => {
+    const avg = Number(item.current_average_price || 0) || Number(item.last_purchase_price || 0);
+    return Number(avg.toFixed(2));
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -582,13 +612,14 @@ function IngredientsTab() {
 
   const handleOpenAdd = () => {
     setEditId(null);
-    setForm({ name: '', default_unit: '', standard_cost_per_unit: '', description: '' });
+    setForm({ item_id: null, name: '', default_unit: '', standard_cost_per_unit: '', description: '' });
     setModalOpen(true);
   };
 
   const handleOpenEdit = (row: IngRow) => {
     setEditId(row.id);
     setForm({
+      item_id: row.item_id ?? null,
       name: row.name,
       default_unit: row.default_unit || '',
       standard_cost_per_unit: row.standard_cost_per_unit != null ? String(Number(row.standard_cost_per_unit)) : '',
@@ -598,10 +629,11 @@ function IngredientsTab() {
   };
 
   const handleSave = async () => {
-    if (!form.name) return alert('Name is required');
+    if (!form.name) return setToastInfo({ show: true, msg: 'Nama bahan baku wajib diisi', type: 'error' });
     setSaving(true);
     try {
       const payload = {
+        item_id: form.item_id || null,
         name: form.name,
         default_unit: form.default_unit,
         standard_cost_per_unit: Number(form.standard_cost_per_unit) || 0,
@@ -614,9 +646,10 @@ function IngredientsTab() {
       });
       if (!res.ok) throw new Error('Failed to save');
       setModalOpen(false);
+      setToastInfo({ show: true, msg: 'Bahan baku berhasil disimpan', type: 'success' });
       load();
     } catch (e: unknown) {
-      alert((e instanceof Error ? e.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: e instanceof Error ? e.message : 'Unknown error', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -632,15 +665,20 @@ function IngredientsTab() {
         throw new Error(d.error || 'Failed to delete');
       }
       setDeleteConfirm(null);
+      setToastInfo({ show: true, msg: 'Bahan baku berhasil dihapus', type: 'success' });
       load();
     } catch (e: unknown) {
-      alert((e instanceof Error ? e.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: e instanceof Error ? e.message : 'Unknown error', type: 'error' });
     } finally {
       setDeleting(false);
     }
   };
 
   const totalPages = Math.ceil(total / limit);
+
+  const matchingMasterItems = masterItems
+    .filter(i => !form.name.trim() || i.name.toLowerCase().includes(form.name.trim().toLowerCase()))
+    .slice(0, 50);
 
   return (
     <>
@@ -688,9 +726,15 @@ function IngredientsTab() {
                       <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: 6 }} onClick={() => handleOpenEdit(row)}>
                         <Pencil size={14} />
                       </button>
-                      <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 6 }} onClick={() => setDeleteConfirm(row.id)}>
-                        <Trash2 size={14} />
-                      </button>
+                      {row.used_in_recipes > 0 ? (
+                        <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'not-allowed' }} title="Tidak bisa dihapus karena sudah ditambahkan ke resep bahan produk">
+                          <Trash2 size={14} />
+                        </button>
+                      ) : (
+                        <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 6 }} onClick={() => setDeleteConfirm(row.id)} title="Hapus">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -726,14 +770,70 @@ function IngredientsTab() {
             </div>
             
             <div className="modal-body form-grid" style={{ padding: '24px', gap: 20 }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Input label="Nama Bahan Baku" placeholder="misal: Biji Kopi Arabika" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+              <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
+                <Input
+                  label="Nama Bahan Baku"
+                  placeholder="misal: Biji Kopi Arabika"
+                  required
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value, item_id: null }))}
+                  onFocus={() => setShowNameSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
+                />
+                {showNameSuggestions && matchingMasterItems.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: '#ffffff',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    zIndex: 99999,
+                    maxHeight: 220,
+                    overflowY: 'auto',
+                    borderRadius: '6px',
+                    marginTop: '4px'
+                  }}>
+                    {matchingMasterItems.map(item => {
+                      const cost = getCostPerSmallestUnit(item);
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            padding: '10px 14px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            color: 'var(--text)',
+                            background: '#ffffff',
+                            borderBottom: '1px solid #f1f5f9'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setForm(f => ({
+                              ...f,
+                              item_id: item.id,
+                              name: item.name,
+                              default_unit: item.smallest_unit || f.default_unit,
+                              standard_cost_per_unit: String(cost)
+                            }));
+                            setShowNameSuggestions(false);
+                          }}
+                        >
+                          {item.name}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <Input label="Satuan Default" placeholder="misal: gr, ml, pcs" value={form.default_unit} onChange={e => setForm(f => ({ ...f, default_unit: e.target.value }))} />
-              <Input label="Biaya Standar / Satuan" placeholder="Rp 0" type="number" min="0" step="1" required value={form.standard_cost_per_unit} onChange={e => setForm(f => ({ ...f, standard_cost_per_unit: e.target.value }))} />
+              <Input label="Biaya Standar / Satuan" placeholder="Rp 0" type="number" min="0" step="any" required value={form.standard_cost_per_unit} onChange={e => setForm(f => ({ ...f, standard_cost_per_unit: e.target.value }))} />
               
               <div style={{ gridColumn: '1 / -1' }} className="form-group">
-                <label className="form-label">Deskripsi (Opsional)</label>
+                <label className="form-label">Deskripsi</label>
                 <textarea className="input" rows={3} placeholder="Tambahkan catatan tentang harga atau konversi satuan di sini..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
               </div>
             </div>
@@ -760,6 +860,8 @@ function IngredientsTab() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm(null)}
       />
+
+      <Toast isOpen={toastInfo.show} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />
     </>
   );
 }

@@ -44,13 +44,15 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
         WHERE o.outlet_id = $1 AND oi.item_id = i.id 
-          AND oi.item_status IN ('DITERIMA_DARI_OUTLET', 'PROSES_BELANJA', 'READY_DI_GUDANG', 'DIKIRIM')
+          AND oi.item_status IN ('PROSES_BELANJA', 'READY_DI_GUDANG', 'DIKIRIM')
+          AND o.status NOT IN ('COMPLETED', 'CANCELLED', 'DIBATALKAN')
       )::numeric AS incoming_balance
     FROM items i
-    LEFT JOIN menu_categories c ON c.id = i.category_id
+    LEFT JOIN categories c ON c.id = i.category_id
     LEFT JOIN outlet_stocks os ON os.item_id = i.id AND os.outlet_id = $1
     LEFT JOIN outlet_item_settings ois ON ois.item_id = i.id AND ois.outlet_id = $1
-    LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = i.id
+    LEFT JOIN ingredients ing ON (ing.id = i.ingredient_id OR ing.item_id = i.id)
+    LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = ing.id
     LEFT JOIN recipes r ON r.id = ri.recipe_id
     LEFT JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $1
     WHERE i.is_active = true
@@ -90,21 +92,36 @@ export async function deductOutletStockFromSales(outletId: number, dateStr: stri
     `, [trxIds]);
 
     let totalIngredientsDeducted = 0;
+    const unmatchedMenus: string[] = [];
 
     for (const item of itemsRes.rows) {
       const qtySold = Number(item.total_qty);
       if (qtySold <= 0) continue;
 
-      // Find recipe ingredients matching menu name or display name or prefix
+      // Find recipe ingredients matching menu name — same logic as monitoring query
       const ingRes = await client.query(`
-        SELECT ing.item_id as ingredient_id, ri.quantity
+        SELECT i.id as ingredient_id, SUM(ri.quantity) as quantity
         FROM menus m
         JOIN recipes r ON r.menu_id = m.id
         JOIN recipe_ingredients ri ON ri.recipe_id = r.id
         JOIN ingredients ing ON ing.id = ri.ingredient_id
-        JOIN items i ON i.id = ing.item_id
-        WHERE m.name = $1 OR m.display_name = $1 OR $1 ILIKE m.name || '%'
+        JOIN items i ON (i.id = ing.item_id OR i.ingredient_id = ing.id)
+        WHERE (
+          LOWER(TRIM(m.name)) = LOWER(TRIM($1))
+          OR (m.display_name IS NOT NULL AND m.display_name <> '' AND LOWER(TRIM(m.display_name)) = LOWER(TRIM($1)))
+          OR (
+            m.name IS NOT NULL AND m.name <> ''
+            AND m.variant IS NOT NULL AND m.variant <> ''
+            AND LOWER(TRIM($1)) LIKE LOWER(TRIM(m.name)) || ' %'
+            AND LOWER(TRIM($1)) LIKE '%' || LOWER(TRIM(m.variant))
+          )
+        )
+        GROUP BY i.id
       `, [item.item_name]);
+
+      if (ingRes.rows.length === 0) {
+        unmatchedMenus.push(item.item_name);
+      }
 
       for (const ing of ingRes.rows) {
         const qtyToDeduct = Number(ing.quantity) * qtySold;
@@ -147,7 +164,8 @@ export async function deductOutletStockFromSales(outletId: number, dateStr: stri
     return { 
       count: trxIds.length, 
       itemsDeducted: itemsRes.rows.length,
-      ingredientsDeducted: totalIngredientsDeducted 
+      ingredientsDeducted: totalIngredientsDeducted,
+      unmatchedMenus
     };
   });
 }
@@ -195,11 +213,12 @@ export async function deductFromMokaItemSales(outletId: number, startDate: strin
 
       // Cari bahan-bahan dari resep menu ini (exact + fuzzy match terhadap nama dasar menu)
       const ingRes = await client.query(`
-        SELECT ing.item_id AS ingredient_id, ri.quantity
+        SELECT i.id AS ingredient_id, ri.quantity
         FROM menus m
         JOIN recipes r ON r.menu_id = m.id
         JOIN recipe_ingredients ri ON ri.recipe_id = r.id
         JOIN ingredients ing ON ing.id = ri.ingredient_id
+        JOIN items i ON (i.id = ing.item_id OR i.ingredient_id = ing.id)
         WHERE LOWER(TRIM(m.name)) = LOWER(TRIM($1))
            OR (m.display_name IS NOT NULL AND m.display_name <> '' AND LOWER(TRIM(m.display_name)) = LOWER(TRIM($1)))
            OR (

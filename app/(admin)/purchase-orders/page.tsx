@@ -44,7 +44,9 @@ export default function PurchaseOrdersPage() {
   const [saving, setSaving] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Memproses...');
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [error, setError] = useState('');
+  const setError = (message: string) => {
+    if (message) setToast({ isOpen: true, message, type: 'error' });
+  };
   const [form, setForm] = useState({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
   const [lines, setLines] = useState<{ type: string; item_id: string | number; description: string; qty: string | number; unit_price: string | number; tax_percent: string | number; disc_percent: string | number }[]>([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
   const [draftPO, setDraftPO] = useState<PO | null>(null);
@@ -718,7 +720,7 @@ export default function PurchaseOrdersPage() {
           </div>
           <div className="card-body flush" style={{ padding: 24 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {error && <div className="alert-banner alert-danger">{error}</div>}
+
               <fieldset disabled={draftPO ? draftPO.status !== 'RFQ' : false} style={{ border: 'none', padding: 0, margin: 0 }}>
                 <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap' }}>
                   {/* Left Column */}
@@ -995,7 +997,7 @@ export default function PurchaseOrdersPage() {
           </div>
         </div>
         <div className="modal-body" style={{ padding: '24px' }}>
-          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
+
 
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             {/* Left: Email Form */}

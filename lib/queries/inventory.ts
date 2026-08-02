@@ -54,11 +54,13 @@ export async function receiveGoods(input: {
     const actualQty = qty * ratio;
     const actualUnitPrice = unit_purchase_price / ratio;
 
-    // 2. Calculate Moving Average
-    const oldValue = oldAvg * oldBalance;
+    // 2. Calculate Moving Average (abaikan stok negatif dalam perhitungan rata-rata tertimbang)
+    const effectiveOldBalance = oldBalance > 0 ? oldBalance : 0;
+    const effectiveNewBalance = effectiveOldBalance + actualQty;
+    const oldValue = oldAvg * effectiveOldBalance;
     const newValue = actualUnitPrice * actualQty;
+    const newAvgPrice = effectiveNewBalance > 0 ? (oldValue + newValue) / effectiveNewBalance : actualUnitPrice;
     const newBalance = oldBalance + actualQty;
-    const newAvgPrice = newBalance > 0 ? (oldValue + newValue) / newBalance : 0;
 
     // 3. Update price cache in items
     await client.query(

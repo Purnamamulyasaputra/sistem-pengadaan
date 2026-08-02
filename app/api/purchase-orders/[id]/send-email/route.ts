@@ -11,13 +11,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
     }
 
-    // Configure nodemailer with environment variables
+    // Configure nodemailer with explicit host and port to avoid port 465 timeout issues
     const transporter = nodemailer.createTransport({
-      service: 'gmail', // or use host/port directly
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // upgrade later with STARTTLS
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_APP_PASSWORD,
       },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
 
     // Check if env vars are set

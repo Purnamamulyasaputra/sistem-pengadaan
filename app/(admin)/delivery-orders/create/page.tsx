@@ -271,6 +271,11 @@ export default function CreateDeliveryOrderPage() {
       return;
     }
 
+    if (!targetOutletId) {
+      setError('Outlet tujuan wajib dipilih.');
+      return;
+    }
+
     if (selectedOrderId !== 'DIRECT') {
       const orderData = orders.find(o => String(o.order_id) === selectedOrderId);
       if (!orderData) return;
@@ -319,9 +324,7 @@ export default function CreateDeliveryOrderPage() {
             <h3>Buat Surat Jalan</h3>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <Link href="/delivery-orders">
-              <Button variant="outline" size="sm">Batal</Button>
-            </Link>
+            <Button variant="outline" size="sm" type="button" onClick={() => router.push('/delivery-orders')}>Batal</Button>
             <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || !selectedOrderId || orderItems.filter(i => i.selected).length === 0}>
               {saving ? 'Membuat Surat Jalan...' : 'Buat Surat Jalan'}
             </Button>

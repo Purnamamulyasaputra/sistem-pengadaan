@@ -270,7 +270,7 @@ export async function getHppRecipeDetail(recipeId: number): Promise<{
       ri.quantity, ri.unit, ri.cost_per_unit, ri.extension, ri.sort_order
     FROM recipe_ingredients ri
     JOIN ingredients i ON i.id = ri.ingredient_id
-    LEFT JOIN items it ON it.id = i.item_id
+    LEFT JOIN items it ON (it.id = i.item_id OR it.ingredient_id = i.id)
     JOIN recipes r ON r.id = ri.recipe_id
     WHERE ri.recipe_id = $1
     ORDER BY ri.sort_order
@@ -318,7 +318,7 @@ export async function getHppIngredients(opts?: {
       COALESCE(COUNT(ri.id)::int, 0) AS used_in_recipes,
       (it.id IS NOT NULL) AS is_linked
     FROM ingredients i
-    LEFT JOIN items it ON it.id = i.item_id
+    LEFT JOIN items it ON (it.id = i.item_id OR it.ingredient_id = i.id)
     LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = i.id
     ${where}
     GROUP BY i.id, it.id, i.name, it.name, it.smallest_unit, i.default_unit, it.current_average_price, it.conversion_ratio, i.standard_cost_per_unit, i.description

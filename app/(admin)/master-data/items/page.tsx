@@ -11,6 +11,7 @@ import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
 import { Toggle } from '@/components/ui/Toggle';
 import { Toast } from '@/components/ui/Toast';
 import { Select } from '@/components/ui/Select';
+import { HelpCircle, Info, Tag, Package, DollarSign, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
 
 interface Item {
   id: number; name: string; category_id: number; category_name: string; barcode?: string;
@@ -20,9 +21,12 @@ interface Item {
   is_hpp?: boolean;
   ingredient_id?: number | null;
   ingredient_name?: string;
+  is_split_allowed?: boolean;
+  min_order_qty?: number;
+  order_multiple?: number;
 }
 interface Category { id: number; name: string; }
-interface Ingredient { id: number; name: string; }
+interface Ingredient { id: number; name: string; unit?: string; }
 
 const fmtCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
@@ -54,23 +58,81 @@ function getUniqueUnits(defaultUnits: string[], dynamicUnits: (string | null | u
   return result.map(u => ({ value: u, label: u }));
 }
 
+function getStockStatus(item: Item): 'MERAH' | 'MENIPIS' | 'AMAN' {
+  const stock = Number(item.current_stock || 0);
+  const min = Number(item.minimum_threshold || 0);
+  const target = Number(item.target_stock || 0);
+
+  if (stock <= min) return 'MERAH';
+  if (target > 0) {
+    if (stock <= target) return 'MENIPIS';
+    return 'AMAN';
+  }
+  if (stock <= min * 1.5) return 'MENIPIS';
+  return 'AMAN';
+}
+
+function InfoTooltip({ text, align = 'right', width = 230 }: { text: string; align?: 'left' | 'right' | 'center'; width?: number }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 6, cursor: 'help' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <HelpCircle size={15} color="#64748b" />
+      {hover && (
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          ...(align === 'left' ? { left: 0 } : align === 'center' ? { left: '50%', transform: 'translateX(-50%)' } : { right: 0 }),
+          marginBottom: 6,
+          background: '#ffffff',
+          color: '#1e293b',
+          border: '1px solid #cbd5e1',
+          fontSize: 11.5,
+          fontWeight: 500,
+          padding: '10px 12px',
+          borderRadius: 8,
+          width,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          zIndex: 9999,
+          lineHeight: 1.4,
+          textAlign: 'left',
+          pointerEvents: 'none'
+        }}>
+          {text}
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            ...(align === 'left' ? { left: 6 } : align === 'center' ? { left: '50%', transform: 'translateX(-50%)' } : { right: 6 }),
+            borderWidth: '5px',
+            borderStyle: 'solid',
+            borderColor: '#ffffff transparent transparent transparent'
+          }} />
+        </div>
+      )}
+    </span>
+  );
+}
+
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
-  const [filterExpiry, setFilterExpiry] = useState('');
-  const [filterUnit, setFilterUnit] = useState('');
+  const [filterPerishable, setFilterPerishable] = useState('');
+  const [filterStockStatus, setFilterStockStatus] = useState('');
 
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
+  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
 
   // Stock Card
   const [confirmDelete, setConfirmDelete] = useState<Item | null>(null);
@@ -93,18 +155,17 @@ export default function ItemsPage() {
   // Reset to page 1 only when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, catFilter, filterExpiry, filterUnit]);
+  }, [search, catFilter, filterPerishable, filterStockStatus]);
 
   useEffect(() => {
     fetch('/api/categories').then(r => r.json()).then(d => setCategories(d.data ?? []));
-    fetch('/api/hpp/ingredients?limit=500').then(r => r.json()).then(d => setIngredients(d.data ?? []));
   }, []);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   function openAdd() {
     setEditing(null);
-    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '' });
+    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1' });
     setError('');
     setShowModal(true);
   }
@@ -120,7 +181,10 @@ export default function ItemsPage() {
       is_perishable: item.is_perishable, is_active: item.is_active,
       purchase_price: String(Number(item.current_average_price ?? 0) * Number(item.conversion_ratio || 1)),
       has_conversion: hasConv,
-      ingredient_id: item.ingredient_id ? String(item.ingredient_id) : ''
+      ingredient_id: item.ingredient_id ? String(item.ingredient_id) : '',
+      is_split_allowed: item.is_split_allowed ?? false,
+      min_order_qty: String(Number(item.min_order_qty ?? 1)),
+      order_multiple: String(Number(item.order_multiple ?? 1))
     });
     setError('');
     setShowModal(true);
@@ -149,7 +213,10 @@ export default function ItemsPage() {
         minimum_threshold: Number(form.minimum_threshold),
         target_stock: Number(form.target_stock),
         current_average_price: finalAvgPrice,
-        ingredient_id: form.ingredient_id ? Number(form.ingredient_id) : null
+        ingredient_id: form.ingredient_id ? Number(form.ingredient_id) : null,
+        is_split_allowed: Boolean(form.is_split_allowed),
+        min_order_qty: Number(form.min_order_qty || 1),
+        order_multiple: Number(form.order_multiple || 1)
       };
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       let data;
@@ -188,25 +255,37 @@ export default function ItemsPage() {
 
 
 
-  const uniqueUnits = Array.from(new Set(items.map(i => i.purchase_unit))).filter(Boolean).sort();
-
   const filteredItems = items.filter(item => {
-    if (filterExpiry === 'SHORT' && !item.is_perishable) return false;
-    if (filterUnit && item.purchase_unit !== filterUnit) return false;
+    if (filterPerishable === 'PERISHABLE' && !item.is_perishable) return false;
+    if (filterPerishable === 'DURABLE' && item.is_perishable) return false;
+    if (filterStockStatus && getStockStatus(item) !== filterStockStatus) return false;
     return true;
   });
 
   const paginatedItems = filteredItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
 
+  const matchingExistingItems = items
+    .filter(i => i.name.toLowerCase().includes(form.name.trim().toLowerCase()))
+    .slice(0, 8);
+
+  const stokMerahCount = items.filter(i => getStockStatus(i) === 'MERAH').length;
+  const stokMenipisCount = items.filter(i => getStockStatus(i) === 'MENIPIS').length;
+
   return (
     <section className="screen">
       <div className="card">
         <MasterDataTabs activeTab="items" />
         <div className="card-body flush">
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input className="input" placeholder="Cari nama barang..." style={{ width: '200px' }} value={search} onChange={e => setSearch(e.target.value)} />
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, background: '#ffffff' }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                className="input"
+                placeholder="Cari nama barang atau SKU..."
+                style={{ width: '220px', height: 34 }}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
               <Select
                 value={catFilter}
                 onChange={val => setCatFilter(String(val))}
@@ -214,31 +293,61 @@ export default function ItemsPage() {
                   { value: '', label: 'Semua Kategori' },
                   ...categories.map(c => ({ value: String(c.id), label: c.name }))
                 ]}
-                style={{ width: 160 }}
-                inputStyle={{ height: 32 }}
+                style={{ width: 170 }}
+                inputStyle={{ height: 34 }}
               />
               <Select
-                value={filterUnit}
-                onChange={val => setFilterUnit(String(val))}
+                value={filterPerishable}
+                onChange={val => setFilterPerishable(String(val))}
                 options={[
-                  { value: '', label: 'Semua Satuan' },
-                  ...uniqueUnits.map(u => ({ value: u, label: u }))
+                  { value: '', label: 'Semua Sifat' },
+                  { value: 'PERISHABLE', label: 'Cepat Basi' },
+                  { value: 'DURABLE', label: 'Tahan Lama' }
                 ]}
-                style={{ width: 130 }}
-                inputStyle={{ height: 32 }}
+                style={{ width: 140 }}
+                inputStyle={{ height: 34 }}
               />
               <Select
-                value={filterExpiry}
-                onChange={val => setFilterExpiry(String(val))}
+                value={filterStockStatus}
+                onChange={val => setFilterStockStatus(String(val))}
                 options={[
-                  { value: '', label: 'Semua Kedaluwarsa' },
-                  { value: 'SHORT', label: 'Hanya Cepat Basi' }
+                  { value: '', label: 'Semua Stok' },
+                  { value: 'MERAH', label: stokMerahCount > 0 ? `Stok Merah (${stokMerahCount})` : 'Stok Merah' },
+                  { value: 'MENIPIS', label: stokMenipisCount > 0 ? `Stok Menipis (${stokMenipisCount})` : 'Stok Menipis' },
+                  { value: 'AMAN', label: 'Stok Aman' }
                 ]}
-                style={{ width: 150 }}
-                inputStyle={{ height: 32 }}
+                style={{ width: 170 }}
+                inputStyle={{ height: 34 }}
               />
+              {(search || catFilter || filterPerishable || filterStockStatus) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setCatFilter('');
+                    setFilterPerishable('');
+                    setFilterStockStatus('');
+                  }}
+                  style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    color: '#dc2626',
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    height: 34,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  Reset Filter
+                </button>
+              )}
             </div>
-            <Button variant="primary" size="sm" onClick={openAdd}>+ Tambah Barang</Button>
+            <Button variant="primary" size="sm" onClick={openAdd} style={{ height: 34 }}>+ Tambah Barang</Button>
           </div>
 
           {loading ? (
@@ -260,7 +369,6 @@ export default function ItemsPage() {
                       <th style={{ width: 140 }}>Satuan (Beli / Ecer)</th>
                       <th className="center" style={{ width: 80 }}>Rasio</th>
                       <th className="right" style={{ width: 120 }}>Rata Harga</th>
-                      <th className="center" style={{ width: 100 }}>Status</th>
                       <th className="center" style={{ width: 100 }}>Aksi</th>
                       <th></th>
                     </tr>
@@ -276,7 +384,10 @@ export default function ItemsPage() {
                               <span style={{ fontSize: 9, background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: 0.5 }}>HPP / RESEP</span>
                             )}
                           </div>
-                          {item.is_perishable && <span style={{ fontSize: 10, color: '#d97706', fontWeight: 600 }}>CEPAT BASI</span>}
+                          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                            {!item.is_active && <span style={{ fontSize: 10, background: '#f1f5f9', color: '#64748b', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>NONAKTIF</span>}
+                            {item.is_perishable && <span style={{ fontSize: 10, color: '#d97706', fontWeight: 600 }}>CEPAT BASI</span>}
+                          </div>
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -286,11 +397,6 @@ export default function ItemsPage() {
                         </td>
                         <td className="center num muted">{Math.round(Number(item.conversion_ratio)).toLocaleString('id-ID')}</td>
                         <td className="right num">{fmtCurrency(item.current_average_price).replace(',00', '')}</td>
-                        <td className="center">
-                          <Badge variant={item.is_active ? 'green' : 'gray'}>
-                            {item.is_active ? 'Aktif' : 'Nonaktif'}
-                          </Badge>
-                        </td>
                         <td className="center">
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'center', whiteSpace: 'nowrap' }}>
                             <Button size="sm" onClick={(e) => { e.stopPropagation(); openEdit(item); }} title="Edit Barang" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
@@ -332,23 +438,69 @@ export default function ItemsPage() {
         }
       >
         <div style={{ padding: '0px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 290px', gap: '24px' }}>
 
             {/* LEFT COLUMN: Main Inputs */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
               <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1.4 }}>
-                  <datalist id="existing-item-names">
-                    {items.map(item => <option key={item.id} value={item.name} />)}
-                  </datalist>
+                <div style={{ flex: 1.4, position: 'relative' }}>
                   <Input
                     label="Nama Barang"
                     value={form.name}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    onFocus={() => setShowNameSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
                     placeholder="buat nama barang baru"
-                    list="existing-item-names"
                   />
+                  {showNameSuggestions && matchingExistingItems.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: '#ffffff',
+                      border: '1px solid var(--border)',
+                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                      zIndex: 99999,
+                      maxHeight: 220,
+                      overflowY: 'auto',
+                      borderRadius: '6px',
+                      marginTop: '4px'
+                    }}>
+                      {matchingExistingItems.map(item => (
+                        <div
+                          key={item.id}
+                          style={{
+                            padding: '10px 14px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            color: '#12201a',
+                            background: '#ffffff',
+                            borderBottom: '1px solid #f1f5f9',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setForm(f => ({ ...f, name: item.name }));
+                            setShowNameSuggestions(false);
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#12201a' }}>{item.name}</div>
+                            {item.barcode && <div style={{ fontSize: '11px', color: '#65786f' }}>SKU: {item.barcode}</div>}
+                          </div>
+                          <span style={{ fontSize: '11px', color: '#475569', background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                            Sudah ada
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div style={{ flex: 0.9 }}>
                   <Input
@@ -398,7 +550,22 @@ export default function ItemsPage() {
                 </div>
 
                 <div className="form-group" style={{ flex: 1.5, marginBottom: 0, opacity: form.has_conversion ? 1 : 0.4, transition: 'opacity 0.2s' }}>
-                  <label className="req">Isi per 1 {form.purchase_unit || 'Satuan Beli'}</label>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                    <label className="req" style={{ marginBottom: 0 }}>Isi per 1 {form.purchase_unit || 'Satuan Beli'}</label>
+                    <InfoTooltip
+                      align="left"
+                      width={280}
+                      text={
+                        form.has_conversion && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0
+                          ? `1 ${form.purchase_unit} = ${form.conversion_ratio} ${form.smallest_unit} • Harga HPP (Moving Avg): ${fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per ${form.smallest_unit}${
+                              editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0
+                                ? ` • Beli Terakhir: ${fmtCurrency(Number(editing.last_purchase_price))} per ${editing.smallest_unit}`
+                                : ''
+                            }`
+                          : 'Masukkan angka konversi dari satuan beli (contoh: 1 Kg berisi 1000 gr).'
+                      }
+                    />
+                  </div>
                   <div style={{ position: 'relative' }}>
                     <input className="input" type="number" min="0.01" step="0.01" value={form.conversion_ratio} onChange={e => setForm(f => ({ ...f, conversion_ratio: e.target.value }))} disabled={!form.has_conversion} style={{ paddingRight: 60, cursor: form.has_conversion ? 'text' : 'not-allowed' }} />
                     <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)' }}>{form.smallest_unit}</span>
@@ -414,13 +581,25 @@ export default function ItemsPage() {
                     if (/^\d*$/.test(raw)) setForm(f => ({ ...f, purchase_price: raw }));
                   }} onFocus={e => e.target.select()} />
                 </div>
-                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Batas Min.</label>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ marginBottom: 0 }}>Batas Min.</label>
+                    <InfoTooltip align="left" width={230} text="Stok kritis terendah di outlet. Jika stok mencapai angka ini, sistem memberi peringatan merah (Reorder Point)." />
+                  </div>
                   <input className="input" type="number" min="0" value={form.minimum_threshold} onChange={e => setForm(f => ({ ...f, minimum_threshold: e.target.value }))} />
                 </div>
-                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Target Stok.</label>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ marginBottom: 0 }}>Target Stok.</label>
+                    <InfoTooltip align="left" width={230} text="Stok ideal/maksimal di outlet. Sistem menghitung saran pembelian berdasarkan selisih Target Stok dikurangi Stok Saat Ini." />
+                  </div>
                   <input className="input" type="number" min="0" value={form.target_stock} onChange={e => setForm(f => ({ ...f, target_stock: e.target.value }))} />
                 </div>
-                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Jenis Peringatan</label>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ marginBottom: 0 }}>Jenis Peringatan</label>
+                    <InfoTooltip align="right" width={230} text="Pilih 'Absolut' (acuan jumlah fisik barang) atau 'Persentase' (acuan persentase dari target stok)." />
+                  </div>
                   <Select
                     value={form.threshold_type}
                     onChange={val => setForm(f => ({ ...f, threshold_type: String(val) }))}
@@ -432,40 +611,133 @@ export default function ItemsPage() {
                 </div>
               </div>
 
-              {form.has_conversion && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0 && (
-                <div style={{ fontSize: 12.5, color: '#0369a1', background: '#e0f2fe', padding: '8px 12px', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-                    <span>1 {form.purchase_unit} berisi {form.conversion_ratio} {form.smallest_unit}.</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingLeft: 22 }}>
-                    <span>🔵 <strong>Harga HPP (Moving Avg):</strong> {fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per {form.smallest_unit}</span>
-                    {editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0 && (
-                      <span>🟢 <strong>Harga Beli Terakhir:</strong> {fmtCurrency(Number(editing.last_purchase_price))} per {editing.smallest_unit} = {fmtCurrency(Number(editing.last_purchase_price) * Number(editing.conversion_ratio))} per {editing.purchase_unit}</span>
+              {Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0 && (
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  color: '#15803d',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginTop: 4,
+                  marginBottom: 4
+                }}>
+                  <div>
+                    <span style={{ fontWeight: 600 }}>Keterangan Harga HPP per {form.smallest_unit || 'Satuan Terkecil'}:</span>{' '}
+                    {form.has_conversion && Number(form.conversion_ratio) > 1 ? (
+                      <>
+                        1 {form.purchase_unit || 'Satuan'} ({fmtCurrency(Number(form.purchase_price))}) : {Number(form.conversion_ratio).toLocaleString('id-ID')} {form.smallest_unit || 'Satuan'} ={' '}
+                        <strong style={{ fontSize: '14px', color: '#166534' }}>
+                          {fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} / {form.smallest_unit || 'satuan'}
+                        </strong>
+                      </>
+                    ) : (
+                      <strong style={{ fontSize: '14px', color: '#166534' }}>
+                        {fmtCurrency(Number(form.purchase_price))} / {form.smallest_unit || form.purchase_unit || 'satuan'}
+                      </strong>
                     )}
                   </div>
+                  {editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0 && (
+                    <span style={{ fontSize: '12px', color: '#166534', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                      Beli Terakhir: {fmtCurrency(Number(editing.last_purchase_price))} / {editing.smallest_unit}
+                    </span>
+                  )}
                 </div>
               )}
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '14px 16px', marginTop: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>
+                      Aturan Pengiriman Gudang Pusat
+                    </span>
+                    <InfoTooltip align="left" width={260} text="Mengatur minimal pembelian & kelipatan order outlet ke gudang pusat. Aturan pembulatan kemasan diatur melalui toggle 'Pusat Boleh Kirim Pecahan' di kolom kanan." />
+                  </div>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 500, color: form.is_split_allowed ? '#059669' : '#475569', background: form.is_split_allowed ? '#ecfdf5' : '#f1f5f9', padding: '3px 8px', borderRadius: 6, border: '1px solid', borderColor: form.is_split_allowed ? '#a7f3d0' : '#e2e8f0' }}>
+                    {form.is_split_allowed ? <CheckCircle2 size={13} color="#059669" /> : <Package size={13} color="#64748b" />}
+                    {form.is_split_allowed ? 'Kirim Pecahan / Desimal' : 'Kirim Kemasan Utuh (Bulat)'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                      <label style={{ marginBottom: 0 }}>Min. Pengiriman ({form.purchase_unit || 'Satuan Pusat'})</label>
+                      <InfoTooltip align="left" width={220} text="Jumlah minimal barang yang harus dipesan dalam 1 kali order." />
+                    </div>
+                    <input
+                      className="input"
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      value={form.min_order_qty}
+                      onChange={e => setForm(f => ({ ...f, min_order_qty: e.target.value }))}
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                      <label style={{ marginBottom: 0 }}>Kelipatan Kirim ({form.purchase_unit || 'Satuan Pusat'})</label>
+                      <InfoTooltip align="left" width={220} text="Pesanan akan dibulatkan sesuai kelipatan angka ini (misal kelipatan 5: pesanan 7 dibulatkan ke 10)." />
+                    </div>
+                    <input
+                      className="input"
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      value={form.order_multiple}
+                      onChange={e => setForm(f => ({ ...f, order_multiple: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* RIGHT COLUMN: Settings & Toggles */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: 8, border: '1px solid #e2e8f0', alignSelf: 'start' }}>
-              <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #cbd5e1', paddingBottom: 8 }}>Pengaturan & Aturan</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: '#f8fafc', padding: '18px 16px', borderRadius: 8, border: '1px solid #e2e8f0', alignSelf: 'start' }}>
+              <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #cbd5e1', paddingBottom: 8 }}>
+                Pengaturan & Aturan
+              </h4>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Satuan Eceran / Terkecil</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Satuan Eceran / Terkecil</span>
+                  <InfoTooltip text="Aktifkan jika barang memiliki satuan outlet (contoh: Beli Kg, Pakai gram)." />
+                </div>
                 <Toggle checked={form.has_conversion} onChange={c => setForm(f => ({ ...f, has_conversion: c }))} />
               </div>
 
+              <div style={{ borderTop: '1px dashed #cbd5e1', margin: '2px 0' }} />
+
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Barang Cepat Basi</span>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Pusat Boleh Kirim Pecahan</span>
+                  <InfoTooltip text="Aktif: Pusat boleh kirim angka desimal (contoh: 1,5 Kg). Nonaktif: Wajib kemasan utuh, saran PO dibulatkan ke atas (contoh: 1,5 Kg → 2 Kg)." />
+                </div>
+                <Toggle checked={form.is_split_allowed} onChange={c => setForm(f => ({ ...f, is_split_allowed: c }))} />
+              </div>
+
+              <div style={{ borderTop: '1px dashed #cbd5e1', margin: '2px 0' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Barang Cepat Basi</span>
+                  <InfoTooltip text="Aktifkan untuk barang perishable / mudah rusak agar sistem memberi prioritas stok & peringatan." />
+                </div>
                 <Toggle checked={form.is_perishable} onChange={c => setForm(f => ({ ...f, is_perishable: c }))} />
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', margin: '4px 0' }} />
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: form.is_active ? 'var(--primary)' : 'var(--muted)' }}>{form.is_active ? 'Barang Aktif' : 'Nonaktif'}</span>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: form.is_active ? 'var(--primary)' : 'var(--muted)' }}>
+                    {form.is_active ? 'Barang Aktif' : 'Nonaktif'}
+                  </span>
+                  <InfoTooltip text="Barang aktif dapat dipesan oleh outlet. Nonaktifkan untuk menyembunyikan sementara." />
+                </div>
                 <Toggle checked={form.is_active} onChange={c => setForm(f => ({ ...f, is_active: c }))} />
               </div>
             </div>

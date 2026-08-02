@@ -204,7 +204,8 @@ export async function getItemsForOpname(locationType: string, locationId?: numbe
        LEFT JOIN categories c ON c.id = i.category_id
        LEFT JOIN outlet_stocks os ON os.item_id = i.id AND os.outlet_id = $1
        LEFT JOIN outlet_item_settings ois ON ois.item_id = i.id AND ois.outlet_id = $1
-       LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = i.id
+       LEFT JOIN ingredients ing ON (ing.id = i.ingredient_id OR ing.item_id = i.id)
+       LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = ing.id
        LEFT JOIN recipes r ON r.id = ri.recipe_id
        LEFT JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $1
        WHERE i.is_active = TRUE

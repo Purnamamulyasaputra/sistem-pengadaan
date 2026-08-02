@@ -4,6 +4,42 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SettingsTabs } from '@/components/ui/SettingsTabs';
 import { Toast } from '@/components/ui/Toast';
+import { HelpCircle } from 'lucide-react';
+
+function InfoTooltip({ text, align = 'right', width = 230 }: { text: string; align?: 'left' | 'right' | 'center'; width?: number }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 6, cursor: 'help' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <HelpCircle size={15} color="#64748b" />
+      {hover && (
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          ...(align === 'left' ? { left: 0 } : align === 'center' ? { left: '50%', transform: 'translateX(-50%)' } : { right: 0 }),
+          marginBottom: 6,
+          background: '#ffffff',
+          color: '#1e293b',
+          border: '1px solid #cbd5e1',
+          fontSize: 11.5,
+          fontWeight: 500,
+          padding: '10px 12px',
+          borderRadius: 8,
+          width,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          zIndex: 9999,
+          lineHeight: 1.4,
+          textTransform: 'none'
+        }}>
+          {text}
+        </div>
+      )}
+    </span>
+  );
+}
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -68,7 +104,7 @@ export default function SettingsPage() {
       <SettingsTabs />
       <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, open: false })} />
 
-      <div className="card" style={{ maxWidth: 640, margin: '0 auto', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+      <div className="card" style={{ maxWidth: 900, margin: '0 auto', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
         <div className="card-head" style={{ padding: '14px 20px' }}>
           <div>
             <h3 style={{ fontSize: '15px', margin: 0, fontWeight: 700 }}>Profil Perusahaan</h3>
@@ -130,7 +166,10 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="form-group mb-0 md:col-span-2">
-                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Informasi Rekening Bank</label>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center">
+                    Informasi Rekening Bank
+                    <InfoTooltip text="Digunakan untuk referensi transfer internal atau pembayaran." width={260} />
+                  </label>
                   <textarea 
                     className="form-control" 
                     rows={2}
@@ -139,11 +178,13 @@ export default function SettingsPage() {
                     placeholder="Contoh: Bank BCA - 1234567890 a.n. PT Sunrise Daily"
                     style={{ padding: '10px 12px' }}
                   />
-                  <p className="text-muted" style={{ fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>Informasi ini mungkin digunakan untuk referensi transfer internal atau instruksi pembayaran.</p>
                 </div>
 
                 <div className="form-group mb-0 md:col-span-2">
-                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Alamat Lengkap Gudang Pusat</label>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center">
+                    Alamat Lengkap Gudang Pusat
+                    <InfoTooltip text="Dicetak pada kop Surat Jalan dan PO." width={230} />
+                  </label>
                   <textarea 
                     className="form-control" 
                     rows={2}
@@ -151,7 +192,6 @@ export default function SettingsPage() {
                     onChange={e => setSettings({...settings, warehouse_address: e.target.value})} 
                     style={{ padding: '10px 12px' }}
                   />
-                  <p className="text-muted" style={{ fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>Alamat ini akan dicetak pada bagian atas Surat Jalan dan Purchase Orders (PO).</p>
                 </div>
               </div>
 
@@ -179,10 +219,10 @@ export default function SettingsPage() {
                   </div>
                 </label>
                 <div>
-                  <label htmlFor="require_barcode_scan" className="text-[14px] font-bold text-gray-800 mb-1 cursor-pointer block">Wajibkan Scan Barcode (Pengiriman & Penerimaan)</label>
-                  <p className="text-muted" style={{ fontSize: '13px', marginTop: '4px', marginBottom: 0, lineHeight: 1.5, color: '#64748b' }}>
-                    Jika dimatikan, staf Pusat dan Outlet dapat mengklik tombol "Kirim Semua Barang" atau "Terima Semua Barang" untuk mempercepat operasional tanpa harus *scan* barcode satu per satu. Fitur unggah bukti foto juga akan menjadi opsional.
-                  </p>
+                  <label htmlFor="require_barcode_scan" className="text-[14px] font-bold text-gray-800 mb-1 cursor-pointer flex items-center">
+                    Wajibkan Scan Barcode (Pengiriman & Penerimaan)
+                    <InfoTooltip text="Jika dimatikan, staf bisa bypass scan barcode untuk mempercepat proses operasional." align="left" width={280} />
+                  </label>
                 </div>
               </div>
             </div>

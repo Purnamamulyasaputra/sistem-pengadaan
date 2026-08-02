@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        WHERE o.outlet_id = $1 
+         AND o.status NOT IN ('COMPLETED', 'CANCELLED', 'DIBATALKAN')
          AND oi.item_status NOT IN ('SELESAI', 'DIBATALKAN')`,
       [session.outletId]
     );

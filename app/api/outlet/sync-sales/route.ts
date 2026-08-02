@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
       success: true, 
       syncStatus: syncResult,
       deduction: deductionResult,
+      unmatched_menus: deductionResult.unmatchedMenus || [],
       message: `Berhasil tersinkronisasi. ${deductionResult.count} transaksi baru diproses, memotong ${deductionResult.ingredientsDeducted} bahan dari ${deductionResult.itemsDeducted} jenis menu terjual.`
     });
   } catch (error: unknown) {

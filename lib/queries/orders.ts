@@ -90,7 +90,7 @@ export async function getOrderById(id: number) {
   const itemsResult = await query<OrderItem>(
     `SELECT oi.*, i.name AS item_name, c.name AS category_name,
             i.purchase_unit, i.smallest_unit, i.conversion_ratio,
-            (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_stock
+            COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock
      FROM order_items oi
      LEFT JOIN items i ON i.id = oi.item_id
      LEFT JOIN categories c ON c.id = i.category_id
@@ -163,7 +163,7 @@ export async function getOrderRecap(opts?: { status?: string; outletId?: number 
             oi.id AS order_item_id, oi.item_id, i.name AS item_name, i.barcode, i.purchase_unit, i.smallest_unit, i.conversion_ratio,
             oi.qty_request, oi.qty_approved, oi.smallest_unit_qty, oi.approved_smallest_qty, oi.additional_notes, oi.center_notes, oi.fulfillment_status, oi.item_status, oi.distribution_price,
             c.name AS category_name, i.current_average_price,
-            (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_stock
+            COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock
      FROM orders o
      LEFT JOIN outlets outlet ON outlet.id = o.outlet_id
      LEFT JOIN order_items oi ON oi.order_id = o.id
@@ -181,10 +181,10 @@ export async function updateOrderItemStatus(
   updates: Partial<{ item_status: string; fulfillment_status: string; distribution_price: number; qty_approved: number; approved_smallest_qty: number; center_notes: string }>
 ) {
   return withTransaction(async (client) => {
-    const fields = Object.keys(updates);
+    const fields = Object.keys(updates).filter(key => (updates as Record<string, unknown>)[key] !== undefined);
     if (!fields.length) return null;
     const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
-    const values = Object.values(updates);
+    const values = fields.map(f => (updates as Record<string, unknown>)[f]);
     const result = await client.query(
       `UPDATE order_items SET ${sets}, updated_at = now() WHERE id = $1 RETURNING *`,
       [orderItemId, ...values]

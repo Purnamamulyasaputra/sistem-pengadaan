@@ -1,6 +1,7 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getItemById, updateItem, deleteItem, generateBarcode } from '@/lib/queries/items';
+import { getItemById, updateItem, deleteItem } from '@/lib/queries/items';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -21,9 +22,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json();
 
+  if ('name' in body && (!body.name || !String(body.name).trim())) {
+    return NextResponse.json({ success: false, message: 'Nama barang tidak boleh kosong', data: null }, { status: 400 });
+  }
+
   if (body.barcode === '') {
     body.barcode = null;
   }
+  if ('ingredient_id' in body) {
+    body.ingredient_id = body.ingredient_id ? Number(body.ingredient_id) : null;
+  }
+  if ('category_id' in body && body.category_id) body.category_id = Number(body.category_id);
+  if ('conversion_ratio' in body && body.conversion_ratio) body.conversion_ratio = Number(body.conversion_ratio);
+  if ('minimum_threshold' in body && body.minimum_threshold !== undefined) body.minimum_threshold = Number(body.minimum_threshold);
+  if ('target_stock' in body && body.target_stock !== undefined) body.target_stock = Number(body.target_stock);
+  if ('current_average_price' in body && body.current_average_price !== undefined) body.current_average_price = Number(body.current_average_price);
+  if ('min_order_qty' in body && body.min_order_qty !== undefined) body.min_order_qty = Number(body.min_order_qty);
+  if ('order_multiple' in body && body.order_multiple !== undefined) body.order_multiple = Number(body.order_multiple);
+  if ('is_perishable' in body) body.is_perishable = body.is_perishable === true || body.is_perishable === 'true';
+  if ('is_active' in body) body.is_active = body.is_active === true || body.is_active === 'true';
+  if ('is_split_allowed' in body) body.is_split_allowed = body.is_split_allowed === true || body.is_split_allowed === 'true';
 
   try {
     const item = await updateItem(Number(id), body);

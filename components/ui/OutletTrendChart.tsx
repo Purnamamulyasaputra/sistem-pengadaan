@@ -13,17 +13,17 @@ export function OutletTrendChart({ data }: { data: { labelDate: string, value: n
   }
 
   return (
-    <div style={{ height: 200, width: '100%', marginTop: 24, paddingBottom: 10 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+    <div style={{ height: 200, width: '100%', marginTop: 24, paddingBottom: 10, outline: 'none' }} tabIndex={-1}>
+      <ResponsiveContainer width="100%" height="100%" style={{ outline: 'none' }}>
+        <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} style={{ outline: 'none' }} tabIndex={-1}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
           <XAxis dataKey="labelDate" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} dy={10} />
           <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip 
+            cursor={false}
             formatter={(value: any) => [value, 'Jumlah Pesanan (RO)']}
             labelStyle={{ color: '#0f172a', fontWeight: 'bold', marginBottom: 4 }}
             contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-            cursor={{ fill: '#f1f5f9' }}
           />
           <Bar dataKey="value" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={40} />
         </BarChart>

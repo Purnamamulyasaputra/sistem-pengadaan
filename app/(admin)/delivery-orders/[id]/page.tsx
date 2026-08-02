@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Toast } from '@/components/ui/Toast';
+import { FullScreenLoader } from '@/components/ui/FullScreenLoader';
 import { FileText, Printer } from 'lucide-react';
 import bwipjs from 'bwip-js';
 
@@ -297,8 +298,11 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
   const isFullyScannedOut = scannedOutItems === totalItems && totalItems > 0;
 
   return (
-    <section className="screen">
-      <div className="card">
+    <>
+      <FullScreenLoader open={scanning} label="Mohon tunggu sebentar, data sedang disimpan." />
+
+      <section className="screen">
+        <div className="card">
         <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
             <div>
@@ -343,7 +347,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <h4 style={{ marginBottom: 4 }}>Pengiriman Langsung</h4>
-                    <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>Fitur wajib scan barcode sedang dinonaktifkan di Pengaturan. Anda dapat langsung mengirim semua barang dalam Surat Jalan ini.</p>
+                    <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>Scan barcode dinonaktifkan. Anda bisa langsung mengirim pesanan.</p>
                   </div>
                   <Button variant="primary" onClick={() => setConfirmShipAll(true)} disabled={scanning} style={{ padding: '0 24px', height: 40 }}>
                     {scanning ? 'Memproses...' : 'Kirim Semua Barang'}
@@ -378,10 +382,10 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
           {dn.status === 'DIKIRIM' && (
             <div style={{ padding: 24, background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-              <h4 style={{ marginBottom: 12 }}>Approve & Transfer Stok (Pusat ➔ Outlet)</h4>
+              <h4 style={{ marginBottom: 12 }}>Konfirmasi Penerimaan Barang</h4>
               <div style={{ padding: '12px 16px', background: '#ecfdf5', color: '#065f46', borderRadius: 6, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8, flexShrink: 0 }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                <span><strong>Status: DIKIRIM (Dalam Perjalanan).</strong> Tekan tombol di bawah untuk menyetujui seluruh barang, mengurangi stok Gudang Pusat, dan menambahkan stok ke Gudang Outlet secara otomatis dalam 1 transaksi.</span>
+                <span><strong>Status: DIKIRIM.</strong> Tekan tombol di bawah untuk menyetujui penerimaan. Stok Pusat akan berkurang dan stok Outlet akan bertambah otomatis.</span>
               </div>
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -396,7 +400,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                     <polyline points="22 4 12 14.01 9 11.01"></polyline>
                   </svg>
-                  {scanning ? 'Memproses Transfer...' : 'Approve & Transfer Stok (Pusat ➔ Outlet)'}
+                  {scanning ? 'Memproses...' : 'Terima Semua Barang'}
                 </Button>
               </div>
             </div>
@@ -585,5 +589,6 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
     </section>
+    </>
   );
 }

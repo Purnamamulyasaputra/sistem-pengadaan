@@ -52,7 +52,6 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/hpp', label: 'Master Menu & HPP', icon: <Icon name="hpp" /> },
   { href: '/stock-card', label: 'Stok Pusat', icon: <Icon name="clipboard" /> },
   { href: '/stock-monitoring', label: 'Stok Seluruh Outlet', icon: <LayoutGrid size={15} /> },
-  { href: '/warehouse', label: 'Penerimaan Barang', icon: <Icon name="box" /> },
   { href: '/opname/central', label: 'Stock Opname', icon: <Icon name="package" /> },
 
   { section: 'DISTRIBUSI KE OUTLET' },
@@ -62,6 +61,7 @@ const CENTRAL_MENU: NavItem[] = [
 
   { section: 'PEMBELIAN (PURCHASING)' },
   { href: '/purchase-orders', label: 'Pembelian (PO)', icon: <Icon name="cart" /> },
+  { href: '/warehouse', label: 'Penerimaan Barang', icon: <Icon name="box" /> },
 
   { section: 'INTEGRASI MOKA POS' },
   { href: '/master-data/moka-catalog', label: 'Katalog Moka', icon: <Icon name="package" /> },

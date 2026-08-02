@@ -51,6 +51,13 @@ export default function TopBar({ user }: TopBarProps) {
 
   const roleLabel = user.role === 'ADMIN_PUSAT' ? 'Admin Pusat' : 'Admin Outlet';
 
+  let displayName = user.name || '';
+  if (user.role !== 'ADMIN_PUSAT') {
+    displayName = displayName.replace(/^Admin\s+/i, '');
+    displayName = displayName.replace(/ER Coffe[e]?lab\s+/i, 'ER ');
+    displayName = displayName.replace(/ER Coffe[e]?\s+/i, 'ER ');
+  }
+
   return (
     <header className="topbar no-print">
       <div
@@ -75,9 +82,9 @@ export default function TopBar({ user }: TopBarProps) {
           </div>
         </div>
 
-        <div className="avatar">{getInitials(user.name)}</div>
+        <div className="avatar">{getInitials(displayName)}</div>
         <div className="who">
-          <span className="name">{user.name}</span>
+          <span className="name">{displayName}</span>
           <span className="role">{roleLabel}</span>
         </div>
       </div>

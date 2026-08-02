@@ -12,6 +12,9 @@ export interface Item {
   package_qty?: number;
   smallest_unit: string;
   conversion_ratio: number;
+  is_split_allowed?: boolean;
+  min_order_qty?: number;
+  order_multiple?: number;
   minimum_threshold: number;
   target_stock: number;
   threshold_type: string;
@@ -49,11 +52,11 @@ export async function getItems(opts?: { categoryId?: string; search?: string; ac
   const result = await query<Item & { current_stock?: number }>(
     `SELECT i.*, c.name AS category_name,
             COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock,
-            i.ingredient_id IS NOT NULL AS is_hpp,
+            (i.ingredient_id IS NOT NULL OR ing.id IS NOT NULL) AS is_hpp,
             ing.name AS ingredient_name
      FROM items i
      LEFT JOIN categories c ON c.id = i.category_id
-     LEFT JOIN ingredients ing ON ing.id = i.ingredient_id
+     LEFT JOIN ingredients ing ON (ing.id = i.ingredient_id OR ing.item_id = i.id)
      ${where}
      ORDER BY i.name`,
     params
@@ -62,10 +65,14 @@ export async function getItems(opts?: { categoryId?: string; search?: string; ac
 }
 
 export async function getItemById(id: number) {
-  const result = await query<Item>(
-    `SELECT i.*, c.name AS category_name
+  const result = await query<Item & { current_stock?: number; is_hpp?: boolean; ingredient_name?: string }>(
+    `SELECT i.*, c.name AS category_name,
+            COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock,
+            (i.ingredient_id IS NOT NULL OR ing.id IS NOT NULL) AS is_hpp,
+            ing.name AS ingredient_name
      FROM items i
      LEFT JOIN categories c ON c.id = i.category_id
+     LEFT JOIN ingredients ing ON (ing.id = i.ingredient_id OR ing.item_id = i.id)
      WHERE i.id = $1`,
     [id]
   );
@@ -86,12 +93,23 @@ export async function createItem(data: {
   current_average_price?: number;
   last_purchase_price?: number;
   ingredient_id?: number | null;
+  is_split_allowed?: boolean;
+  min_order_qty?: number;
+  order_multiple?: number;
 }) {
   const result = await query<Item>(
-    `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      RETURNING *`,
-    [data.name, data.category_id, data.purchase_unit, data.smallest_unit, data.conversion_ratio, data.minimum_threshold, data.target_stock ?? 0, data.threshold_type, data.is_perishable, data.barcode ?? null, data.current_average_price ?? 0, data.last_purchase_price ?? data.current_average_price ?? 0, data.ingredient_id ?? null]
+    [
+      data.name, data.category_id, data.purchase_unit, data.smallest_unit, data.conversion_ratio,
+      data.minimum_threshold, data.target_stock ?? 0, data.threshold_type, data.is_perishable,
+      data.barcode ?? null, data.current_average_price ?? 0, data.last_purchase_price ?? data.current_average_price ?? 0,
+      data.ingredient_id ?? null,
+      data.is_split_allowed ?? false,
+      data.min_order_qty ?? 1,
+      data.order_multiple ?? 1
+    ]
   );
   return result.rows[0];
 }
@@ -112,11 +130,21 @@ export async function updateItem(id: number, data: Partial<{
   /** Harga beli terakhir per satuan terkecil */
   last_purchase_price: number;
   ingredient_id: number | null;
+  is_split_allowed: boolean;
+  min_order_qty: number;
+  order_multiple: number;
 }>) {
-  const fields = Object.keys(data);
+  const ALLOWED_COLUMNS = [
+    'name', 'category_id', 'purchase_unit', 'smallest_unit', 'conversion_ratio',
+    'minimum_threshold', 'target_stock', 'threshold_type', 'is_perishable',
+    'is_active', 'barcode', 'current_average_price', 'last_purchase_price',
+    'ingredient_id', 'is_split_allowed', 'min_order_qty', 'order_multiple',
+    'package_unit', 'package_qty', 'package_inner_size'
+  ];
+  const fields = Object.keys(data).filter(key => ALLOWED_COLUMNS.includes(key) && (data as Record<string, unknown>)[key] !== undefined);
   if (!fields.length) return null;
   const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
-  const values = Object.values(data);
+  const values = fields.map(f => (data as Record<string, unknown>)[f]);
   const result = await query<Item>(
     `UPDATE items SET ${sets}, updated_at = now() WHERE id = $1 RETURNING *`,
     [id, ...values]

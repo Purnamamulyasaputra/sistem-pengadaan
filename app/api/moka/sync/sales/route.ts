@@ -85,12 +85,19 @@ export async function POST(req: Request) {
 
             const deductedCount = deductResults.filter(r => r.status === 'fulfilled').length;
 
+            const unmatchedMenusRaw = deductResults
+                .filter(r => r.status === 'fulfilled')
+                .flatMap(r => (r as PromiseFulfilledResult<any>).value.unmatchedMenus || []);
+            
+            const unmatchedMenus = Array.from(new Set(unmatchedMenusRaw));
+
             return NextResponse.json({
                 success: true,
                 message: `Sinkronisasi selesai!`,
                 sales_synced: salesSynced,
                 trx_synced: trxSynced,
                 deduct_count: deductedCount,
+                unmatched_menus: unmatchedMenus
             });
         } else {
             return NextResponse.json({ message: 'Gagal sinkronisasi dari semua akun yang terhubung.' }, { status: 500 });

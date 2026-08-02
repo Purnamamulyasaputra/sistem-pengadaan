@@ -10,8 +10,57 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
 import { ChevronLeft } from 'lucide-react';
 
-interface Item { id: number; name: string; category_name: string; purchase_unit: string; smallest_unit: string; conversion_ratio: number; }
-interface RequestLine { id: number; item_id: number | null; name: string; uom: string; qty: string; note: string; smallest_unit: string; purchase_unit: string; ratio: number; }
+interface Item {
+  id: number;
+  name: string;
+  category_name: string;
+  purchase_unit: string;
+  smallest_unit: string;
+  conversion_ratio: number;
+  is_split_allowed?: boolean;
+  min_order_qty?: number;
+  order_multiple?: number;
+}
+
+interface RequestLine {
+  id: number;
+  item_id: number | null;
+  name: string;
+  uom: string;
+  qty: string;
+  note: string;
+  smallest_unit: string;
+  purchase_unit: string;
+  ratio: number;
+  kebutuhan_bersih_small?: number;
+  excess_small?: number;
+  is_split_allowed?: boolean;
+  min_order_qty?: number;
+  order_multiple?: number;
+}
+
+function calculateSuggestedOrder(
+  kebutuhanBersihSmall: number,
+  ratio: number,
+  isSplitAllowed: boolean = false,
+  minOrderQty: number = 1,
+  orderMultiple: number = 1
+) {
+  const rawLarge = kebutuhanBersihSmall / (ratio || 1);
+  let roundedLarge = isSplitAllowed ? rawLarge : Math.ceil(rawLarge);
+  if (roundedLarge < minOrderQty) {
+    roundedLarge = minOrderQty;
+  }
+  const multiple = orderMultiple > 0 ? orderMultiple : 1;
+  const remainder = roundedLarge % multiple;
+  if (remainder > 1e-6) {
+    roundedLarge += (multiple - remainder);
+  }
+  roundedLarge = Math.round(roundedLarge * 100) / 100;
+  const totalSmallest = Math.round(roundedLarge * (ratio || 1));
+  const excessSmall = totalSmallest - kebutuhanBersihSmall;
+  return { suggestedLarge: roundedLarge, totalSmallest, excessSmall };
+}
 
 export default function CreateRequestPage() {
   const router = useRouter();
@@ -23,7 +72,6 @@ export default function CreateRequestPage() {
   const [orderDate] = useState(new Date().toISOString().split('T')[0]);
   const [deliveryDate, setDeliveryDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
 
 
@@ -49,32 +97,54 @@ export default function CreateRequestPage() {
         setActiveItemIds(Array.from(activeItemsSet) as number[]);
 
         if (invJson.success && invJson.data) {
+          const activeSet = new Set(activeJson.success ? activeJson.data : []);
+
           const lowStockItems = invJson.data
             .filter((d: any) => {
               if (d.minimum_threshold === null) return false;
-              const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
+              // Jika item sudah ada di order aktif (belum SELESAI/DIBATALKAN), skip
+              if (activeSet.has(d.item_id)) return false;
+              const currentBalance = Number(d.current_balance || 0);
+              const incomingBalance = Number(d.incoming_balance || 0);
+              const effectiveBalance = currentBalance + incomingBalance;
               return effectiveBalance <= d.minimum_threshold;
             })
             .map((d: any, index: number) => {
-              const effectiveBalance = Number(d.current_balance || 0) + Number(d.incoming_balance || 0);
-              let shortageSmall = d.minimum_threshold - effectiveBalance;
-              if (shortageSmall <= 0) shortageSmall = d.minimum_threshold;
+              const currentBalance = Number(d.current_balance || 0);
+              const incomingBalance = Number(d.incoming_balance || 0);
+              const effectiveBalance = currentBalance + incomingBalance;
+              const minThreshold = Number(d.minimum_threshold || 0);
+
+              // Hitung kebutuhan untuk mencapai batas minimum outlet (bukan target master data).
+              // target_stock dari master bisa sangat besar (satuan pcs), sehingga tidak cocok
+              // untuk menentukan jumlah order per-outlet.
+              // Rumus: order cukup untuk kembali ke minimum_threshold + sedikit buffer (min threshold itu sendiri).
+              let shortageSmall = minThreshold - effectiveBalance;
+              if (shortageSmall <= 0) shortageSmall = minThreshold;
               
-              const matchedMaster = itemsList.find((i: { id: number, item_name: string, unit: string }) => i.id === d.item_id);
+              const matchedMaster = itemsList.find((i: { id: number, item_name?: string, name?: string }) => i.id === d.item_id);
               if (!matchedMaster) return null;
 
               const ratio = Number(matchedMaster.conversion_ratio) || 1;
-              const shortageLarge = Math.ceil(shortageSmall / ratio);
+              const calc = calculateSuggestedOrder(
+                shortageSmall,
+                ratio,
+                matchedMaster.is_split_allowed,
+                Number(matchedMaster.min_order_qty || 1),
+                Number(matchedMaster.order_multiple || 1)
+              );
 
               return {
                 id: Date.now() + index,
                 item_id: d.item_id,
-                name: d.item_name,
+                name: d.item_name || matchedMaster.name,
                 uom: matchedMaster.purchase_unit,
-                smallest_unit: d.smallest_unit,
+                smallest_unit: d.smallest_unit || matchedMaster.smallest_unit,
                 purchase_unit: matchedMaster.purchase_unit,
                 ratio: ratio, 
-                qty: shortageLarge.toString(),
+                qty: calc.suggestedLarge.toString(),
+                kebutuhan_bersih_small: shortageSmall,
+                excess_small: calc.excessSmall,
                 note: ''
               };
             })
@@ -82,7 +152,7 @@ export default function CreateRequestPage() {
 
           if (lowStockItems.length > 0) {
              setCart(lowStockItems);
-             setToast({ open: true, message: `${lowStockItems.length} item Stok Rendah otomatis ditambahkan!`, type: 'info' });
+             setToast({ open: true, message: `${lowStockItems.length} item stok rendah otomatis ditambahkan`, type: 'info' });
           }
         }
       } catch (e) {
@@ -121,7 +191,10 @@ export default function CreateRequestPage() {
       uom: item.purchase_unit,
       smallest_unit: item.smallest_unit,
       purchase_unit: item.purchase_unit,
-      ratio: item.conversion_ratio
+      ratio: item.conversion_ratio,
+      is_split_allowed: item.is_split_allowed,
+      min_order_qty: Number(item.min_order_qty || 1),
+      order_multiple: Number(item.order_multiple || 1)
     } : c));
   };
 
@@ -143,9 +216,9 @@ export default function CreateRequestPage() {
   };
 
   async function handleSubmit() {
-    if (!deliveryDate) { setError('Tanggal pengiriman wajib diisi.'); return; }
-    if (!cart.length) { setError('Keranjang kosong.'); return; }
-    setSubmitting(true); setError('');
+    if (!deliveryDate) { setToast({ open: true, message: 'Tanggal pengiriman wajib diisi.', type: 'error' }); return; }
+    if (!cart.length) { setToast({ open: true, message: 'Keranjang kosong.', type: 'error' }); return; }
+    setSubmitting(true);
     try {
       const res = await fetch('/api/orders', {
         method: 'POST',
@@ -161,10 +234,10 @@ export default function CreateRequestPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) { setError(data.message || 'Gagal mengirim permintaan'); return; }
+      if (!res.ok || !data.success) { setToast({ open: true, message: data.message || 'Gagal mengirim permintaan', type: 'error' }); return; }
       router.push('/outlet/requests');
     } catch (err: unknown) {
-      setError((err instanceof Error ? err.message : 'Unknown error'));
+      setToast({ open: true, message: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
     } finally {
       setSubmitting(false);
       setShowConfirm(false);
@@ -173,7 +246,7 @@ export default function CreateRequestPage() {
 
   return (
     <section className="screen">
-      <Toast isOpen={toast.open} message={toast.message} type={toast.type} onClose={() => setToast({...toast, open: false})} />
+      <Toast isOpen={toast.open} message={toast.message} type={toast.type} duration={toast.type === 'error' ? 6000 : 4000} onClose={() => setToast({...toast, open: false})} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <button className="btn" onClick={() => router.back()} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px' }}>
           <ChevronLeft size={18} /> Kembali
@@ -189,8 +262,6 @@ export default function CreateRequestPage() {
       <div className="card" style={{ overflow: 'visible' }}>
 
         <div className="card-body" style={{ minHeight: 500 }}>
-          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 20 }}>{error}</div>}
-
           <div className="form-grid" style={{ marginBottom: 30, maxWidth: 600 }}>
             <div className="form-group">
               <label>Tanggal Order</label>
@@ -267,13 +338,27 @@ export default function CreateRequestPage() {
                     ) : c.name}
                   </td>
                   <td>
-                    <input type="number" min="1" step="1" className="input right" value={c.qty} onChange={(e) => updateCartQty(c.id, e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} style={{ height: 32, width: '100%', minWidth: 60 }} placeholder="0" />
+                    <input type="number" min={c.min_order_qty || 1} step={c.is_split_allowed ? "any" : "1"} className="input right" value={c.qty} onChange={(e) => updateCartQty(c.id, e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} style={{ height: 32, width: '100%', minWidth: 60 }} placeholder="0" />
                   </td>
                   <td style={{ fontWeight: 600, color: 'var(--foreground)' }}>
                     {c.item_id ? c.purchase_unit : '-'}
                   </td>
                   <td className="muted" style={{ fontSize: 13 }}>
-                    {c.item_id ? `≈ ${Number((parseFloat(c.qty || '0') * c.ratio).toFixed(2)).toLocaleString('id-ID')} ${c.smallest_unit}` : '-'}
+                    {c.item_id ? (
+                      <div>
+                        <div>≈ {Number((parseFloat(c.qty || '0') * c.ratio).toFixed(2)).toLocaleString('id-ID')} {c.smallest_unit}</div>
+                        {c.kebutuhan_bersih_small !== undefined && (
+                          <div style={{ fontSize: 11, color: '#059669', marginTop: 2 }}>
+                            Kebutuhan: {c.kebutuhan_bersih_small} {c.smallest_unit}
+                            {Number(c.excess_small) > 0 && (
+                              <span style={{ marginLeft: 6, background: '#dbeafe', color: '#1e40af', padding: '1px 5px', borderRadius: 4 }}>
+                                +{c.excess_small} {c.smallest_unit}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : '-'}
                   </td>
                   <td>
                      <Input type="text" value={c.note} onChange={e => updateCartNote(c.id, e.target.value)} placeholder="Catatan (Opsional)" style={{ height: 32, minWidth: 150 }} />

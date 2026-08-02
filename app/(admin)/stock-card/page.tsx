@@ -33,6 +33,9 @@ export default function StockCardPage() {
   const [categories, setCategories] = useState<Record<string, unknown>[]>([]);
   const [catFilter, setCatFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [logFilter, setLogFilter] = useState('');
+  const [dateFilterStart, setDateFilterStart] = useState('');
+  const [dateFilterEnd, setDateFilterEnd] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -211,11 +214,10 @@ export default function StockCardPage() {
         onClose={() => setSelectedItemId('')}
         title={`Kartu Stok — ${String(selectedItem?.name || '')}`}
         maxWidth={800}
-        footer={<Button variant="outline" onClick={() => setSelectedItemId('')}>Tutup</Button>}
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
           <div>
-            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Saldo Saat Ini</p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Sisa Stok Saat Ini</p>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
               {(Number(currentBalance) / Number(selectedItem?.conversion_ratio || 1)).toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span className="muted" style={{ fontSize: 14 }}>{String(selectedItem?.purchase_unit || selectedItem?.smallest_unit || '')}</span>
             </div>
@@ -226,13 +228,13 @@ export default function StockCardPage() {
             )}
           </div>
           <div>
-            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Penerimaan Terakhir (IN)</p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Penerimaan Terakhir (MASUK)</p>
             <div style={{ fontWeight: 600 }}>
               {lastIn ? new Date(lastIn).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
             </div>
           </div>
           <div>
-            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Distribusi Terakhir (OUT)</p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Distribusi Terakhir (KELUAR)</p>
             <div style={{ fontWeight: 600 }}>
               {lastOut ? new Date(lastOut).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
             </div>
@@ -247,20 +249,53 @@ export default function StockCardPage() {
               Tidak ada pergerakan inventaris yang tercatat untuk barang ini.
             </div>
           ) : (
-            <div className="table-responsive" style={{ maxHeight: '450px', overflowY: 'auto' }}>
-              <Table>
-                <thead>
-                  <tr>
-                    <th>Tanggal & Waktu</th>
-                    <th>Jenis Mutasi</th>
-                    <th className="right">Perubahan (Jml)</th>
-                    <th className="right">Nilai (Rp)</th>
-                    <th className="right">Saldo Akhir</th>
-                    <th>Referensi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map(log => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 24px', marginTop: 12, gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="date" className="input" style={{ height: 34, fontSize: 13 }} value={dateFilterStart} onChange={e => setDateFilterStart(e.target.value)} />
+                  <span className="muted" style={{ fontSize: 13 }}>-</span>
+                  <input type="date" className="input" style={{ height: 34, fontSize: 13 }} value={dateFilterEnd} onChange={e => setDateFilterEnd(e.target.value)} />
+                </div>
+                <Select
+                  value={logFilter}
+                  onChange={(val: any) => setLogFilter(String(val))}
+                  options={[
+                    { value: '', label: 'Semua Mutasi' },
+                    { value: 'IN', label: 'Hanya Masuk' },
+                    { value: 'OUT', label: 'Hanya Keluar' }
+                  ]}
+                  style={{ width: 180 }}
+                  inputStyle={{ height: 34 }}
+                />
+              </div>
+              <div className="table-responsive" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+                <Table>
+                  <thead>
+                    <tr>
+                      <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', boxShadow: '0 1px 0 var(--border)' }}>Tanggal & Waktu</th>
+                      <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', boxShadow: '0 1px 0 var(--border)' }}>Jenis Mutasi</th>
+                      <th className="right" style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', boxShadow: '0 1px 0 var(--border)' }}>Perubahan (Jml)</th>
+                      <th className="right" style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', boxShadow: '0 1px 0 var(--border)' }}>Nilai (Rp)</th>
+                      <th className="right" style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', boxShadow: '0 1px 0 var(--border)' }}>Sisa Stok Akhir</th>
+                      <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', boxShadow: '0 1px 0 var(--border)' }}>Referensi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.filter(log => {
+                      if (logFilter && log.movement_type !== logFilter) return false;
+                      const logDate = new Date(log.created_at);
+                      if (dateFilterStart) {
+                        const start = new Date(dateFilterStart);
+                        start.setHours(0, 0, 0, 0);
+                        if (logDate < start) return false;
+                      }
+                      if (dateFilterEnd) {
+                        const end = new Date(dateFilterEnd);
+                        end.setHours(23, 59, 59, 999);
+                        if (logDate > end) return false;
+                      }
+                      return true;
+                    }).map(log => {
                     const ratio = Number(selectedItem?.conversion_ratio || 1);
                     const convertedQtyChange = log.qty_change / ratio;
                     const convertedEndingBalance = log.ending_balance / ratio;
@@ -273,7 +308,7 @@ export default function StockCardPage() {
                         </td>
                         <td>
                           <Badge variant={log.movement_type === 'IN' ? 'green' : log.movement_type === 'OUT' ? 'blue' : 'amber'}>
-                            {log.movement_type}
+                            {log.movement_type === 'IN' ? 'Masuk' : log.movement_type === 'OUT' ? 'Keluar' : log.movement_type.charAt(0) + log.movement_type.slice(1).toLowerCase()}
                           </Badge>
                         </td>
                         <td className="right">
@@ -300,7 +335,15 @@ export default function StockCardPage() {
                           )}
                         </td>
                         <td>
-                          <div className="font-bold">{log.reference_type}</div>
+                          <div className="font-bold">
+                            {log.reference_type === 'RECEIPT' ? 'Pembelian (PO)' : 
+                             log.reference_type === 'ATOMIC_TRANSFER' ? 'Pengiriman ke Outlet' : 
+                             log.reference_type === 'OPNAME_ADJUSTMENT' ? 'Stock Opname' : 
+                             log.reference_type === 'ADJUSTMENT' ? 'Penyesuaian Stok' : 
+                             log.reference_type === 'BARCODE_SCAN' ? 'Scan Surat Jalan' : 
+                             log.reference_type === 'BULK_SHIP' ? 'Kirim Massal' : 
+                             log.reference_type}
+                          </div>
                           <div className="muted font-mono" style={{ fontSize: 12 }}>
                             {(log.reference_type === 'BARCODE_SCAN' || log.reference_type === 'BULK_SHIP') && log.do_id ? (
                               <Link href={`/delivery-orders/${log.do_id}`} className="text-[#016e3f] hover:underline font-medium">{log.do_number}</Link>
@@ -318,6 +361,7 @@ export default function StockCardPage() {
                   })}
                 </tbody>
               </Table>
+            </div>
             </div>
           )}
         </div>

@@ -43,7 +43,7 @@ export function ConfirmDialog({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200"
       style={{ background: "rgba(12,20,16,0.55)", backdropFilter: "blur(3px)", opacity: show ? 1 : 0 }}
-      onClick={onCancel}
+      onClick={() => !loading && onCancel()}
     >
       <div
         onClick={(e) => e.stopPropagation()}

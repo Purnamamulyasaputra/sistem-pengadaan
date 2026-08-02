@@ -120,19 +120,23 @@ export async function getOutletMonitoringData() {
     query<{ item_id: number; outlet_id: number; total_in: string }>(`
       SELECT item_id, outlet_id, COALESCE(SUM(qty_change), 0) AS total_in 
       FROM outlet_inventory_logs 
-      WHERE qty_change > 0 AND (created_at AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date
+      WHERE qty_change > 0 
+        AND movement_type != 'ADJ'
+        AND (created_at AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date
       GROUP BY item_id, outlet_id
     `),
     // Total OUT hari ini per item per outlet (ditampilkan di kolom OUT Terkecil/Kemasan)
     query<{ item_id: number; outlet_id: number; total_out: string }>(`
       SELECT item_id, outlet_id, COALESCE(ABS(SUM(qty_change)), 0) AS total_out 
       FROM outlet_inventory_logs 
-      WHERE qty_change < 0 AND (created_at AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date
+      WHERE qty_change < 0 
+        AND movement_type != 'ADJ'
+        AND (created_at AT TIME ZONE 'Asia/Jakarta')::date = (now() AT TIME ZONE 'Asia/Jakarta')::date
       GROUP BY item_id, outlet_id
     `),
     query<{ item_id: number; outlet_id: number; cups_sold: string; unit_consumed: string }>(`
       SELECT 
-        ing.item_id,
+        i.id AS item_id,
         mis.outlet_id,
         COALESCE(SUM(mis.item_sold - COALESCE(mis.item_refunded, 0)), 0) AS cups_sold,
         COALESCE(SUM((mis.item_sold - COALESCE(mis.item_refunded, 0)) * ri.quantity), 0) AS unit_consumed
@@ -162,7 +166,8 @@ export async function getOutletMonitoringData() {
       JOIN recipes r ON r.menu_id = m.id
       JOIN recipe_ingredients ri ON ri.recipe_id = r.id
       JOIN ingredients ing ON ing.id = ri.ingredient_id
-      GROUP BY ing.item_id, mis.outlet_id
+      JOIN items i ON (i.id = ing.item_id OR i.ingredient_id = ing.id)
+      GROUP BY i.id, mis.outlet_id
     `),
     query<OutletMonitoringCategory>(`SELECT id, name FROM categories ORDER BY name ASC`),
     // Stok fisik dari sesi opname terakhir (LOCKED) per item per outlet.
@@ -187,6 +192,7 @@ export async function getOutletMonitoringData() {
           WHERE oll.outlet_id = last_opname.outlet_id
             AND oll.item_id  = last_opname.item_id
             AND oll.qty_change > 0
+            AND oll.movement_type != 'ADJ'
             AND oll.created_at > last_opname.locked_at
         ), 0) AS in_since,
         -- Total OUT (absolut) sejak waktu opname terakhir dikunci
@@ -196,6 +202,7 @@ export async function getOutletMonitoringData() {
           WHERE oll.outlet_id = last_opname.outlet_id
             AND oll.item_id  = last_opname.item_id
             AND oll.qty_change < 0
+            AND oll.movement_type != 'ADJ'
             AND oll.created_at > last_opname.locked_at
         ), 0) AS out_since
       FROM (
@@ -270,18 +277,15 @@ export async function getOutletMonitoringData() {
 
       if (opnameData) {
         // Jika ada opname terakhir:
-        // LIVE = opname_qty + IN(sejak opname) - OUT(sejak opname)
-        // Ini adalah "Titik Nol" dari sore sebelumnya, lalu ditambah/dikurangi gerakan berikutnya.
         opnameQty = opnameData.opname_qty;
         opnameDate = opnameData.locked_at;
         hasOpname = true;
         inSince = opnameData.in_since;
         outSince = opnameData.out_since;
-        balSmall = opnameQty + inSince - outSince;
-      } else {
-        // Fallback jika belum pernah opname: gunakan current_balance dari outlet_stocks
-        balSmall = balMap[item.id]?.[o.id] ?? (inSmall - outSmall);
       }
+      
+      // LIVE STOCK selalu menggunakan current_balance dari outlet_stocks agar sinkron 100% dengan tampilan outlet
+      balSmall = balMap[item.id]?.[o.id] ?? 0;
 
       stockMatrix[item.id][o.id] = {
         in_smallest: inSmall,
@@ -479,9 +483,9 @@ export async function directTransferStockToOutlet(
       const centralNewBalance = centralOldBalance - qty;
 
       await client.query(
-        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id, notes)
-         VALUES ($1, 'OUT', $2, $3, 'DIRECT_TRANSFER', $4, $5)`,
-        [item.item_id, -qty, centralNewBalance, outletId, notes || 'Transfer Langsung 1-Paket (Monitoring)']
+        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         VALUES ($1, 'OUT', $2, $3, 'DIRECT_TRANSFER', $4)`,
+        [item.item_id, -qty, centralNewBalance, outletId]
       );
 
       // STEP 2: Tambahkan stok ke Gudang Outlet (outlet_stocks & outlet_inventory_logs)
@@ -507,9 +511,9 @@ export async function directTransferStockToOutlet(
 
       const outletLogBalance = outletOldBalance + qty;
       await client.query(
-        `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id, notes)
-         VALUES ($1, $2, 'IN', $3, $4, 'DIRECT_TRANSFER', $5, $6)`,
-        [outletId, item.item_id, qty, outletLogBalance, adminId, notes || 'Transfer Langsung 1-Paket (Monitoring)']
+        `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         VALUES ($1, $2, 'IN', $3, $4, 'DIRECT_TRANSFER', $5)`,
+        [outletId, item.item_id, qty, outletLogBalance, adminId]
       );
     }
 

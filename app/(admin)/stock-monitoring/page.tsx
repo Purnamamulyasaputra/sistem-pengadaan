@@ -110,6 +110,24 @@ export default function StockMonitoringPage() {
       }
       setToast({ open: true, message: json.message || 'Sinkronisasi berhasil!', type: 'success' });
       setSyncModal(false);
+
+      if (json.unmatched_menus && json.unmatched_menus.length > 0) {
+        const textContent = "Daftar Menu Moka yang tidak ditemukan resepnya di sistem:\n(Silakan lengkapi bahan dan takaran berikut untuk didaftarkan ke Master Menu & HPP)\n\n" + 
+                            json.unmatched_menus.map((m: string) => 
+                              `- ${m}\n  Bahan 1: ........................ | Takaran: .......... (Satuan Terkecil)\n  Bahan 2: ........................ | Takaran: .......... (Satuan Terkecil)\n  Bahan 3: ........................ | Takaran: .......... (Satuan Terkecil)\n`
+                            ).join('\n') +
+                            "\nHarap daftarkan menu dan resep di atas ke halaman Master Menu & HPP agar stok bahan dapat terpotong otomatis saat sync.";
+        const blob = new Blob([textContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `menu-moka-tidak-cocok-${syncFromDate}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
       await fetchData();
     } catch (err: unknown) {
       setToast({ open: true, message: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
@@ -336,9 +354,10 @@ export default function StockMonitoringPage() {
                   size="sm"
                   onClick={() => setSyncModal(true)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, borderColor: '#016e3f', color: '#016e3f' }}
+                  disabled={syncing}
                 >
-                  <RefreshCcw size={13} />
-                  Sync Moka
+                  <RefreshCcw size={13} className={syncing ? 'animate-spin' : ''} />
+                  {syncing ? 'Menyinkronkan...' : 'Sync Moka'}
                 </Button>
                 <Button
                   variant="outline"

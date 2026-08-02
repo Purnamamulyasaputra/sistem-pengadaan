@@ -19,9 +19,9 @@ export function DashboardChart({ data }: { data: { date: string, value: number }
 
   return (
     <>
-      <div style={{ height: 200, width: '100%', marginTop: 24 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+      <div style={{ height: 200, width: '100%', marginTop: 24, outline: 'none' }} tabIndex={-1}>
+        <ResponsiveContainer width="100%" height="100%" style={{ outline: 'none' }}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} style={{ outline: 'none' }} tabIndex={-1}>
             <defs>
               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#016e3f" stopOpacity={0.3}/>
@@ -39,6 +39,7 @@ export function DashboardChart({ data }: { data: { date: string, value: number }
               width={65}
             />
             <Tooltip 
+              cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '5 5' }}
               formatter={(value: any, name: any) => {
                 if (name === 'value') return [`Rp ${Number(value).toLocaleString('id-ID')}`, 'Total Nilai Persediaan'];
                 if (name === 'outboundValue') return [`Rp ${Number(value).toLocaleString('id-ID')}`, 'Distribusi ke Outlet'];

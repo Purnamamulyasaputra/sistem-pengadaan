@@ -61,7 +61,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
       setIsLocked(hData.data?.status === 'LOCKED');
       if (hData.data?.location_id) locId = hData.data.location_id;
     }
-    
+
     // Fetch all items for input
     const iRes = await fetch(`/api/opname/items?location_type=OUTLET&location_id=${locId}`);
     const iData = await iRes.json();
@@ -141,7 +141,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat data opname...</div>;
   if (!header) return <div style={{ padding: 40, textAlign: 'center' }}>Sesi tidak ditemukan.</div>;
 
-  const filteredItems = items.filter((item: any) => 
+  const filteredItems = items.filter((item: any) =>
     !searchQuery || String(item.item_name).toLowerCase().includes(searchQuery.toLowerCase())
   );
   const paginatedItems = limit === 'all' ? filteredItems : filteredItems.slice((currentPage - 1) * limit, currentPage * limit);
@@ -165,7 +165,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <input 
+            <input
               type="text"
               className="input"
               placeholder="Cari nama barang..."
@@ -173,7 +173,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
               onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
               style={{ width: 180, height: 32, fontSize: 11 }}
             />
-            <Select 
+            <Select
               value={limit}
               onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
               options={[
@@ -197,7 +197,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
             </Link>
           </div>
         </div>
-        
+
         <div className="card-body flush">
           <Table>
             <thead>
@@ -231,7 +231,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                 const smallUnit = formatUnit(item.smallest_unit);
                 const largeUnit = formatUnit(item.purchase_unit || item.smallest_unit);
                 const hasLargeUnit = ratio > 1 && largeUnit && largeUnit !== smallUnit;
-                
+
                 return (
                   <tr key={item.item_id}>
                     <td className="font-bold">
@@ -254,14 +254,14 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                       )}
                     </td>
                     <td className="right">
-                      <input 
-                        type="text" 
-                        className="input right" 
-                        value={String(actual ?? '')} 
-                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, e.target.value)} 
+                      <input
+                        type="text"
+                        className="input right"
+                        value={String(actual ?? '')}
+                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, e.target.value)}
                         disabled={isLocked}
                         placeholder="0"
-                        style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: String(actual ?? '') === '' ? '#fca5a5' : 'var(--border)' }} 
+                        style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: String(actual ?? '') === '' ? '#fca5a5' : 'var(--border)' }}
                       />
                       {hasLargeUnit && (
                         <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2, textAlign: 'right', color: '#64748b' }}>
@@ -324,7 +324,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
               })}
             </tbody>
           </Table>
-          
+
           {totalPages > 1 && (
             <Pagination
               currentPage={currentPage}

@@ -242,7 +242,7 @@ export async function getSalesIngredientRequirements(outletId: number, dateFrom:
     FROM recipes r
     JOIN recipe_ingredients ri ON ri.recipe_id = r.id
     JOIN ingredients i ON i.id = ri.ingredient_id
-    LEFT JOIN items it ON it.ingredient_id = i.id
+    LEFT JOIN items it ON (it.ingredient_id = i.id OR it.id = i.item_id)
     LEFT JOIN categories cat ON cat.id = it.category_id
     WHERE r.menu_id = ANY($1::bigint[])
   `, [menuIds]);

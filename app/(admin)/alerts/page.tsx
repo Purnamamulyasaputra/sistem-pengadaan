@@ -22,6 +22,16 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState<number | null>(null);
 
+  const formatQty = (val: number | string, unit: string) => {
+    const u = (unit || '').toLowerCase();
+    if (['pcs', 'gr', 'ml', 'oz', 'cup', 'botol', 'kaleng', 'bungkus', 'box', 'pak'].includes(u)) {
+      return Number(val).toFixed(0);
+    }
+    // If it's an exact integer, maybe we still want to show it without .00?
+    // The user said "kalau satuannya besar ya seperti formatnya saja" (keep the .00 for large units)
+    return Number(val).toFixed(2);
+  };
+
   const fetchAlerts = useCallback(async () => {
     setLoading(true);
     const res = await fetch('/api/alerts?resolved=false');
@@ -107,12 +117,12 @@ export default function AlertsPage() {
                       <td className="muted">{a.category_name}</td>
                       <td className="right">
                         <span style={{ color: '#dc2626', fontWeight: 700 }}>
-                          {Number(a.current_balance).toFixed(2)}
+                          {formatQty(a.current_balance, a.smallest_unit)}
                         </span>
                         <span className="muted" style={{ marginLeft: 4 }}>{a.smallest_unit}</span>
                       </td>
                       <td className="right font-bold">
-                        {Number(a.threshold_at_alert || a.minimum_threshold || 0).toFixed(2)} <span className="muted">{a.smallest_unit}</span>
+                        {formatQty(a.threshold_at_alert || a.minimum_threshold || 0, a.smallest_unit)} <span className="muted">{a.smallest_unit}</span>
                       </td>
                       <td className="center">
                         <Badge variant={stockPct <= 0 ? 'red' : 'amber'}>

@@ -1,5 +1,4 @@
 import { query, withTransaction } from '@/lib/db';
-import { outboundStock } from './inventory';
 import { checkAndCreateAlert } from './alerts';
 
 export interface DeliveryNote {
@@ -61,7 +60,8 @@ export async function createDeliveryNote(data: {
       const itemName = balRes.rows[0]?.item_name ?? 'Unknown Item';
       const smallestUnit = balRes.rows[0]?.smallest_unit ?? '';
       const purchaseUnit = balRes.rows[0]?.purchase_unit ?? '';
-      const conversionRatio = parseFloat(balRes.rows[0]?.conversion_ratio ?? '1');
+      let conversionRatio = parseFloat(balRes.rows[0]?.conversion_ratio ?? '1');
+      // conversionRatio sudah didapat dari tabel items di atas
 
       // qty_shipped is in purchase_unit. Convert it to smallest_unit.
       const actualQtyShipped = item.qty_shipped * conversionRatio;
@@ -232,7 +232,7 @@ export async function processPublicReceive(data: {
     // Update Delivery Note Items
     for (const item of data.items) {
       const unitRes = await client.query(
-        `SELECT i.conversion_ratio FROM delivery_note_items dni 
+        `SELECT COALESCE(dni.conversion_ratio, i.conversion_ratio) AS conversion_ratio FROM delivery_note_items dni 
          JOIN items i ON i.id = dni.item_id 
          WHERE dni.id = $1`, [item.delivery_note_item_id]
       );
@@ -766,10 +766,11 @@ export async function resolveDeliveryNoteIssue(issueId: number, action: 'REPLACE
       );
       const oi = oiRes.rows[0];
 
+      const uniqueBarcode = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000).toString();
       await client.query(
-        `INSERT INTO delivery_note_items (delivery_note_id, order_item_id, item_id, qty_shipped, price_at_shipment)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [newDnId, oi.order_item_id, issue.item_id, issue.qty_issue, oi.price_at_shipment]
+        `INSERT INTO delivery_note_items (delivery_note_id, order_item_id, item_id, qty_shipped, price_at_shipment, unique_barcode, conversion_ratio)
+         VALUES ($1, $2, $3, $4, $5, $6, COALESCE((SELECT conversion_ratio FROM items WHERE id = $3), 1.00))`,
+        [newDnId, oi.order_item_id, issue.item_id, issue.qty_issue, oi.price_at_shipment, uniqueBarcode]
       );
 
       // We should probably revert order_item_id status back to DIKEMAS or something so it can be shipped, 

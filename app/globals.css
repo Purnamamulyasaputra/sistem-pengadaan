@@ -51,15 +51,47 @@ body {
   padding: 0;
   height: 100vh;
   overflow: hidden;
+  color-scheme: light;
 }
 
 body {
   font-family: 'Albert Sans', sans-serif;
   background: var(--bg);
   color: var(--ink);
+  color-scheme: light;
   -webkit-font-smoothing: antialiased;
   font-size: 12px;
   accent-color: var(--primary);
+}
+
+/* Ensure native datalist and dropdown options are always light/white in Windows & Chrome */
+input, select, textarea, datalist, option {
+  color-scheme: light !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Remove focus outline on Recharts components */
+.recharts-wrapper,
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-wrapper:active,
+.recharts-surface,
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.recharts-responsive-container,
+.recharts-responsive-container:focus,
+.recharts-wrapper *,
+.recharts-wrapper *:focus,
+.recharts-wrapper *:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+svg:focus, svg:active, svg *:focus, svg *:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 h1,
@@ -1375,4 +1407,17 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin,
+.animate-spin {
+  animation: spin 1s linear infinite;
 }

@@ -407,7 +407,6 @@ function RequestsContent() {
                   </Button>
                 </Link>
               )}
-              <Button variant="primary" size="sm" onClick={() => setSelectedOrder(null)}>Tutup</Button>
             </div>
           </div>
 

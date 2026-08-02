@@ -105,12 +105,13 @@ export default function OutletInventoryStockPage() {
   return (
     <section className="screen">
       <div className="card">
-        <div className="card-head">
+        <div className="card-head" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 16 }}>
           <div>
-            <h3>Stok Inventaris Saat Ini</h3>
-            <p className="hint">Stok fisik bahan baku dan perlengkapan operasional saat ini di outlet.</p>
+            <h3 style={{ margin: 0 }}>Stok Inventaris Saat Ini</h3>
+            <p className="hint" style={{ margin: 0, marginTop: 4 }}>Stok fisik bahan baku dan perlengkapan operasional saat ini di outlet.</p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'stretch' }}>
+          
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ position: 'relative', width: 220 }}>
                 <Search style={{ position: 'absolute', left: 10, top: 8, width: 14, height: 14, color: 'var(--muted)' }} />
@@ -159,7 +160,7 @@ export default function OutletInventoryStockPage() {
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, alignSelf: 'flex-end' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {totalPages > 1 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <button className="btn btn-outline" style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', height: 26, minWidth: 26, justifyContent: 'center' }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={13} /></button>

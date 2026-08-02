@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getItems, createItem, generateBarcode } from '@/lib/queries/items';
-import { getCategories } from '@/lib/queries/master';
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -26,7 +25,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, current_average_price, ingredient_id } = body;
 
-  if (!name || !category_id || !purchase_unit || !smallest_unit) {
+  if (!name || !String(name).trim() || !category_id || !purchase_unit || !smallest_unit) {
     return NextResponse.json({ success: false, message: 'Field wajib tidak lengkap', data: null }, { status: 400 });
   }
 
@@ -37,9 +36,13 @@ export async function POST(req: NextRequest) {
       minimum_threshold: Number(minimum_threshold ?? 0),
       target_stock: Number(target_stock ?? 0),
       threshold_type: threshold_type ?? 'ABSOLUT',
-      is_perishable: Boolean(is_perishable),
+      is_perishable: is_perishable === true || is_perishable === 'true',
+      barcode: body.barcode ? String(body.barcode) : undefined,
       current_average_price: Number(current_average_price ?? 0),
       ingredient_id: ingredient_id ? Number(ingredient_id) : null,
+      is_split_allowed: body.is_split_allowed === true || body.is_split_allowed === 'true',
+      min_order_qty: Number(body.min_order_qty ?? 1),
+      order_multiple: Number(body.order_multiple ?? 1),
     });
 
     // Auto-generate barcode
