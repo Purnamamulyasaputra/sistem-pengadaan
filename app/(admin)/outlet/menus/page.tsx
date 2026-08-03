@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
+import { Toast } from '@/components/ui/Toast';
 
 // ─── Types ───────────────────────────────────────────────────
 type Category = { id: number; name: string };
@@ -336,6 +337,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [venueId, setVenueId] = useState('');
   const [page, setPage] = useState(1);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const [deleting, setDeleting] = useState(false);
   const limit = 20;
 
@@ -378,7 +380,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
       setDeleteConfirm(null);
       load();
     } catch (e: unknown) {
-      alert((e instanceof Error ? e.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: (e instanceof Error ? e.message : 'Unknown error'), type: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -388,6 +390,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
 
   return (
     <>
+      {toastInfo.show && <Toast isOpen={true} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />}
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
         <input className="input" placeholder="Cari nama resep..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 220 }} />
@@ -517,6 +520,7 @@ function IngredientsTab() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const [deleting, setDeleting] = useState(false);
   const limit = 20;
 
@@ -561,7 +565,7 @@ function IngredientsTab() {
   };
 
   const handleSave = async () => {
-    if (!form.name) return alert('Name is required');
+    if (!form.name) return setToastInfo({ show: true, msg: 'Name is required', type: 'error' });
     setSaving(true);
     try {
       const payload = {
@@ -580,7 +584,7 @@ function IngredientsTab() {
       setModalOpen(false);
       load();
     } catch (e: unknown) {
-      alert((e instanceof Error ? e.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: (e instanceof Error ? e.message : 'Unknown error'), type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -598,7 +602,7 @@ function IngredientsTab() {
       setDeleteConfirm(null);
       load();
     } catch (e: unknown) {
-      alert((e instanceof Error ? e.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: (e instanceof Error ? e.message : 'Unknown error'), type: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -608,7 +612,8 @@ function IngredientsTab() {
 
   return (
     <>
-      <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+      {toastInfo.show && <Toast isOpen={true} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />}
+      <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
         <input className="input" placeholder="Cari nama bahan baku..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 260 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>

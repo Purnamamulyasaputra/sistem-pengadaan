@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Toast } from '@/components/ui/Toast';
 
 interface Alert {
   id: number;
@@ -21,6 +22,7 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState<number | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
 
   const formatQty = (val: number | string, unit: string) => {
     const u = (unit || '').toLowerCase();
@@ -48,12 +50,13 @@ export default function AlertsPage() {
       const res = await fetch(`/api/alerts/${id}/resolve`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) {
-        alert(data.message || 'Failed to resolve alert');
+        setToastInfo({ show: true, msg: data.message || 'Gagal menyelesaikan peringatan', type: 'error' });
       } else {
+        setToastInfo({ show: true, msg: 'Peringatan diselesaikan', type: 'success' });
         fetchAlerts(); // refresh
       }
     } catch (err: unknown) {
-      alert((err instanceof Error ? err.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
     } finally {
       setResolvingId(null);
     }
@@ -61,6 +64,7 @@ export default function AlertsPage() {
 
   return (
     <section className="screen">
+      {toastInfo.show && <Toast isOpen={true} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />}
       <div className="card">
         <div className="card-head">
           <div>

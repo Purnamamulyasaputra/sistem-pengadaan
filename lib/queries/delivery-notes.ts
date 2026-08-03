@@ -442,7 +442,9 @@ export async function recordScan(data: {
       }
 
     } else if (data.scan_type === 'IN') {
-      // Update scanned_in_at and discrepancy fields
+      // Scan IN = checklist visual saja (menandai item sudah diterima di outlet).
+      // Stok outlet TIDAK dimanipulasi di sini — transfer stok dilakukan
+      // secara eksklusif oleh approveAndTransferDeliveryNote() untuk menghindari double-credit.
       const qty_recv = data.qty_received ?? dni.qty_shipped;
       await client.query(
         `UPDATE delivery_note_items SET 
@@ -452,54 +454,16 @@ export async function recordScan(data: {
         [data.scanned_by, qty_recv, data.discrepancy_reason || null, data.discrepancy_notes || null, data.delivery_note_item_id]
       );
 
-      // CREATE ISSUE TICKET IF DISCREPANCY EXISTS
+      // Buat tiket masalah jika ada selisih qty
       if (qty_recv < dni.qty_shipped) {
-         const qty_issue = dni.qty_shipped - qty_recv;
-         await client.query(
-           `INSERT INTO delivery_note_issues 
-            (delivery_note_item_id, qty_issue, reason, photo_url, status) 
-            VALUES ($1, $2, $3, $4, 'PENDING')`,
-           [data.delivery_note_item_id, qty_issue, data.discrepancy_reason || 'Barang tidak lengkap', '']
-         );
-      }
-
-      // Increase outlet stock
-      const dnRes = await client.query(`SELECT outlet_id FROM delivery_notes WHERE id = $1`, [dni.delivery_note_id]);
-      const outletId = dnRes.rows[0].outlet_id;
-
-      const stockRes = await client.query(
-        `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
-        [outletId, data.item_id]
-      );
-
-      let oldBalance = 0;
-      if (stockRes.rows.length > 0) {
-        oldBalance = parseFloat(stockRes.rows[0].current_balance);
-        const newBalance = oldBalance + qty_recv;
+        const qty_issue = dni.qty_shipped - qty_recv;
         await client.query(
-          `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() WHERE outlet_id = $2 AND item_id = $3`,
-          [newBalance, outletId, data.item_id]
-        );
-      } else {
-        await client.query(
-          `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
-          [outletId, data.item_id, qty_recv]
+          `INSERT INTO delivery_note_issues 
+           (delivery_note_item_id, qty_issue, reason, photo_url, status) 
+           VALUES ($1, $2, $3, $4, 'PENDING')`,
+          [data.delivery_note_item_id, qty_issue, data.discrepancy_reason || 'Barang tidak lengkap', '']
         );
       }
-
-      const logBalance = oldBalance + qty_recv;
-      await client.query(
-        `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
-         VALUES ($1, $2, 'IN', $3, $4, 'BARCODE_SCAN', $5)`,
-        [outletId, data.item_id, qty_recv, logBalance, data.delivery_note_item_id]
-      );
-
-      // Update order item status to SELESAI
-      await client.query(
-        `UPDATE order_items SET item_status = 'SELESAI', updated_at = now() WHERE id = $1`,
-        [dni.order_item_id]
-      );
-
     }
 
     return { success: true };
@@ -521,6 +485,67 @@ export async function confirmReceipt(deliveryNoteId: number, recipientName: stri
       `UPDATE delivery_notes SET status = 'DITERIMA', recipient_name = $1, proof_image_url = $2, updated_at = now() WHERE id = $3`,
       [recipientName, proofImageUrl || null, deliveryNoteId]
     );
+
+    // Dapatkan semua item untuk transfer stok
+    const itemsRes = await client.query(
+      `SELECT id, item_id, qty_shipped, qty_received, order_item_id, price_at_shipment 
+       FROM delivery_note_items 
+       WHERE delivery_note_id = $1`,
+      [deliveryNoteId]
+    );
+
+    const dnRes = await client.query(`SELECT outlet_id FROM delivery_notes WHERE id = $1`, [deliveryNoteId]);
+    const outletId = dnRes.rows[0].outlet_id;
+
+    for (const dni of itemsRes.rows) {
+      const qty = parseFloat(dni.qty_received ?? dni.qty_shipped ?? '0');
+      if (qty <= 0) continue;
+
+      // STEP 1: Potong stok dari Gudang Pusat (inventory_logs)
+      const balRes = await client.query(
+        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [dni.item_id]
+      );
+      const centralOldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
+      const centralNewBalance = centralOldBalance - qty;
+
+      await client.query(
+        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         VALUES ($1, 'OUT', $2, $3, 'ATOMIC_TRANSFER', $4)`,
+        [dni.item_id, -qty, centralNewBalance, deliveryNoteId]
+      );
+      
+      const { checkAndCreateAlert } = await import('./alerts');
+      await checkAndCreateAlert(dni.item_id, centralNewBalance, client);
+
+      // STEP 2: Tambahkan stok ke Gudang Outlet
+      const stockRes = await client.query(
+        `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
+        [outletId, dni.item_id]
+      );
+
+      let outletOldBalance = 0;
+      if (stockRes.rows.length > 0) {
+        outletOldBalance = parseFloat(stockRes.rows[0].current_balance);
+        const outletNewBalance = outletOldBalance + qty;
+        await client.query(
+          `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() WHERE outlet_id = $2 AND item_id = $3`,
+          [outletNewBalance, outletId, dni.item_id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
+          [outletId, dni.item_id, qty]
+        );
+      }
+
+      const outletLogBalance = outletOldBalance + qty;
+      await client.query(
+        `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         VALUES ($1, $2, 'IN', $3, $4, 'ATOMIC_TRANSFER', $5)`,
+        [outletId, dni.item_id, qty, outletLogBalance, deliveryNoteId]
+      );
+    }
 
     // Update all related order items to SELESAI
     const orderRes = await client.query(
@@ -615,62 +640,27 @@ export async function bulkRecordScan(data: {
         await client.query(`UPDATE order_items SET item_status = 'DIKIRIM', distribution_price = $1, updated_at = now() WHERE id = $2`, [dni.price_at_shipment, dni.order_item_id]);
         processed_count++;
       } else if (data.scan_type === 'IN' && !dni.scanned_in_at) {
-        // update dni
+        // Bulk Scan IN = checklist visual saja.
+        // Stok outlet TIDAK dimanipulasi di sini — transfer stok dilakukan
+        // secara eksklusif oleh approveAndTransferDeliveryNote() untuk menghindari double-credit.
         const qty_recv = dni.qty_shipped;
         await client.query(
           `UPDATE delivery_note_items SET scanned_in_at = now(), scanned_in_by = $1, qty_received = $2 WHERE id = $3`,
           [data.scanned_by, qty_recv, dni.id]
         );
-
-        // Increase outlet stock
-        const dnRes = await client.query(`SELECT outlet_id FROM delivery_notes WHERE id = $1`, [data.delivery_note_id]);
-        const outletId = dnRes.rows[0].outlet_id;
-
-        const stockRes = await client.query(
-          `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
-          [outletId, dni.item_id]
-        );
-
-        let oldBalance = 0;
-        if (stockRes.rows.length > 0) {
-          oldBalance = parseFloat(stockRes.rows[0].current_balance);
-          const newBalance = oldBalance + qty_recv;
-          await client.query(
-            `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() WHERE outlet_id = $2 AND item_id = $3`,
-            [newBalance, outletId, dni.item_id]
-          );
-        } else {
-          await client.query(
-            `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
-            [outletId, dni.item_id, qty_recv]
-          );
-        }
-
-        const logBalance = oldBalance + qty_recv;
-        await client.query(
-          `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
-           VALUES ($1, $2, 'IN', $3, $4, 'BARCODE_SCAN', $5)`,
-          [outletId, dni.item_id, qty_recv, logBalance, dni.id]
-        );
-
-        // update order item
-        await client.query(`UPDATE order_items SET item_status = 'SELESAI', updated_at = now() WHERE id = $1`, [dni.order_item_id]);
         processed_count++;
       }
     }
 
     if (processed_count > 0) {
       if (data.scan_type === 'OUT') {
+        // Semua item sudah di-scan OUT → Surat Jalan berstatus DIKIRIM
         await client.query(`UPDATE delivery_notes SET status = 'DIKIRIM', updated_at = now() WHERE id = $1`, [data.delivery_note_id]);
       } else if (data.scan_type === 'IN') {
-        await client.query(`UPDATE delivery_notes SET status = 'DITERIMA', updated_at = now() WHERE id = $1`, [data.delivery_note_id]);
-
-        // Check if all items in the related order are completed
-        const orderRes = await client.query(`SELECT order_id FROM delivery_notes WHERE id = $1`, [data.delivery_note_id]);
-        if (orderRes.rows.length > 0) {
-          const orderId = orderRes.rows[0].order_id;
-          await client.query(`UPDATE orders SET status = 'COMPLETED', updated_at = now() WHERE id = $1`, [orderId]);
-        }
+        // Semua item sudah di-scan IN → status jadi SIAP_TRANSFER
+        // Transfer stok aktual dilakukan via tombol Approve & Transfer (approveAndTransferDeliveryNote)
+        // Tidak ada perubahan stok di sini.
+        await client.query(`UPDATE delivery_notes SET status = 'SIAP_TRANSFER', updated_at = now() WHERE id = $1`, [data.delivery_note_id]);
       }
     }
 
@@ -731,13 +721,25 @@ export async function resolveDeliveryNoteIssue(issueId: number, action: 'REPLACE
     );
 
     if (action === 'WRITE_OFF') {
-      // Just record a loss in central warehouse (assuming central already deducted during OUT scan, wait, we don't deduct central again, the stock is just gone. 
-      // Actually, if it was scanned out, central stock is already deducted. The outlet just didn't get it.
-      // So no inventory logs needed. The stock is simply written off from the "in-transit" state.)
-      // Wait, is there any stock adjustment needed?
-      // When it was OUT, Central stock decreased by 10.
-      // When it was IN, Outlet stock increased by 8.
-      // The remaining 2 is currently nowhere. If we WRITE_OFF, it just stays nowhere. No stock action needed.
+      // Approve & Transfer hanya memotong qty_received dari stok pusat (bukan qty_shipped).
+      // Sisa barang (qty_issue = qty_shipped - qty_received) masih tercatat di stok pusat
+      // padahal secara fisik sudah hilang dalam pengiriman.
+      // → Kita harus mencatat kerugian qty_issue ke inventory_logs dengan movement_type 'WRITE_OFF'.
+      const qtyToWriteOff = parseFloat(issue.qty_issue ?? '0');
+      if (qtyToWriteOff > 0) {
+        const balRes = await client.query(
+          `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          [issue.item_id]
+        );
+        const oldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
+        const newBalance = oldBalance - qtyToWriteOff;
+
+        await client.query(
+          `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+           VALUES ($1, 'WRITE_OFF', $2, $3, 'ISSUE_WRITE_OFF', $4)`,
+          [issue.item_id, -qtyToWriteOff, newBalance, issueId]
+        );
+      }
     } else if (action === 'REPLACE') {
       // Create a new DO Draft for the replacement.
       // We need to create a new DO linked to the same order.

@@ -406,6 +406,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [venueId, setVenueId] = useState('');
   const [page, setPage] = useState(1);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const [deleting, setDeleting] = useState(false);
   const limit = 20;
 
@@ -448,7 +449,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
       setDeleteConfirm(null);
       load();
     } catch (e: unknown) {
-      alert((e instanceof Error ? e.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: (e instanceof Error ? e.message : 'Unknown error'), type: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -458,6 +459,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
 
   return (
     <>
+      {toastInfo.show && <Toast isOpen={true} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />}
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
         <input className="input" placeholder="Cari nama resep..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 220 }} />
@@ -963,6 +965,8 @@ function KitchenTab() {
 function CategoriesTab({ onUpdated }: { onUpdated?: () => void }) {
   const [cats, setCats] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
   const [showAddModal, setShowAddModal] = useState(false);
   const [addName, setAddName] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -989,7 +993,7 @@ function CategoriesTab({ onUpdated }: { onUpdated?: () => void }) {
       const res = await fetch('/api/hpp/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: addName }) });
       const data = await res.json();
       if (!data.success) { setToastInfo({ show: true, msg: data.message || 'Gagal menyimpan', type: 'error' }); return; }
-      setShowAddModal(false); 
+      setShowAddModal(false);
       setToastInfo({ show: true, msg: 'Berhasil ditambah', type: 'success' });
       fetchCats();
       if (onUpdated) onUpdated();
@@ -1029,56 +1033,76 @@ function CategoriesTab({ onUpdated }: { onUpdated?: () => void }) {
     if (onUpdated) onUpdated();
   }
 
+  const totalPages = Math.ceil(cats.length / ITEMS_PER_PAGE);
+  const paginatedCats = cats.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
   return (
-    <div className="card-body flush">
+    <div className="card-body flush" style={{ padding: '0 20px 40px' }}>
       {toastInfo.show && <Toast isOpen={true} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />}
-      <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'flex-end', borderBottom: '1px solid var(--border)' }}>
-        <button className="btn btn-sm btn-primary" onClick={() => { setAddName(''); setShowAddModal(true); }}>
-          + Tambah Kategori
-        </button>
-      </div>
-      <div className="table-responsive">
-        <Table>
-          <thead>
-            <tr>
-              <th style={{ width: 60, textAlign: 'center' }}>No.</th>
-              <th>Nama Kategori</th>
-              <th style={{ width: 120, textAlign: 'center' }}>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40 }} className="muted">Memuat data...</td></tr>
-            ) : cats.length === 0 ? (
-              <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40 }} className="muted">Tidak ada kategori.</td></tr>
-            ) : cats.map((c, i) => (
-              <tr key={c.id}>
-                <td style={{ textAlign: 'center' }}>{i + 1}</td>
-                <td>
-                  {editingId === c.id ? (
-                    <Input value={editName} onChange={e => setEditName(e.target.value)} autoFocus style={{ marginBottom: 0, height: 32 }} />
-                  ) : c.name}
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                    {editingId === c.id ? (
-                      <>
-                        <button className="btn btn-sm btn-primary" onClick={() => handleEditSave(c.id)} disabled={saving}><Save size={14} /></button>
-                        <button className="btn btn-sm btn-danger btn-outline" onClick={() => setEditingId(null)} disabled={saving}><X size={14} /></button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="btn btn-sm" style={{ background: '#e0f2fe', color: '#0284c7', borderColor: '#bae6fd' }} onClick={() => { setEditingId(c.id); setEditName(c.name); }} title="Edit"><Pencil size={14} /></button>
-                        <button className="btn btn-sm btn-danger btn-outline" onClick={() => setConfirmDelete(c)} title="Hapus"><Trash2 size={14} /></button>
-                      </>
-                    )}
-                  </div>
-                </td>
+      
+      <div style={{ maxWidth: 700, margin: '0 auto', background: '#fff', borderRadius: 8, border: '1px solid var(--border)', marginTop: 24, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
+          <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Daftar Kategori</h4>
+          <button className="btn btn-sm btn-primary" onClick={() => { setAddName(''); setShowAddModal(true); }}>
+            + Tambah Kategori
+          </button>
+        </div>
+        <div className="table-responsive">
+          <Table>
+            <thead>
+              <tr>
+                <th style={{ width: 60, textAlign: 'center' }}>No.</th>
+                <th>Nama Kategori</th>
+                <th style={{ width: 120, textAlign: 'center' }}>Aksi</th>
               </tr>
-            ))}
-          </tbody>
-        </Table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40 }} className="muted">Memuat data...</td></tr>
+              ) : paginatedCats.length === 0 ? (
+                <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40 }} className="muted">Tidak ada kategori.</td></tr>
+              ) : paginatedCats.map((c, i) => (
+                <tr key={c.id}>
+                  <td style={{ textAlign: 'center' }}>{(page - 1) * ITEMS_PER_PAGE + i + 1}</td>
+                  <td>
+                    {editingId === c.id ? (
+                      <Input value={editName} onChange={e => setEditName(e.target.value)} autoFocus style={{ marginBottom: 0, height: 32 }} />
+                    ) : c.name}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      {editingId === c.id ? (
+                        <>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleEditSave(c.id)} disabled={saving}><Save size={14} /></button>
+                          <button className="btn btn-sm btn-danger btn-outline" onClick={() => setEditingId(null)} disabled={saving}><X size={14} /></button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn btn-sm" style={{ background: '#e0f2fe', color: '#0284c7', borderColor: '#bae6fd' }} onClick={() => { setEditingId(c.id); setEditName(c.name); }} title="Edit"><Pencil size={14} /></button>
+                          <button className="btn btn-sm btn-danger btn-outline" onClick={() => setConfirmDelete(c)} title="Hapus"><Trash2 size={14} /></button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
       </div>
+
+      {totalPages > 1 && (
+        <div style={{ maxWidth: 700, margin: '20px auto 0' }}>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={cats.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setPage}
+          />
+        </div>
+      )}
+
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Tambah Kategori">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Input label="Nama Kategori" value={addName} onChange={e => setAddName(e.target.value)} required placeholder="Misal: Minuman Dingin" autoFocus />

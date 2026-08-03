@@ -11,7 +11,7 @@ import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
 import { Toggle } from '@/components/ui/Toggle';
 import { Toast } from '@/components/ui/Toast';
 import { Select } from '@/components/ui/Select';
-import { HelpCircle, Info, Tag, Package, DollarSign, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { HelpCircle, Info, Tag, Package, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, RotateCcw } from 'lucide-react';
 
 interface Item {
   id: number; name: string; category_id: number; category_name: string; barcode?: string;
@@ -332,18 +332,17 @@ export default function ItemsPage() {
                     background: '#fef2f2',
                     border: '1px solid #fecaca',
                     color: '#dc2626',
-                    fontSize: 12.5,
-                    fontWeight: 600,
                     cursor: 'pointer',
-                    padding: '6px 12px',
+                    padding: '0 10px',
                     borderRadius: 6,
                     height: 34,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 6
+                    justifyContent: 'center'
                   }}
+                  title="Reset Filter"
                 >
-                  Reset Filter
+                  <RotateCcw size={16} />
                 </button>
               )}
             </div>

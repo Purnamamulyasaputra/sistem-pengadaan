@@ -96,6 +96,7 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
   const [scanning, setScanning] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState<{ open: boolean; type: 'OUT' | 'IN' | null }>({ open: false, type: null });
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const [confirmShipAll, setConfirmShipAll] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState(false);
@@ -283,8 +284,9 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
       await fetchDn();
       setConfirmCancel(false);
+      setToastInfo({ show: true, msg: 'Surat jalan dibatalkan', type: 'success' });
     } catch (err: unknown) {
-      alert((err instanceof Error ? err.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
     } finally {
       setScanning(false);
     }
@@ -299,7 +301,8 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
 
   return (
     <>
-      <FullScreenLoader open={scanning} label="Mohon tunggu sebentar, data sedang disimpan." />
+      {toastInfo.show && <Toast isOpen={true} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />}
+      <FullScreenLoader open={scanning} label="Mohon tunggu sebentar, data sedang diproses." />
 
       <section className="screen">
         <div className="card">

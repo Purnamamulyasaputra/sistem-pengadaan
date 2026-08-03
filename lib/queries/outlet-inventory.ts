@@ -102,11 +102,13 @@ export async function deductOutletStockFromSales(outletId: number, dateStr: stri
       const qtySold = Number(item.total_qty);
       if (qtySold <= 0) continue;
 
-      // Find recipe ingredients matching menu name — same logic as monitoring query
+      // Cari bahan-bahan dari resep menu ini, difilter hanya dari venue yang dimiliki outlet ini.
+      // JOIN outlet_venues memastikan resep dari outlet/venue lain tidak ikut terhitung (cross-venue contamination).
       const ingRes = await client.query(`
         SELECT i.id as ingredient_id, SUM(ri.quantity) as quantity
         FROM menus m
         JOIN recipes r ON r.menu_id = m.id
+        JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $2
         JOIN recipe_ingredients ri ON ri.recipe_id = r.id
         JOIN ingredients ing ON ing.id = ri.ingredient_id
         JOIN items i ON (i.id = ing.item_id OR i.ingredient_id = ing.id)
@@ -121,7 +123,7 @@ export async function deductOutletStockFromSales(outletId: number, dateStr: stri
           )
         )
         GROUP BY i.id
-      `, [item.item_name]);
+      `, [item.item_name, outletId]);
 
       if (ingRes.rows.length === 0) {
         unmatchedMenus.push(item.item_name);
@@ -215,11 +217,13 @@ export async function deductFromMokaItemSales(outletId: number, startDate: strin
       const netSold = Number(sale.net_sold);
       if (netSold <= 0) continue;
 
-      // Cari bahan-bahan dari resep menu ini (exact + fuzzy match terhadap nama dasar menu)
+      // Cari bahan-bahan dari resep menu ini, difilter hanya dari venue yang dimiliki outlet ini.
+      // JOIN outlet_venues memastikan resep dari outlet/venue lain tidak ikut terhitung (cross-venue contamination).
       const ingRes = await client.query(`
         SELECT i.id AS ingredient_id, ri.quantity
         FROM menus m
         JOIN recipes r ON r.menu_id = m.id
+        JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $2
         JOIN recipe_ingredients ri ON ri.recipe_id = r.id
         JOIN ingredients ing ON ing.id = ri.ingredient_id
         JOIN items i ON (i.id = ing.item_id OR i.ingredient_id = ing.id)
@@ -231,7 +235,7 @@ export async function deductFromMokaItemSales(outletId: number, startDate: strin
              AND LOWER(TRIM($1)) LIKE LOWER(TRIM(m.name)) || ' %'
              AND LOWER(TRIM($1)) LIKE '%' || LOWER(TRIM(m.variant))
            )
-      `, [sale.name]);
+      `, [sale.name, outletId]);
 
       for (const ing of ingRes.rows) {
         const qtyToDeduct = Number(ing.quantity) * netSold;

@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
           offset,
         })
       : getHppMenus({
-          categoryName: categoryId ? categoryId : undefined,
+          categoryId: categoryId ? Number(categoryId) : undefined,
           marginFlag: marginFlag ?? undefined,
           search,
           limit,
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       isOutlet ? getOutletHppCategories(session.outletId as number) : getHppCategories(),
     ]);
 
-    const categories = isOutlet ? rawCategories : rawCategories.map((c: any) => ({ id: c.name, name: c.name }));
+    const categories = isOutlet ? rawCategories : rawCategories.map((c: any) => ({ id: c.id, name: c.name }));
 
     return NextResponse.json({
       data: menusResult.data,

@@ -6,6 +6,7 @@ import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Pagination } from '@/components/ui/Pagination';
+import { Toast } from '@/components/ui/Toast';
 
 interface OpnameSession {
   id: number;
@@ -23,6 +24,7 @@ export default function OutletOpnamePage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [outletId, setOutletId] = useState<number | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const [limit, setLimit] = useState<number | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [filterDate, setFilterDate] = useState('');
@@ -67,11 +69,11 @@ export default function OutletOpnamePage() {
       if (data.success && data.data?.id) {
         router.push(`/outlet/opname/${data.data.id}`);
       } else {
-        alert(data.message || 'Gagal memulai opname');
+        setToastInfo({ show: true, msg: data.message || 'Gagal memulai opname', type: 'error' });
         setCreating(false);
       }
     } catch (err: unknown) {
-      alert((err instanceof Error ? err.message : 'Unknown error'));
+      setToastInfo({ show: true, msg: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
       setCreating(false);
     }
   };
@@ -80,6 +82,7 @@ export default function OutletOpnamePage() {
 
   return (
     <section className="screen">
+      {toastInfo.show && <Toast isOpen={true} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />}
       <div className="card">
         <div className="card-head" style={{ flexWrap: 'wrap', gap: 16 }}>
           <div style={{ flex: '1 1 auto', minWidth: 200 }}>

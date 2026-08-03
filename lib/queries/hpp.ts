@@ -144,6 +144,7 @@ export async function deleteHppCategory(id: number): Promise<void> {
 // ─────────────────────────────────────────────
 
 export async function getHppMenus(opts?: {
+  categoryId?: number;
   categoryName?: string;
   marginFlag?: string;
   search?: string;
@@ -154,7 +155,10 @@ export async function getHppMenus(opts?: {
   const conditions: string[] = [];
   let idx = 1;
 
-  if (opts?.categoryName) {
+  if (opts?.categoryId) {
+    conditions.push(`m.category_id = $${idx++}`);
+    params.push(opts.categoryId);
+  } else if (opts?.categoryName) {
     conditions.push(`c.name = $${idx++}`);
     params.push(opts.categoryName);
   }
@@ -181,13 +185,13 @@ export async function getHppMenus(opts?: {
   const countRes = await query<{ cnt: number }>(`
     SELECT COUNT(*)::int AS cnt
     FROM menus m
-    JOIN menu_categories c ON c.id = m.category_id
+    LEFT JOIN menu_categories c ON c.id = m.category_id
     ${where}
   `, params);
 
   const dataRes = await query<HppMenu>(`
     SELECT 
-      m.id, m.category_id, c.name AS category_name,
+      m.id, m.category_id, COALESCE(c.name, '—') AS category_name,
       m.name, m.variant, m.display_name,
       m.sale_price, m.hpp, m.hpp_ratio, m.notes,
       CASE
@@ -197,9 +201,9 @@ export async function getHppMenus(opts?: {
         ELSE 'RED'
       END AS margin_flag
     FROM menus m
-    JOIN menu_categories c ON c.id = m.category_id
+    LEFT JOIN menu_categories c ON c.id = m.category_id
     ${where}
-    ORDER BY c.name, m.name, m.variant
+    ORDER BY c.name NULLS LAST, m.name, m.variant
     LIMIT $${idx} OFFSET $${idx + 1}
   `, [...params, limit, offset]);
 
@@ -480,12 +484,13 @@ export async function createRecipe(data: {
     let menuRes = await client.query(`SELECT id FROM menus WHERE display_name ILIKE $1 OR name ILIKE $1 LIMIT 1`, [data.name]);
     let menuId = menuRes.rows[0]?.id;
 
-    if (!menuId && data.category_id) {
+    if (!menuId) {
+      // Always create a menu entry even if category_id is not provided
       const newMenu = await client.query(`
         INSERT INTO menus (name, display_name, category_id, sale_price) 
         VALUES ($1, $2, $3, $4) 
         RETURNING id
-      `, [data.name, data.name, data.category_id, data.sale_price || 0]);
+      `, [data.name, data.name, data.category_id || null, data.sale_price || 0]);
       menuId = newMenu.rows[0].id;
     }
 
