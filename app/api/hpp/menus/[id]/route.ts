@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, withTransaction } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -74,6 +74,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     console.error('Error updating master menu price:', err);
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const menuId = parseInt(id, 10);
+
+    await withTransaction(async (client) => {
+      await client.query('DELETE FROM recipes WHERE menu_id = $1', [menuId]);
+      await client.query('DELETE FROM menus WHERE id = $1', [menuId]);
+    });
+    return NextResponse.json({ success: true });
+  } catch (err: unknown) {
+    console.error('Error deleting menu:', err);
     return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

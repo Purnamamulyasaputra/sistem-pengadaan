@@ -492,7 +492,6 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
                   <td className="center">
                     {item.scanned_out_at ? (
                       <span style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13, display: 'inline-flex', alignItems: 'center' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}><polyline points="20 6 9 17 4 12"></polyline></svg>
                         {new Date(item.scanned_out_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     ) : (
@@ -502,7 +501,6 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
                   <td className="center">
                     {item.scanned_in_at ? (
                       <span style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13, display: 'inline-flex', alignItems: 'center' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}><polyline points="20 6 9 17 4 12"></polyline></svg>
                         {new Date(item.scanned_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     ) : (

@@ -286,7 +286,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
               isActive = pathname === '/reports' || pathname.startsWith('/reports/profit-projection') || pathname.startsWith('/price-history') || pathname.startsWith('/reports/inventory-value');
             }
 
-            if (item.href === '/master-data/items' && pathname.startsWith('/master-data/items')) isActive = true;
+            if (item.href === '/master-data/items' && (pathname.startsWith('/master-data/items') || pathname.startsWith('/master-data/outlets') || pathname.startsWith('/master-data/vendors') || pathname.startsWith('/master-data/categories'))) isActive = true;
             if (item.href === '/hpp' && pathname.startsWith('/hpp')) isActive = true;
             if (item.href === '/outlet/sales') {
               isActive = pathname === '/outlet/sales';

@@ -18,7 +18,7 @@ type MenuRow = {
   margin_flag: 'GREEN' | 'YELLOW' | 'RED' | null;
 };
 type RecipeRow = {
-  id: number; venue_name: string; name: string; source_sheet: string;
+  id: number; venue_name: string; name: string;
   yield: number; yield_unit: string | null;
   subtotal: number | null; total_cost: number | null; sale_price: number | null;
 };
@@ -28,7 +28,7 @@ type IngRow = {
   used_in_recipes: number;
 };
 type KitchenRow = {
-  recipe_name: string; source_sheet: string; yield_amount: number;
+  recipe_name: string; yield_amount: number;
   yield_unit: string | null; sale_price: number;
   raw_cost: number | null; total_cost_with_xfactor: number | null;
   cost_per_unit_yield: number | null; hpp_ratio_pct: number | null;
@@ -334,7 +334,6 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [venueId, setVenueId] = useState('');
-  const [sheet, setSheet] = useState('');
   const [page, setPage] = useState(1);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -344,19 +343,17 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [viewRecipeData, setViewRecipeData] = useState<any>(null);
   const [viewRecipeLoading, setViewRecipeLoading] = useState(false);
 
-  const SHEETS = ['Bar 1', 'Bar 2', 'Kitchen 2025', 'Turangga'];
 
   const load = useCallback(() => {
     setLoading(true);
     let url = `/api/hpp/recipes?limit=${limit}&page=${page}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (venueId) url += `&venue_id=${venueId}`;
-    if (sheet) url += `&source_sheet=${encodeURIComponent(sheet)}`;
     fetch(url)
       .then(r => r.json())
       .then(d => { setData(d.data ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
-  }, [search, venueId, sheet, page]);
+  }, [search, venueId, page]);
 
   const openViewRecipe = async (id: number) => {
     setViewRecipeModal(id);
@@ -404,16 +401,6 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           style={{ width: 150 }}
           inputStyle={{ height: 32 }}
         />
-        <Select
-          value={sheet}
-          onChange={val => { setSheet(String(val)); setPage(1); }}
-          options={[
-            { value: '', label: 'Semua Sheet' },
-            ...SHEETS.map(s => ({ value: s, label: s }))
-          ]}
-          style={{ width: 160 }}
-          inputStyle={{ height: 32 }}
-        />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
           <span className="muted" style={{ fontSize: 12 }}>{total} resep</span>
           {totalPages > 1 && (
@@ -445,7 +432,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
             <thead>
               <tr>
                 <th>Nama Resep</th>
-                <th>Venue / Sheet</th>
+                <th>Venue</th>
                 <th className="right">Hasil (Yield)</th>
                 <th className="right">Subtotal Bahan</th>
                 <th className="right">Total HPP</th>
@@ -458,7 +445,6 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
                   <td style={{ fontWeight: 600 }}>{row.name}</td>
                   <td>
                     <div>{row.venue_name}</div>
-                    <div className="muted" style={{ fontSize: 12 }}>{row.source_sheet}</div>
                   </td>
                   <td className="right ">{Number(row.yield).toLocaleString('id-ID')} <span className="muted">{row.yield_unit ?? 'pcs'}</span></td>
                   <td className="right ">{rp(row.subtotal)}</td>
@@ -483,7 +469,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{viewRecipeData.recipe.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-                  {viewRecipeData.recipe.venue_name} &middot; {viewRecipeData.recipe.source_sheet}
+                  {viewRecipeData.recipe.venue_name}
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -706,23 +692,11 @@ function KitchenTab() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = filter
-    ? data.filter(r => r.source_sheet === filter)
-    : data;
+  const filtered = data;
 
   return (
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-        <Select
-          value={filter}
-          onChange={val => setFilter(String(val))}
-          options={[
-            { value: '', label: 'Semua Dapur / Sheet' },
-            ...Array.from(new Set(data.map(r => r.source_sheet))).map(sheet => ({ value: sheet, label: sheet }))
-          ]}
-          style={{ width: 180 }}
-          inputStyle={{ height: 32 }}
-        />
         <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{filtered.length} resep</span>
       </div>
       <div className="card-body flush">
@@ -733,7 +707,7 @@ function KitchenTab() {
             <thead>
               <tr>
                 <th>Nama Resep</th>
-                <th>Sheet</th>
+
                 <th className="right">Hasil (Yield)</th>
                 <th className="right">Biaya Bahan</th>
                 <th className="right">HPP (+10%)</th>
@@ -746,7 +720,7 @@ function KitchenTab() {
               {filtered.map((row, i) => (
                 <tr key={i}>
                   <td style={{ fontWeight: 600 }}>{row.recipe_name}</td>
-                  <td><span style={{ fontSize: 12, color: 'var(--muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{row.source_sheet}</span></td>
+
                   <td className="right ">{Number(row.yield_amount).toLocaleString('id-ID')} <span className="muted">{row.yield_unit}</span></td>
                   <td className="right ">{rp(row.raw_cost)}</td>
                   <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost_with_xfactor)}</td>

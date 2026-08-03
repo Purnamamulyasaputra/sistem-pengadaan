@@ -317,7 +317,37 @@ export default function ReceiveGoodsPage() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h5 style={{ margin: 0, color: 'var(--primary)', fontSize: 16 }}>Verifikasi Barang</h5>
-            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {scanModal?.status !== 'DITERIMA' && (
+                  <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} style={{ whiteSpace: 'nowrap' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                    {proofImage || previewUrl ? 'Ubah Foto' : 'Unggah Foto'}
+                  </Button>
+                )}
+                {scanModal?.status !== 'DITERIMA' && (
+                  <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" capture="environment" onChange={e => handlePhotoChange(e.target.files?.[0])} />
+                )}
+                {previewUrl && (
+                  <img
+                    src={previewUrl}
+                    alt="Proof"
+                    onClick={() => setViewingPhoto(true)}
+                    style={{ height: 40, width: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'zoom-in' }}
+                  />
+                )}
+                {scanModal?.status === 'DITERIMA' && previewUrl && (
+                  <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>Bukti Pengiriman</span>
+                )}
+              </div>
+
+              {!allScannedIn && scanModal?.status !== 'DITERIMA' && (
+                <form onSubmit={handleCompleteReceipt} style={{ display: 'flex', alignItems: 'center' }}>
+                  <Button variant="primary" type="submit" disabled={processing || (requireBarcode && !proofImage && !previewUrl)}>
+                    {processing ? 'Menyelesaikan...' : 'Selesaikan Penerimaan'}
+                  </Button>
+                </form>
+              )}
             </div>
           </div>
 
@@ -419,43 +449,6 @@ export default function ReceiveGoodsPage() {
             </Table>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {scanModal?.status !== 'DITERIMA' && (
-                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} style={{ whiteSpace: 'nowrap' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                  {proofImage || previewUrl ? 'Ubah Foto' : 'Unggah Foto'}
-                </Button>
-              )}
-              {scanModal?.status !== 'DITERIMA' && (
-                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" capture="environment" onChange={e => handlePhotoChange(e.target.files?.[0])} />
-              )}
-              {previewUrl && (
-                <img
-                  src={previewUrl}
-                  alt="Proof"
-                  onClick={() => setViewingPhoto(true)}
-                  style={{ height: 40, width: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'zoom-in' }}
-                />
-              )}
-              {scanModal?.status === 'DITERIMA' && previewUrl && (
-                <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>Bukti Pengiriman</span>
-              )}
-            </div>
-
-            {!allScannedIn && scanModal?.status !== 'DITERIMA' && (
-              <form onSubmit={handleCompleteReceipt} style={{ display: 'flex', alignItems: 'center' }}>
-                <Button variant="primary" type="submit" disabled={processing || (requireBarcode && !proofImage && !previewUrl)}>
-                  {processing ? 'Menyelesaikan...' : 'Selesaikan Penerimaan'}
-                </Button>
-              </form>
-            )}
-          </div>
-
-        </div>
-
-        <div className="modal-actions" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button variant="outline" onClick={() => setScanModal(null)}>Tutup</Button>
         </div>
       </Modal>
 

@@ -40,21 +40,19 @@ export type HppRecipe = {
   venue_name: string;
   menu_id: bigint | null;
   name: string;
-  source_sheet: string;
-  source_name: string | null;
   yield: number;
   yield_unit: string | null;
   subtotal: number | null;
   x_factor_pct: number;
   total_cost: number | null;
   sale_price: number | null;
+  category_id?: bigint | null;
 };
 
 export type HppRecipeIngredient = {
   id: bigint;
   recipe_id: bigint;
   recipe_name: string;
-  source_sheet: string;
   ingredient_id: bigint;
   ingredient_name: string;
   default_unit: string | null;
@@ -89,7 +87,6 @@ export type HppVsSale = {
 
 export type HppKitchenSummary = {
   recipe_name: string;
-  source_sheet: string;
   yield_amount: number;
   yield_unit: string | null;
   sale_price: number;
@@ -121,12 +118,33 @@ export async function getHppCategories(): Promise<HppCategory[]> {
   return res.rows;
 }
 
+export async function createHppCategory(name: string): Promise<HppCategory> {
+  const res = await query<HppCategory>(
+    `INSERT INTO menu_categories (name) VALUES ($1) RETURNING id, name`,
+    [name]
+  );
+  return res.rows[0];
+}
+
+export async function updateHppCategory(id: number, name: string): Promise<HppCategory> {
+  const res = await query<HppCategory>(
+    `UPDATE menu_categories SET name = $1 WHERE id = $2 RETURNING id, name`,
+    [name, id]
+  );
+  return res.rows[0];
+}
+
+export async function deleteHppCategory(id: number): Promise<void> {
+  await query(`DELETE FROM menu_categories WHERE id = $1`, [id]);
+}
+
+
 // ─────────────────────────────────────────────
 // MENUS — dengan filter opsional
 // ─────────────────────────────────────────────
 
 export async function getHppMenus(opts?: {
-  categoryId?: number;
+  categoryName?: string;
   marginFlag?: string;
   search?: string;
   limit?: number;
@@ -136,9 +154,9 @@ export async function getHppMenus(opts?: {
   const conditions: string[] = [];
   let idx = 1;
 
-  if (opts?.categoryId) {
-    conditions.push(`m.category_id = $${idx++}`);
-    params.push(opts.categoryId);
+  if (opts?.categoryName) {
+    conditions.push(`c.name = $${idx++}`);
+    params.push(opts.categoryName);
   }
   if (opts?.marginFlag) {
     conditions.push(`
@@ -189,12 +207,11 @@ export async function getHppMenus(opts?: {
 }
 
 // ─────────────────────────────────────────────
-// RECIPES — dengan filter venue & source_sheet
+// RECIPES — dengan filter venue
 // ─────────────────────────────────────────────
 
 export async function getHppRecipes(opts?: {
   venueId?: number;
-  sourceSheet?: string;
   search?: string;
   limit?: number;
   offset?: number;
@@ -206,10 +223,6 @@ export async function getHppRecipes(opts?: {
   if (opts?.venueId) {
     conditions.push(`r.venue_id = $${idx++}`);
     params.push(opts.venueId);
-  }
-  if (opts?.sourceSheet) {
-    conditions.push(`r.source_sheet = $${idx++}`);
-    params.push(opts.sourceSheet);
   }
   if (opts?.search) {
     conditions.push(`r.name ILIKE $${idx++}`);
@@ -227,13 +240,13 @@ export async function getHppRecipes(opts?: {
   const dataRes = await query<HppRecipe>(`
     SELECT 
       r.id, r.venue_id, v.name AS venue_name,
-      r.menu_id, r.name, r.source_sheet, r.source_name,
+      r.menu_id, r.name,
       r.yield, r.yield_unit, r.subtotal, r.x_factor_pct,
       r.total_cost, r.sale_price
     FROM recipes r
     JOIN venues v ON v.id = r.venue_id
     ${where}
-    ORDER BY r.source_sheet, r.name
+    ORDER BY r.name
     LIMIT $${idx} OFFSET $${idx + 1}
   `, [...params, limit, offset]);
 
@@ -251,18 +264,20 @@ export async function getHppRecipeDetail(recipeId: number): Promise<{
   const recipeRes = await query<HppRecipe>(`
     SELECT 
       r.id, r.venue_id, v.name AS venue_name,
-      r.menu_id, r.name, r.source_sheet, r.source_name,
+      r.menu_id, r.name,
       r.yield, r.yield_unit, r.subtotal, r.x_factor_pct,
-      r.total_cost, r.sale_price
+      r.total_cost, r.sale_price,
+      m.category_id
     FROM recipes r
     JOIN venues v ON v.id = r.venue_id
+    LEFT JOIN menus m ON m.id = r.menu_id
     WHERE r.id = $1
   `, [recipeId]);
 
   const ingRes = await query<HppRecipeIngredient>(`
     SELECT 
       ri.id, ri.recipe_id,
-      r.name AS recipe_name, r.source_sheet,
+      r.name AS recipe_name,
       ri.ingredient_id, 
       COALESCE(it.name, i.name) AS ingredient_name,
       COALESCE(it.smallest_unit, i.default_unit) AS default_unit,
@@ -375,11 +390,11 @@ export async function getHppVsSale(opts?: {
 export async function getHppKitchenSummary(): Promise<HppKitchenSummary[]> {
   const res = await query<HppKitchenSummary>(`
     SELECT 
-      recipe_name, source_sheet, yield_amount, yield_unit,
+      recipe_name, yield_amount, yield_unit,
       sale_price, raw_cost, total_cost_with_xfactor,
       cost_per_unit_yield, hpp_ratio_pct
     FROM v_kitchen_hpp_summary
-    ORDER BY source_sheet, hpp_ratio_pct DESC NULLS LAST
+    ORDER BY recipe_name ASC
   `);
   return res.rows;
 }
@@ -430,11 +445,11 @@ export async function getHppStats(): Promise<{
 export async function createRecipe(data: {
   name: string;
   venue_id: number;
-  source_sheet: string;
   yield_amount: number;
   yield_unit?: string;
   x_factor_pct: number;
   sale_price?: number;
+  category_id?: number;
   ingredients: { ingredient_id: number; quantity: number; unit?: string; cost_per_unit: number }[];
 }) {
   return await withTransaction(async (client) => {
@@ -444,10 +459,10 @@ export async function createRecipe(data: {
 
     // 2. Insert recipe
     const recRes = await client.query(`
-      INSERT INTO recipes (name, venue_id, source_sheet, yield, yield_unit, subtotal, x_factor_pct, total_cost, sale_price)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO recipes (name, venue_id, yield, yield_unit, subtotal, x_factor_pct, total_cost, sale_price)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
-    `, [data.name, data.venue_id, data.source_sheet, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost, data.sale_price ?? null]);
+    `, [data.name, data.venue_id, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost, data.sale_price ?? null]);
     
     const recipeId = recRes.rows[0].id;
 
@@ -461,21 +476,30 @@ export async function createRecipe(data: {
       `, [recipeId, ing.ingredient_id, ing.quantity, ing.unit || null, ing.cost_per_unit, extension, i + 1]);
     }
 
-    // 4. Update menus HPP and link menu_id automatically by name matching
-    await client.query(`
-      UPDATE recipes 
-      SET menu_id = (SELECT id FROM menus WHERE display_name ILIKE $2 LIMIT 1)
-      WHERE id = $1
-    `, [recipeId, data.name]);
+    // 4. Update menus HPP and link menu_id automatically
+    let menuRes = await client.query(`SELECT id FROM menus WHERE display_name ILIKE $1 OR name ILIKE $1 LIMIT 1`, [data.name]);
+    let menuId = menuRes.rows[0]?.id;
 
-    await client.query(`
-      UPDATE menus
-      SET 
-        hpp = r.total_cost / NULLIF(r.yield, 0),
-        hpp_ratio = (r.total_cost / NULLIF(r.yield, 0)) / NULLIF(menus.sale_price, 0)
-      FROM recipes r
-      WHERE r.id = $1 AND menus.id = r.menu_id
-    `, [recipeId]);
+    if (!menuId && data.category_id) {
+      const newMenu = await client.query(`
+        INSERT INTO menus (name, display_name, category_id, sale_price) 
+        VALUES ($1, $2, $3, $4) 
+        RETURNING id
+      `, [data.name, data.name, data.category_id, data.sale_price || 0]);
+      menuId = newMenu.rows[0].id;
+    }
+
+    if (menuId) {
+      await client.query(`UPDATE recipes SET menu_id = $1 WHERE id = $2`, [menuId, recipeId]);
+      await client.query(`
+        UPDATE menus
+        SET 
+          hpp = r.total_cost / NULLIF(r.yield, 0),
+          hpp_ratio = (r.total_cost / NULLIF(r.yield, 0)) / NULLIF(menus.sale_price, 0)
+        FROM recipes r
+        WHERE r.id = $1 AND menus.id = $2
+      `, [recipeId, menuId]);
+    }
 
     return recipeId;
   });
@@ -484,11 +508,11 @@ export async function createRecipe(data: {
 export async function updateRecipe(id: number, data: {
   name: string;
   venue_id: number;
-  source_sheet: string;
   yield_amount: number;
   yield_unit?: string;
   x_factor_pct: number;
   sale_price?: number;
+  category_id?: number;
   ingredients: { ingredient_id: number; quantity: number; unit?: string; cost_per_unit: number }[];
 }) {
   return await withTransaction(async (client) => {
@@ -499,10 +523,18 @@ export async function updateRecipe(id: number, data: {
     // 2. Update recipe
     await client.query(`
       UPDATE recipes 
-      SET name = $1, venue_id = $2, source_sheet = $3, yield = $4, yield_unit = $5, 
-          subtotal = $6, x_factor_pct = $7, total_cost = $8, sale_price = COALESCE($9, sale_price), revision_date = CURRENT_DATE
-      WHERE id = $10
-    `, [data.name, data.venue_id, data.source_sheet, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost, data.sale_price ?? null, id]);
+      SET name = $1, venue_id = $2, yield = $3, yield_unit = $4, 
+          subtotal = $5, x_factor_pct = $6, total_cost = $7, sale_price = COALESCE($8, sale_price), revision_date = CURRENT_DATE
+      WHERE id = $9
+    `, [data.name, data.venue_id, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost, data.sale_price ?? null, id]);
+
+    if (data.category_id) {
+      await client.query(`
+        UPDATE menus 
+        SET category_id = $1 
+        WHERE id = (SELECT menu_id FROM recipes WHERE id = $2)
+      `, [data.category_id, id]);
+    }
 
     // 3. Delete old ingredients
     await client.query(`DELETE FROM recipe_ingredients WHERE recipe_id = $1`, [id]);

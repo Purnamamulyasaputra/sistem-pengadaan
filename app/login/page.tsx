@@ -12,7 +12,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [fullLoading, setFullLoading] = useState(false);
-  const [error, setError] = useState('');
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -32,7 +31,7 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    setError('');
+    setToastOpen(false);
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -41,7 +40,8 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        setError(data.message || 'Email atau password salah');
+        setToastMessage(data.message || 'Email atau password salah');
+        setToastOpen(true);
         setSubmitting(false);
       } else {
         setSubmitting(false);
@@ -52,7 +52,8 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch {
-      setError('Terjadi kesalahan. Coba lagi.');
+      setToastMessage('Terjadi kesalahan. Coba lagi.');
+      setToastOpen(true);
       setSubmitting(false);
     }
   }
@@ -84,12 +85,6 @@ export default function LoginPage() {
 
               {/* Form */}
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {error && (
-                  <div className="alert-banner alert-danger" style={{ borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                    {error}
-                  </div>
-                )}
 
                 <div className="form-group">
                   <label className="form-label">Email</label>

@@ -83,14 +83,18 @@ export async function getOutletHppCategories(outletId: number) {
   const outletName = outletRes.rows[0]?.name || '';
 
   const res = await query(`
-    SELECT DISTINCT c.id, c.name
-    FROM menu_categories c
-    JOIN menus m ON m.category_id = c.id
+    SELECT DISTINCT 
+      COALESCE(c.name, mi.category_name) AS id, 
+      COALESCE(c.name, mi.category_name) AS name
+    FROM menus m
     JOIN recipes r ON r.menu_id = m.id
+    JOIN (SELECT DISTINCT name, category_name, outlet_id FROM moka_items WHERE is_deleted IS NOT TRUE) mi 
+      ON mi.name = m.name AND mi.outlet_id = $2
+    LEFT JOIN menu_categories c ON c.id = m.category_id
     WHERE r.venue_id = ANY($1)
-      AND EXISTS (SELECT 1 FROM moka_items mi WHERE mi.outlet_id = $2 AND mi.name = m.name AND mi.is_deleted IS NOT TRUE)
-      ${!outletName.toLowerCase().includes('cafetaria') ? `AND c.name NOT ILIKE '%cafetaria%'` : ''}
-    ORDER BY c.name
+      ${!outletName.toLowerCase().includes('cafetaria') ? `AND COALESCE(c.name, mi.category_name) NOT ILIKE '%cafetaria%'` : ''}
+      AND COALESCE(c.name, mi.category_name) IS NOT NULL
+    ORDER BY COALESCE(c.name, mi.category_name)
   `, [venueIds, outletId]);
   
   return res.rows;
@@ -108,7 +112,7 @@ export async function getOutletHppVenues(outletId: number) {
   return res.rows;
 }
 
-export async function getOutletHppMenus(outletId: number, opts?: { categoryId?: number; marginFlag?: string; search?: string; limit?: number; offset?: number }) {
+export async function getOutletHppMenus(outletId: number, opts?: { categoryName?: string; marginFlag?: string; search?: string; limit?: number; offset?: number }) {
   const outletRes = await query(`SELECT name FROM outlets WHERE id = $1`, [outletId]);
   const outletName = outletRes.rows[0]?.name || '';
 
@@ -118,19 +122,18 @@ export async function getOutletHppMenus(outletId: number, opts?: { categoryId?: 
   
   const params: unknown[] = [outletId, venueIds]; // $1 = outletId, $2 = venueIds
   const conditions: string[] = [
-    `r.venue_id = ANY($2)`,
-    `EXISTS (SELECT 1 FROM moka_items mi WHERE mi.outlet_id = $1 AND mi.name = m.name AND mi.is_deleted IS NOT TRUE)`
+    `r.venue_id = ANY($2)`
   ];
   
   if (!outletName.toLowerCase().includes('cafetaria')) {
-    conditions.push(`c.name NOT ILIKE '%cafetaria%'`);
+    conditions.push(`COALESCE(c.name, mi.category_name) NOT ILIKE '%cafetaria%'`);
   }
   
   let idx = 3;
 
-  if (opts?.categoryId) {
-    conditions.push(`m.category_id = $${idx++}`);
-    params.push(opts.categoryId);
+  if (opts?.categoryName) {
+    conditions.push(`COALESCE(c.name, mi.category_name) = $${idx++}`);
+    params.push(opts.categoryName);
   }
   if (opts?.marginFlag) {
     conditions.push(`
@@ -156,14 +159,16 @@ export async function getOutletHppMenus(outletId: number, opts?: { categoryId?: 
     SELECT COUNT(DISTINCT m.id)::int AS cnt
     FROM menus m
     JOIN recipes r ON r.menu_id = m.id
+    JOIN (SELECT DISTINCT name, category_name, outlet_id FROM moka_items WHERE is_deleted IS NOT TRUE) mi 
+      ON mi.name = m.name AND mi.outlet_id = $1
     LEFT JOIN menu_categories c ON c.id = m.category_id
     LEFT JOIN outlet_menu_prices omp ON omp.menu_id = m.id AND omp.outlet_id = $1
     ${where}
   `, params);
 
     const dataRes = await query<HppMenu & { is_overridden?: boolean }>(`
-      SELECT DISTINCT ON (c.name, m.name, m.variant, m.id)
-        m.id, m.category_id, c.name AS category_name, m.name, m.variant, m.display_name,
+      SELECT DISTINCT ON (COALESCE(c.name, mi.category_name), m.name, m.variant, m.id)
+        m.id, m.category_id, COALESCE(c.name, mi.category_name) AS category_name, m.name, m.variant, m.display_name,
         COALESCE(omp.sale_price, m.sale_price) AS sale_price,
         m.hpp,
         CASE
@@ -189,17 +194,19 @@ export async function getOutletHppMenus(outletId: number, opts?: { categoryId?: 
         (omp.sale_price IS NOT NULL) AS is_overridden
       FROM menus m
       JOIN recipes r ON r.menu_id = m.id
+      JOIN (SELECT DISTINCT name, category_name, outlet_id FROM moka_items WHERE is_deleted IS NOT TRUE) mi 
+        ON mi.name = m.name AND mi.outlet_id = $1
       LEFT JOIN menu_categories c ON c.id = m.category_id
       LEFT JOIN outlet_menu_prices omp ON omp.menu_id = m.id AND omp.outlet_id = $1
       ${where}
-      ORDER BY c.name, m.name, m.variant, m.id
+      ORDER BY COALESCE(c.name, mi.category_name), m.name, m.variant, m.id
       LIMIT $${idx} OFFSET $${idx + 1}
     `, [...params, limit, offset]);
 
   return { data: dataRes.rows, total: countRes.rows[0]?.cnt ?? 0 };
 }
 
-export async function getOutletHppRecipes(outletId: number, opts?: { search?: string; venueId?: number; sourceSheet?: string; limit?: number; offset?: number }) {
+export async function getOutletHppRecipes(outletId: number, opts?: { search?: string; venueId?: number; limit?: number; offset?: number }) {
   const venuesRes = await query(`SELECT venue_id FROM outlet_venues WHERE outlet_id = $1`, [outletId]);
   let venueIds = venuesRes.rows.map(r => r.venue_id);
   if (!venueIds.length) return { data: [], total: 0 };
@@ -230,10 +237,6 @@ export async function getOutletHppRecipes(outletId: number, opts?: { search?: st
     conditions.push(`r.name ILIKE $${idx++}`);
     params.push(`%${opts.search}%`);
   }
-  if (opts?.sourceSheet) {
-    conditions.push(`r.source_sheet = $${idx++}`);
-    params.push(opts.sourceSheet);
-  }
 
   const where = `WHERE ${conditions.join(' AND ')}`;
   const limit = opts?.limit ?? 50;
@@ -246,13 +249,13 @@ export async function getOutletHppRecipes(outletId: number, opts?: { search?: st
   const dataRes = await query<HppRecipe>(`
     SELECT 
       r.id, r.venue_id, v.name AS venue_name,
-      r.menu_id, r.name, r.source_sheet, r.source_name,
+      r.menu_id, r.name,
       r.yield, r.yield_unit, r.subtotal, r.x_factor_pct,
       r.total_cost, r.sale_price
     FROM recipes r
     JOIN venues v ON v.id = r.venue_id
     ${where}
-    ORDER BY r.source_sheet, r.name
+    ORDER BY r.name
     LIMIT $${idx} OFFSET $${idx + 1}
   `, [...params, limit, offset]);
 
@@ -266,7 +269,7 @@ export async function getOutletHppKitchenSummary(outletId: number) {
   
   const res = await query(`
     SELECT DISTINCT
-      k.recipe_name, k.source_sheet, k.yield_amount, k.yield_unit,
+      k.recipe_name, k.yield_amount, k.yield_unit,
       k.sale_price, k.raw_cost, k.total_cost_with_xfactor,
       k.cost_per_unit_yield, k.hpp_ratio_pct
     FROM v_kitchen_hpp_summary k
@@ -279,7 +282,7 @@ export async function getOutletHppKitchenSummary(outletId: number) {
           AND mi.outlet_id = $2 
           AND mi.is_deleted IS NOT TRUE
       )
-    ORDER BY k.source_sheet, k.hpp_ratio_pct DESC NULLS LAST
+    ORDER BY k.hpp_ratio_pct DESC NULLS LAST
   `, [venueIds, outletId]);
   
   return res.rows;

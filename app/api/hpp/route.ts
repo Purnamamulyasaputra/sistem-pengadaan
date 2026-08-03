@@ -20,32 +20,34 @@ export async function GET(request: NextRequest) {
     if (tab === 'margin') {
       const data = await getHppVsSale({
         marginFlag: marginFlag ?? undefined,
-        category: categoryId ? undefined : undefined,
+        category: categoryId ? categoryId : undefined,
       });
       return NextResponse.json({ data });
     }
 
     const menusPromise = isOutlet 
       ? getOutletHppMenus(session.outletId as number, {
-          categoryId: categoryId ? parseInt(categoryId) : undefined,
+          categoryName: categoryId ? categoryId : undefined,
           marginFlag: marginFlag ?? undefined,
           search,
           limit,
           offset,
         })
       : getHppMenus({
-          categoryId: categoryId ? parseInt(categoryId) : undefined,
+          categoryName: categoryId ? categoryId : undefined,
           marginFlag: marginFlag ?? undefined,
           search,
           limit,
           offset,
         });
 
-    const [menusResult, venues, categories] = await Promise.all([
+    const [menusResult, venues, rawCategories] = await Promise.all([
       menusPromise,
       isOutlet ? getOutletHppVenues(session.outletId as number) : getHppVenues(),
       isOutlet ? getOutletHppCategories(session.outletId as number) : getHppCategories(),
     ]);
+
+    const categories = isOutlet ? rawCategories : rawCategories.map((c: any) => ({ id: c.name, name: c.name }));
 
     return NextResponse.json({
       data: menusResult.data,

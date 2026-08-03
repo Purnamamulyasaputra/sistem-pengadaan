@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, Plus, Trash2, Save } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Table } from '@/components/ui/Table';
+import { Toast } from '@/components/ui/Toast';
 
 export default function RecipeBuilderPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -12,22 +13,26 @@ export default function RecipeBuilderPage({ params: paramsPromise }: { params: P
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ show: boolean; msg: string; type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
 // Master Data
 const [venues, setVenues] = useState<{ id: number; name: string }[]>([]);
+const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
 const [availableIngredients, setAvailableIngredients] = useState<{ id: number; name: string; standard_cost_per_unit: number; default_unit: string }[]>([]);
+const [availableMenus, setAvailableMenus] = useState<string[]>([]);
+const [menuSuggestions, setMenuSuggestions] = useState<string[]>([]);
+const [showMenuSuggestions, setShowMenuSuggestions] = useState(false);
 
 // Form State
 const [form, setForm] = useState({
   name: '',
   venue_id: '',
-  source_sheet: 'Kitchen 2025',
   yield_amount: '1',
   yield_unit: 'pcs',
   x_factor_pct: '10', // as integer percentage for UI
   sale_price: '0',
+  category_id: '',
 });
 
 const [ingredients, setIngredients] = useState<{
@@ -40,15 +45,38 @@ const [ingredients, setIngredients] = useState<{
   extension: number;
 }[]>([]);
 
+const handleMenuNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const val = e.target.value;
+  setForm(f => ({ ...f, name: val }));
+  if (val.trim()) {
+    const filtered = availableMenus.filter(m => m.toLowerCase().includes(val.toLowerCase()) && m !== val);
+    setMenuSuggestions(filtered);
+    setShowMenuSuggestions(filtered.length > 0);
+  } else {
+    setShowMenuSuggestions(false);
+  }
+};
+
+const selectSuggestion = (s: string) => {
+  setForm(f => ({ ...f, name: s }));
+  setShowMenuSuggestions(false);
+};
+
 const loadMasterData = async () => {
   const [venueRes, ingRes] = await Promise.all([
-    fetch('/api/hpp'), // Returns venues
+    fetch('/api/hpp?limit=1000'), // Returns venues and menus
     fetch('/api/hpp/ingredients?limit=1000') // Fetch all ingredients for dropdown
   ]);
   const venueData = await venueRes.json();
   const ingData = await ingRes.json();
   setVenues(venueData.venues ?? []);
+  setCategories(venueData.categories ?? []);
   setAvailableIngredients(ingData.data ?? []);
+  
+  if (venueData.data) {
+    const uniqueMenus = Array.from(new Set(venueData.data.map((m: any) => m.display_name || m.name)));
+    setAvailableMenus(uniqueMenus as string[]);
+  }
 };
 
 const loadRecipe = async () => {
@@ -60,11 +88,11 @@ const loadRecipe = async () => {
     setForm({
       name: data.recipe.name,
       venue_id: String(data.recipe.venue_id),
-      source_sheet: data.recipe.source_sheet,
       yield_amount: String(data.recipe.yield),
       yield_unit: data.recipe.yield_unit || '',
       x_factor_pct: String((Number(data.recipe.x_factor_pct) * 100).toFixed(0)),
       sale_price: data.recipe.sale_price ? String(Math.round(Number(data.recipe.sale_price))) : '0',
+      category_id: data.recipe.category_id ? String(data.recipe.category_id) : '',
     });
 
     setIngredients(data.ingredients.map((ing: any) => ({
@@ -77,7 +105,7 @@ const loadRecipe = async () => {
       extension: Number(ing.quantity) * Number(ing.standard_cost_per_unit ?? ing.cost_per_unit),
     })));
   } catch (err: unknown) {
-    setError((err instanceof Error ? err.message : 'Unknown error'));
+    setToastInfo({ show: true, msg: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
   } finally {
     setLoading(false);
   }
@@ -137,25 +165,25 @@ const handleIngredientChange = (id: string, field: string, value: string) => {
 };
 
   const handleSave = async () => {
-    if (!form.name || !form.venue_id || ingredients.length === 0) {
-      setError('Harap isi semua kolom wajib dan tambahkan minimal satu bahan baku.');
+    if (!form.name || !form.venue_id) {
+      setToastInfo({ show: true, msg: 'Harap isi semua kolom wajib.', type: 'error' });
       return;
     }
 
   // Validate ingredients
     for (const ing of ingredients) {
       if (!ing.ingredient_id || Number(ing.quantity) <= 0) {
-        setError('Harap pilih bahan baku dan masukkan jumlah yang valid untuk semua baris.');
+        setToastInfo({ show: true, msg: 'Harap pilih bahan baku dan masukkan jumlah yang valid untuk semua baris.', type: 'error' });
         return;
       }
     }
 
   setSaving(true);
-  setError('');
 
   const payload = {
     ...form,
     venue_id: Number(form.venue_id),
+    category_id: form.category_id ? Number(form.category_id) : undefined,
     yield_amount: Number(form.yield_amount),
     x_factor_pct: Number(form.x_factor_pct) / 100,
     sale_price: Number(form.sale_price) || 0,
@@ -179,14 +207,17 @@ const handleIngredientChange = (id: string, field: string, value: string) => {
       throw new Error(data.error || 'Failed to save recipe');
     }
 
-    router.push('/hpp');
+    setToastInfo({ show: true, msg: 'Data Produk berhasil disimpan!', type: 'success' });
+    setTimeout(() => {
+      router.push('/hpp');
+    }, 1000);
   } catch (err: unknown) {
-    setError((err instanceof Error ? err.message : 'Unknown error'));
+    setToastInfo({ show: true, msg: (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
     setSaving(false);
   }
 };
 
-if (loading) return <div style={{ padding: 40, textAlign: 'center' }} className="muted">Memuat resep...</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }} className="muted">Memuat data produk...</div>;
 
 return (
   <section className="screen" style={{ paddingBottom: 40 }}>
@@ -195,41 +226,51 @@ return (
         <button className="btn" onClick={() => router.push('/hpp')} style={{ display: 'flex', alignItems: 'center', padding: '4px 10px', fontSize: 12, height: 30 }}>
           <ChevronLeft size={16} /> Kembali
         </button>
-        <h2 style={{ margin: 0, color: 'var(--foreground)', fontSize: 18 }}>{isNew ? 'Buat Resep Baru' : 'Edit Resep'}</h2>
+        <h2 style={{ margin: 0, color: 'var(--foreground)', fontSize: 18 }}>{isNew ? 'Buat Produk Baru' : 'Edit Produk'}</h2>
       </div>
 
       <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 12, height: 30, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }} onClick={handleSave} disabled={saving}>
         <Save size={14} />
-        {saving ? 'Menyimpan...' : 'Simpan Resep'}
+        {saving ? 'Menyimpan...' : 'Simpan Produk'}
       </button>
     </div>
-
-    {error && <div className="alert-banner alert-danger" style={{ marginBottom: 20 }}>{error}</div>}
 
     <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'flex-start' }}>
       {/* LEFT COLUMN: Metadata */}
       <div className="card">
         <div className="card-head" style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-          <h3 style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Detail Resep</h3>
+          <h3 style={{ fontSize: 13, margin: 0, fontWeight: 700 }}>Detail Produk</h3>
         </div>
         <div className="card-body" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Input label="Nama Resep" required placeholder="misal. Americano - Hot Medium" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <div style={{ position: 'relative' }}>
+            <Input label="Nama Produk / Menu" required placeholder="misal. Americano - Hot Medium" autoComplete="off" value={form.name} onChange={handleMenuNameChange} onFocus={handleMenuNameChange} onBlur={() => setTimeout(() => setShowMenuSuggestions(false), 200)} />
+            {showMenuSuggestions && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 4, zIndex: 10, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', marginTop: 2 }}>
+                {menuSuggestions.map((s, idx) => (
+                  <div key={idx} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: idx < menuSuggestions.length - 1 ? '1px solid var(--border)' : 'none' }} onClick={() => selectSuggestion(s)} onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                    {s}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="form-group">
+            <label style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, display: 'block', color: 'var(--muted)' }}>
+              Kategori POS (Opsional)
+            </label>
+            <select className="input" style={{ width: '100%', height: 34, fontSize: 12 }} value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
+              <option value="">Pilih...</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
             <div className="form-group">
               <label className="req" style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, display: 'block', color: 'var(--muted)' }}>Lokasi (Venue)</label>
               <select className="input" style={{ width: '100%', height: 34, fontSize: 12 }} value={form.venue_id} onChange={e => setForm(f => ({ ...f, venue_id: e.target.value }))}>
                 <option value="">Pilih...</option>
                 {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="req" style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, display: 'block', color: 'var(--muted)' }}>Grup Sumber</label>
-              <select className="input" style={{ width: '100%', height: 34, fontSize: 12 }} value={form.source_sheet} onChange={e => setForm(f => ({ ...f, source_sheet: e.target.value }))}>
-                <option value="Bar 1">Bar 1</option>
-                <option value="Bar 2">Bar 2</option>
-                <option value="Kitchen 2025">Kitchen 2025</option>
-                <option value="Turangga">Turangga</option>
               </select>
             </div>
           </div>
@@ -272,7 +313,7 @@ return (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: 40 }} className="muted">
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>Belum ada bahan baku</div>
-                    <div style={{ fontSize: 12, marginTop: 4 }}>Klik tombol <strong>"+ Tambah Bahan"</strong> di atas untuk memasukkan bahan resep.</div>
+                    <div style={{ fontSize: 12, marginTop: 4 }}>Klik tombol <strong>"+ Tambah Bahan"</strong> di atas untuk memasukkan bahan produk.</div>
                   </td>
                 </tr>
               ) : (
@@ -354,7 +395,7 @@ return (
                   <td></td>
                 </tr>
                 <tr>
-                  <td colSpan={4} className="right" style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', padding: '8px 14px' }}>Total Biaya Resep:</td>
+                  <td colSpan={4} className="right" style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', padding: '8px 14px' }}>Total Biaya Produk:</td>
                   <td className="right" style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', padding: '8px 14px' }}>Rp {Math.round(totalCost).toLocaleString('id-ID')}</td>
                   <td></td>
                 </tr>
@@ -374,6 +415,7 @@ return (
       </div>
     </div>
 
+    <Toast isOpen={toastInfo.show} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />
   </section>
 );
 }

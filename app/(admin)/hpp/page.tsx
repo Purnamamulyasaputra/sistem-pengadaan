@@ -19,7 +19,7 @@ type MenuRow = {
   margin_flag: 'GREEN' | 'YELLOW' | 'RED' | null;
 };
 type RecipeRow = {
-  id: number; venue_name: string; name: string; source_sheet: string;
+  id: number; venue_name: string; name: string;
   yield: number; yield_unit: string | null;
   subtotal: number | null; total_cost: number | null; sale_price: number | null;
 };
@@ -29,7 +29,7 @@ type IngRow = {
   used_in_recipes: number;
 };
 type KitchenRow = {
-  recipe_name: string; source_sheet: string; yield_amount: number;
+  recipe_name: string; yield_amount: number;
   yield_unit: string | null; sale_price: number;
   raw_cost: number | null; total_cost_with_xfactor: number | null;
   cost_per_unit_yield: number | null; hpp_ratio_pct: number | null;
@@ -79,13 +79,16 @@ function MenusTab({ categories }: { categories: Category[] }) {
   const [catId, setCatId] = useState('');
   const [marginFlag, setMarginFlag] = useState('');
   const [page, setPage] = useState(1);
-  const [toastInfo, setToastInfo] = useState<{show: boolean; msg: string; type: 'success'|'error'|'info'}>({ show: false, msg: '', type: 'info' });
+  const [toastInfo, setToastInfo] = useState<{ show: boolean; msg: string; type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const limit = 20;
 
   const [detailModal, setDetailModal] = useState<number | null>(null);
   const [detailData, setDetailData] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [newPrice, setNewPrice] = useState<string>('');
+
+  const [deleteMenuConfirm, setDeleteMenuConfirm] = useState<number | null>(null);
+  const [deletingMenu, setDeletingMenu] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -139,14 +142,32 @@ function MenusTab({ categories }: { categories: Category[] }) {
     }
   };
 
+  const handleDeleteMenu = async () => {
+    if (!deleteMenuConfirm) return;
+    setDeletingMenu(true);
+    try {
+      const res = await fetch(`/api/hpp/menus/${deleteMenuConfirm}`, { method: 'DELETE' });
+      if (res.ok) {
+        setToastInfo({ show: true, msg: 'Menu POS berhasil dihapus', type: 'success' });
+        setDeleteMenuConfirm(null);
+        load();
+      } else {
+        const err = await res.json();
+        setToastInfo({ show: true, msg: 'Gagal menghapus: ' + (err.error || ''), type: 'error' });
+      }
+    } catch (e: any) {
+      setToastInfo({ show: true, msg: e.message || 'Unknown error', type: 'error' });
+    } finally {
+      setDeletingMenu(false);
+    }
+  };
+
   useEffect(() => { load(); }, [load]);
 
   const totalPages = Math.ceil(total / limit);
 
   return (
     <>
-
-
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
@@ -177,16 +198,19 @@ function MenusTab({ categories }: { categories: Category[] }) {
           inputStyle={{ height: 32 }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-          <span className="muted" style={{ fontSize: 13 }}>
+          <a href="/hpp/recipe-builder/new" className="btn btn-sm btn-primary" style={{ textDecoration: 'none' }}>
+            + Buat Data Produk
+          </a>
+          <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>
             {total} Menu ditemukan
           </span>
-          <div 
-            className="group" 
+          <div
+            className="group"
             style={{ position: 'relative', cursor: 'help', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}
           >
             <AlertCircle size={18} />
-            <div 
-              className="hidden group-hover:flex" 
+            <div
+              className="hidden group-hover:flex"
               style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 8, zIndex: 50,
                 background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
@@ -221,43 +245,54 @@ function MenusTab({ categories }: { categories: Category[] }) {
           </div>
         ) : (
           <div className="table-responsive">
-          <Table>
-            <thead>
-              <tr>
-                <th>Kategori</th>
-                <th>Menu / Varian</th>
-                <th className="right">Harga Jual</th>
-                <th className="right">HPP</th>
-                <th className="right">Laba Kotor</th>
-                <th className="right">% HPP</th>
-                <th className="right">% Margin</th>
-                <th className="center">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map(row => (
-                <tr key={row.id} onClick={() => openDetail(row.id)} style={{ cursor: 'pointer' }}>
-                  <td><span style={{ fontSize: 12, color: 'var(--muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{row.category_name}</span></td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{row.display_name ?? row.name}</div>
-                    {row.variant && <div className="muted" style={{ fontSize: 12 }}>{row.variant}</div>}
-                  </td>
-                  <td className="right " style={{ fontWeight: 600 }}>{rp(row.sale_price)}</td>
-                  <td className="right ">{rp(row.hpp)}</td>
-                  <td className="right " style={{ fontWeight: 600, color: '#059669' }}>
-                    {row.hpp == null ? '—' : rp(row.sale_price - row.hpp)}
-                  </td>
-                  <td className="right " style={{ color: row.hpp_ratio && row.hpp_ratio > 0.5 ? '#dc2626' : row.hpp_ratio && row.hpp_ratio > 0.35 ? '#d97706' : '#166534' }}>
-                    {pct(row.hpp_ratio)}
-                  </td>
-                  <td className="right " style={{ fontWeight: 600 }}>
-                    {row.hpp_ratio == null ? '—' : pct(1 - row.hpp_ratio)}
-                  </td>
-                  <td className="center"><MarginBadge flag={row.margin_flag} /></td>
+            <Table>
+              <thead>
+                <tr>
+                  <th>Kategori</th>
+                  <th>Menu / Varian</th>
+                  <th className="right">Harga Jual</th>
+                  <th className="right">HPP</th>
+                  <th className="right">Laba Kotor</th>
+                  <th className="right">% HPP</th>
+                  <th className="right">% Margin</th>
+                  <th className="center">Status</th>
+                  <th className="center" style={{ width: 50 }}></th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {data.map(row => (
+                  <tr key={row.id} onClick={() => openDetail(row.id)} style={{ cursor: 'pointer' }}>
+                    <td><span style={{ fontSize: 12, color: 'var(--muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{row.category_name}</span></td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{row.display_name ?? row.name}</div>
+                      {row.variant && <div className="muted" style={{ fontSize: 12 }}>{row.variant}</div>}
+                    </td>
+                    <td className="right " style={{ fontWeight: 600 }}>{rp(row.sale_price)}</td>
+                    <td className="right ">{rp(row.hpp)}</td>
+                    <td className="right " style={{ fontWeight: 600, color: '#059669' }}>
+                      {row.hpp == null ? '—' : rp(row.sale_price - row.hpp)}
+                    </td>
+                    <td className="right " style={{ color: row.hpp_ratio && row.hpp_ratio > 0.5 ? '#dc2626' : row.hpp_ratio && row.hpp_ratio > 0.35 ? '#d97706' : '#166534' }}>
+                      {pct(row.hpp_ratio)}
+                    </td>
+                    <td className="right " style={{ fontWeight: 600 }}>
+                      {row.hpp_ratio == null ? '—' : pct(1 - row.hpp_ratio)}
+                    </td>
+                    <td className="center"><MarginBadge flag={row.margin_flag} /></td>
+                    <td className="center" onClick={e => e.stopPropagation()}>
+                      <button
+                        className="btn btn-sm"
+                        style={{ padding: '4px', color: '#ef4444', background: 'transparent' }}
+                        onClick={() => setDeleteMenuConfirm(row.id)}
+                        title="Hapus Menu"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           </div>
         )}
       </div>
@@ -346,6 +381,18 @@ function MenusTab({ categories }: { categories: Category[] }) {
         )}
       </Modal>
 
+      <ConfirmDialog
+        open={!!deleteMenuConfirm}
+        danger={true}
+        title="Hapus Menu POS"
+        message="Yakin ingin menghapus menu ini? Tindakan ini permanen."
+        confirmText="Ya, Hapus"
+        cancelText="Batal"
+        onConfirm={handleDeleteMenu}
+        onCancel={() => setDeleteMenuConfirm(null)}
+        loading={deletingMenu}
+      />
+
       <Toast isOpen={toastInfo.show} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />
     </>
   );
@@ -357,7 +404,6 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [venueId, setVenueId] = useState('');
-  const [sheet, setSheet] = useState('');
   const [page, setPage] = useState(1);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -367,19 +413,17 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [viewRecipeData, setViewRecipeData] = useState<any>(null);
   const [viewRecipeLoading, setViewRecipeLoading] = useState(false);
 
-  const SHEETS = ['Bar 1', 'Bar 2', 'Kitchen 2025'];
 
   const load = useCallback(() => {
     setLoading(true);
     let url = `/api/hpp/recipes?limit=${limit}&page=${page}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (venueId) url += `&venue_id=${venueId}`;
-    if (sheet) url += `&source_sheet=${encodeURIComponent(sheet)}`;
     fetch(url)
       .then(r => r.json())
       .then(d => { setData(d.data ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
-  }, [search, venueId, sheet, page]);
+  }, [search, venueId, page]);
 
   const openViewRecipe = async (id: number) => {
     setViewRecipeModal(id);
@@ -427,16 +471,6 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           style={{ width: 150 }}
           inputStyle={{ height: 32 }}
         />
-        <Select
-          value={sheet}
-          onChange={val => { setSheet(String(val)); setPage(1); }}
-          options={[
-            { value: '', label: 'Semua Sheet' },
-            ...SHEETS.map(s => ({ value: s, label: s }))
-          ]}
-          style={{ width: 160 }}
-          inputStyle={{ height: 32 }}
-        />
         <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} resep</span>
         <a href="/hpp/recipe-builder/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>+ Tambah Resep</a>
       </div>
@@ -446,44 +480,43 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
           <div className="table-responsive">
-          <Table>
-            <thead>
-              <tr>
-                <th>Nama Resep</th>
-                <th>Venue / Sheet</th>
-                <th className="right">Yield (Hasil)</th>
-                <th className="right">Subtotal Bahan</th>
-                <th className="right">Total HPP</th>
-                <th className="right">Harga Jual</th>
-                <th className="right" style={{ width: 120 }}>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map(row => (
-                <tr key={row.id}>
-                  <td style={{ fontWeight: 600 }}>{row.name}</td>
-                  <td>
-                    <div>{row.venue_name}</div>
-                    <div className="muted" style={{ fontSize: 12 }}>{row.source_sheet}</div>
-                  </td>
-                  <td className="right ">{Number(row.yield).toLocaleString('id-ID')} <span className="muted">{row.yield_unit ?? 'pcs'}</span></td>
-                  <td className="right ">{rp(row.subtotal)}</td>
-                  <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost)}</td>
-                  <td className="right ">{row.sale_price ? rp(row.sale_price) : <span className="muted">Persiapan Dasar</span>}</td>
-                  <td className="right">
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
-                      <a href={`/hpp/recipe-builder/${row.id}`} className="btn" style={{ padding: '6px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: 6 }}>
-                        <Pencil size={14} />
-                      </a>
-                      <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 6 }} onClick={() => setDeleteConfirm(row.id)}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
+            <Table>
+              <thead>
+                <tr>
+                  <th>Nama Resep</th>
+                  <th>Venue</th>
+                  <th className="right">Yield (Hasil)</th>
+                  <th className="right">Subtotal Bahan</th>
+                  <th className="right">Total HPP</th>
+                  <th className="right">Harga Jual</th>
+                  <th className="right" style={{ width: 120 }}>Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {data.map(row => (
+                  <tr key={row.id}>
+                    <td style={{ fontWeight: 600 }}>{row.name}</td>
+                    <td>
+                      <div>{row.venue_name}</div>
+                    </td>
+                    <td className="right ">{Number(row.yield).toLocaleString('id-ID')} <span className="muted">{row.yield_unit ?? 'pcs'}</span></td>
+                    <td className="right ">{rp(row.subtotal)}</td>
+                    <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost)}</td>
+                    <td className="right ">{row.sale_price ? rp(row.sale_price) : <span className="muted">Persiapan Dasar</span>}</td>
+                    <td className="right">
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
+                        <a href={`/hpp/recipe-builder/${row.id}`} className="btn" style={{ padding: '6px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: 6 }}>
+                          <Pencil size={14} />
+                        </a>
+                        <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 6 }} onClick={() => setDeleteConfirm(row.id)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           </div>
         )}
       </div>
@@ -518,7 +551,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{viewRecipeData.recipe.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-                  {viewRecipeData.recipe.venue_name} &middot; {viewRecipeData.recipe.source_sheet}
+                  {viewRecipeData.recipe.venue_name}
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -568,7 +601,7 @@ function IngredientsTab() {
   const [deleting, setDeleting] = useState(false);
   const limit = 20;
 
-  const [toastInfo, setToastInfo] = useState<{show: boolean; msg: string; type: 'success'|'error'|'info'}>({ show: false, msg: '', type: 'info' });
+  const [toastInfo, setToastInfo] = useState<{ show: boolean; msg: string; type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -587,7 +620,7 @@ function IngredientsTab() {
     fetch('/api/items?limit=1000&active_only=true')
       .then(r => r.json())
       .then(d => setMasterItems(d.data ?? []))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const getCostPerSmallestUnit = (item: {
@@ -694,53 +727,53 @@ function IngredientsTab() {
           <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
           <div className="table-responsive">
-          <Table>
-            <thead>
-              <tr>
-                <th>Nama Bahan Baku</th>
-                <th>Satuan</th>
-                <th className="right">Biaya Standar/Satuan</th>
-                <th className="right">Digunakan di Resep</th>
-                <th>Deskripsi</th>
-                <th className="right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map(row => (
-                <tr key={row.id}>
-                  <td style={{ fontWeight: 600 }}>{row.name}</td>
-                  <td><span style={{ fontSize: 13 }}>{row.default_unit ?? '—'}</span></td>
-                  <td className="right ">{rp(row.standard_cost_per_unit)}</td>
-                  <td className="right">
-                    <span style={{
-                      background: row.used_in_recipes > 10 ? '#dcfce7' : '#f1f5f9',
-                      color: row.used_in_recipes > 10 ? '#166534' : 'var(--muted)',
-                      padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 600,
-                    }}>
-                      {row.used_in_recipes}
-                    </span>
-                  </td>
-                  <td className="muted" style={{ fontSize: 12 }}>{row.description ?? '—'}</td>
-                  <td className="right">
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
-                      <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: 6 }} onClick={() => handleOpenEdit(row)}>
-                        <Pencil size={14} />
-                      </button>
-                      {row.used_in_recipes > 0 ? (
-                        <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'not-allowed' }} title="Tidak bisa dihapus karena sudah ditambahkan ke resep bahan produk">
-                          <Trash2 size={14} />
-                        </button>
-                      ) : (
-                        <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 6 }} onClick={() => setDeleteConfirm(row.id)} title="Hapus">
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+            <Table>
+              <thead>
+                <tr>
+                  <th>Nama Bahan Baku</th>
+                  <th>Satuan</th>
+                  <th className="right">Biaya Standar/Satuan</th>
+                  <th className="right">Digunakan di Resep</th>
+                  <th>Deskripsi</th>
+                  <th className="right">Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {data.map(row => (
+                  <tr key={row.id}>
+                    <td style={{ fontWeight: 600 }}>{row.name}</td>
+                    <td><span style={{ fontSize: 13 }}>{row.default_unit ?? '—'}</span></td>
+                    <td className="right ">{rp(row.standard_cost_per_unit)}</td>
+                    <td className="right">
+                      <span style={{
+                        background: row.used_in_recipes > 10 ? '#dcfce7' : '#f1f5f9',
+                        color: row.used_in_recipes > 10 ? '#166534' : 'var(--muted)',
+                        padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 600,
+                      }}>
+                        {row.used_in_recipes}
+                      </span>
+                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>{row.description ?? '—'}</td>
+                    <td className="right">
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
+                        <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: 6 }} onClick={() => handleOpenEdit(row)}>
+                          <Pencil size={14} />
+                        </button>
+                        {row.used_in_recipes > 0 ? (
+                          <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'not-allowed' }} title="Tidak bisa dihapus karena sudah ditambahkan ke resep bahan produk">
+                            <Trash2 size={14} />
+                          </button>
+                        ) : (
+                          <button className="btn" style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 6 }} onClick={() => setDeleteConfirm(row.id)} title="Hapus">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           </div>
         )}
       </div>
@@ -768,7 +801,7 @@ function IngredientsTab() {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="modal-body form-grid" style={{ padding: '24px', gap: 20 }}>
               <div style={{ gridColumn: '1 / -1', position: 'relative' }}>
                 <Input
@@ -831,13 +864,13 @@ function IngredientsTab() {
               </div>
               <Input label="Satuan Default" placeholder="misal: gr, ml, pcs" value={form.default_unit} onChange={e => setForm(f => ({ ...f, default_unit: e.target.value }))} />
               <Input label="Biaya Standar / Satuan" placeholder="Rp 0" type="number" min="0" step="any" required value={form.standard_cost_per_unit} onChange={e => setForm(f => ({ ...f, standard_cost_per_unit: e.target.value }))} />
-              
+
               <div style={{ gridColumn: '1 / -1' }} className="form-group">
                 <label className="form-label">Deskripsi</label>
                 <textarea className="input" rows={3} placeholder="Tambahkan catatan tentang harga atau konversi satuan di sini..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
               </div>
             </div>
-            
+
             <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: '#f8fafc', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button className="btn" style={{ padding: '8px 16px', fontWeight: 600, background: '#fff', border: '1px solid var(--border)' }} onClick={() => setModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" style={{ padding: '8px 24px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }} onClick={handleSave} disabled={saving}>
@@ -878,23 +911,11 @@ function KitchenTab() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = filter
-    ? data.filter(r => r.source_sheet === filter)
-    : data;
+  const filtered = data;
 
   return (
     <>
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-        <Select
-          value={filter}
-          onChange={val => setFilter(String(val))}
-          options={[
-            { value: '', label: 'Semua Kitchen' },
-            { value: 'Kitchen 2025', label: 'Kitchen 2025' }
-          ]}
-          style={{ width: 180 }}
-          inputStyle={{ height: 32 }}
-        />
         <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{filtered.length} resep</span>
       </div>
       <div className="card-body flush">
@@ -902,36 +923,36 @@ function KitchenTab() {
           <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
         ) : (
           <div className="table-responsive">
-          <Table>
-            <thead>
-              <tr>
-                <th>Nama Resep</th>
-                <th>Sheet</th>
-                <th className="right">Yield (Hasil)</th>
-                <th className="right">Biaya Bahan Baku</th>
-                <th className="right">HPP (+10%)</th>
-                <th className="right">Biaya/Satuan Yield</th>
-                <th className="right">Harga Jual</th>
-                <th className="right">% HPP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight: 600 }}>{row.recipe_name}</td>
-                  <td><span style={{ fontSize: 12, color: 'var(--muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{row.source_sheet}</span></td>
-                  <td className="right ">{Number(row.yield_amount).toLocaleString('id-ID')} <span className="muted">{row.yield_unit}</span></td>
-                  <td className="right ">{rp(row.raw_cost)}</td>
-                  <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost_with_xfactor)}</td>
-                  <td className="right ">{rp(row.cost_per_unit_yield)}</td>
-                  <td className="right ">{row.sale_price > 0 ? rp(row.sale_price) : <span className="muted">Persiapan Dasar</span>}</td>
-                  <td className="right " style={{ color: row.hpp_ratio_pct && row.hpp_ratio_pct > 50 ? '#dc2626' : row.hpp_ratio_pct && row.hpp_ratio_pct > 35 ? '#d97706' : '#166534' }}>
-                    {row.hpp_ratio_pct != null ? `${row.hpp_ratio_pct}%` : '—'}
-                  </td>
+            <Table>
+              <thead>
+                <tr>
+                  <th>Nama Resep</th>
+
+                  <th className="right">Yield (Hasil)</th>
+                  <th className="right">Biaya Bahan Baku</th>
+                  <th className="right">HPP (+10%)</th>
+                  <th className="right">Biaya/Satuan Yield</th>
+                  <th className="right">Harga Jual</th>
+                  <th className="right">% HPP</th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {filtered.map((row, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 600 }}>{row.recipe_name}</td>
+
+                    <td className="right ">{Number(row.yield_amount).toLocaleString('id-ID')} <span className="muted">{row.yield_unit}</span></td>
+                    <td className="right ">{rp(row.raw_cost)}</td>
+                    <td className="right " style={{ fontWeight: 700, color: '#016e3f' }}>{rp(row.total_cost_with_xfactor)}</td>
+                    <td className="right ">{rp(row.cost_per_unit_yield)}</td>
+                    <td className="right ">{row.sale_price > 0 ? rp(row.sale_price) : <span className="muted">Persiapan Dasar</span>}</td>
+                    <td className="right " style={{ color: row.hpp_ratio_pct && row.hpp_ratio_pct > 50 ? '#dc2626' : row.hpp_ratio_pct && row.hpp_ratio_pct > 35 ? '#d97706' : '#166534' }}>
+                      {row.hpp_ratio_pct != null ? `${row.hpp_ratio_pct}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           </div>
         )}
       </div>
@@ -939,14 +960,147 @@ function KitchenTab() {
   );
 }
 
+function CategoriesTab({ onUpdated }: { onUpdated?: () => void }) {
+  const [cats, setCats] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const [confirmDelete, setConfirmDelete] = useState<Category | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
+
+  const fetchCats = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch('/api/hpp/categories');
+    const data = await res.json();
+    setCats(data.data ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchCats(); }, [fetchCats]);
+
+  async function handleAddSave() {
+    if (!addName.trim()) { setToastInfo({ show: true, msg: 'Nama kategori wajib diisi', type: 'error' }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/hpp/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: addName }) });
+      const data = await res.json();
+      if (!data.success) { setToastInfo({ show: true, msg: data.message || 'Gagal menyimpan', type: 'error' }); return; }
+      setShowAddModal(false); 
+      setToastInfo({ show: true, msg: 'Berhasil ditambah', type: 'success' });
+      fetchCats();
+      if (onUpdated) onUpdated();
+    } catch (e: any) {
+      setToastInfo({ show: true, msg: e.message || 'Terjadi kesalahan', type: 'error' });
+    } finally { setSaving(false); }
+  }
+
+  async function handleEditSave(id: number) {
+    if (!editName.trim()) { setToastInfo({ show: true, msg: 'Nama kategori wajib diisi', type: 'error' }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/hpp/categories', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: editName }) });
+      const data = await res.json();
+      if (!data.success) { setToastInfo({ show: true, msg: data.message || 'Gagal menyimpan', type: 'error' }); return; }
+      setEditingId(null);
+      setToastInfo({ show: true, msg: 'Berhasil diubah', type: 'success' });
+      fetchCats();
+      if (onUpdated) onUpdated();
+    } catch (e: any) {
+      setToastInfo({ show: true, msg: e.message || 'Terjadi kesalahan', type: 'error' });
+    } finally { setSaving(false); }
+  }
+
+  async function executeDelete() {
+    if (!confirmDelete) return;
+    try {
+      const res = await fetch(`/api/hpp/categories?id=${confirmDelete.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.success) { setToastInfo({ show: true, msg: data.message || 'Gagal menghapus', type: 'error' }); }
+      else { setToastInfo({ show: true, msg: 'Berhasil dihapus', type: 'success' }); }
+    } catch (e: any) {
+      setToastInfo({ show: true, msg: e.message || 'Terjadi kesalahan', type: 'error' });
+    }
+    setConfirmDelete(null);
+    fetchCats();
+    if (onUpdated) onUpdated();
+  }
+
+  return (
+    <div className="card-body flush">
+      {toastInfo.show && <Toast isOpen={true} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />}
+      <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'flex-end', borderBottom: '1px solid var(--border)' }}>
+        <button className="btn btn-sm btn-primary" onClick={() => { setAddName(''); setShowAddModal(true); }}>
+          + Tambah Kategori
+        </button>
+      </div>
+      <div className="table-responsive">
+        <Table>
+          <thead>
+            <tr>
+              <th style={{ width: 60, textAlign: 'center' }}>No.</th>
+              <th>Nama Kategori</th>
+              <th style={{ width: 120, textAlign: 'center' }}>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40 }} className="muted">Memuat data...</td></tr>
+            ) : cats.length === 0 ? (
+              <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40 }} className="muted">Tidak ada kategori.</td></tr>
+            ) : cats.map((c, i) => (
+              <tr key={c.id}>
+                <td style={{ textAlign: 'center' }}>{i + 1}</td>
+                <td>
+                  {editingId === c.id ? (
+                    <Input value={editName} onChange={e => setEditName(e.target.value)} autoFocus style={{ marginBottom: 0, height: 32 }} />
+                  ) : c.name}
+                </td>
+                <td>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                    {editingId === c.id ? (
+                      <>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleEditSave(c.id)} disabled={saving}><Save size={14} /></button>
+                        <button className="btn btn-sm btn-danger btn-outline" onClick={() => setEditingId(null)} disabled={saving}><X size={14} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="btn btn-sm" style={{ background: '#e0f2fe', color: '#0284c7', borderColor: '#bae6fd' }} onClick={() => { setEditingId(c.id); setEditName(c.name); }} title="Edit"><Pencil size={14} /></button>
+                        <button className="btn btn-sm btn-danger btn-outline" onClick={() => setConfirmDelete(c)} title="Hapus"><Trash2 size={14} /></button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </div>
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Tambah Kategori">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Input label="Nama Kategori" value={addName} onChange={e => setAddName(e.target.value)} required placeholder="Misal: Minuman Dingin" autoFocus />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Batal</button>
+            <button className="btn btn-primary" onClick={handleAddSave} disabled={saving}>Simpan</button>
+          </div>
+        </div>
+      </Modal>
+      <ConfirmDialog open={!!confirmDelete} title="Hapus Kategori" message={`Yakin ingin menghapus kategori "${confirmDelete?.name}"?`} confirmText="Hapus" onConfirm={executeDelete} onCancel={() => setConfirmDelete(null)} />
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────
 export default function HppPage() {
-  const [tab, setTab] = useState<'menus' | 'recipes' | 'ingredients' | 'kitchen'>('menus');
+  const [tab, setTab] = useState<'menus' | 'recipes' | 'ingredients' | 'kitchen' | 'categories'>('menus');
   const [stats, setStats] = useState<Stats | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
 
-  useEffect(() => {
+  const loadMasterData = useCallback(() => {
     fetch('/api/hpp/stats').then(r => r.json()).then(setStats);
     fetch('/api/hpp').then(r => r.json()).then(d => {
       setCategories(d.categories ?? []);
@@ -954,9 +1108,12 @@ export default function HppPage() {
     });
   }, []);
 
+  useEffect(() => { loadMasterData(); }, [loadMasterData]);
+
   const tabDefs = [
     { key: 'menus', label: 'Menu POS & Resep' },
     { key: 'ingredients', label: 'Bahan Baku' },
+    { key: 'categories', label: 'Kategori Menu' },
   ] as const;
 
   const marginMap = (stats?.marginBreakdown ?? []).reduce((a, b) => ({ ...a, [b.flag]: b.count }), {} as Record<string, number>);
@@ -1034,6 +1191,7 @@ export default function HppPage() {
 
         {tab === 'menus' && <MenusTab categories={categories} />}
         {tab === 'ingredients' && <IngredientsTab />}
+        {tab === 'categories' && <CategoriesTab onUpdated={loadMasterData} />}
       </div>
     </section>
   );

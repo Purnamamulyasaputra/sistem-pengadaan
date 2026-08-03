@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Pagination } from '@/components/ui/Pagination';
 import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
+import { Toast } from '@/components/ui/Toast';
 
 interface Category { id: number; name: string; }
 
@@ -23,7 +24,10 @@ export default function CategoriesPage() {
   const [editName, setEditName] = useState('');
   
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  
+  const [toast, setToast] = useState<{ isOpen: boolean, message: string, type: 'success' | 'error' | 'info' }>({ isOpen: false, message: '', type: 'info' });
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => setToast({ isOpen: true, message, type });
+  const hideToast = () => setToast(prev => ({ ...prev, isOpen: false }));
 
   // Confirm state
   const [confirmDelete, setConfirmDelete] = useState<Category | null>(null);
@@ -41,41 +45,43 @@ export default function CategoriesPage() {
 
   useEffect(() => { fetchCats(); }, [fetchCats]);
 
-  function openAdd() { setAddName(''); setError(''); setShowAddModal(true); }
+  function openAdd() { setAddName(''); hideToast(); setShowAddModal(true); }
   
   function openEdit(c: Category) { 
     setEditingId(c.id); 
     setEditName(c.name); 
-    setError(''); 
+    hideToast(); 
   }
   
   function cancelEdit() {
     setEditingId(null);
     setEditName('');
-    setError('');
+    hideToast();
   }
 
   async function handleAddSave() {
-    if (!addName.trim()) { setError('Nama kategori wajib'); return; }
-    setSaving(true); setError('');
+    if (!addName.trim()) { showToast('Nama kategori wajib', 'error'); return; }
+    setSaving(true); hideToast();
     try {
       const res = await fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: addName }) });
       const data = await res.json();
-      if (!data.success) { setError(data.message); return; }
+      if (!data.success) { showToast(data.message, 'error'); return; }
       setShowAddModal(false); 
       fetchCats();
+      showToast('Kategori berhasil ditambahkan', 'success');
     } finally { setSaving(false); }
   }
 
   async function handleEditSave(id: number) {
-    if (!editName.trim()) { setError('Nama kategori wajib'); return; }
-    setSaving(true); setError('');
+    if (!editName.trim()) { showToast('Nama kategori wajib', 'error'); return; }
+    setSaving(true); hideToast();
     try {
       const res = await fetch('/api/categories', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: editName }) });
       const data = await res.json();
-      if (!data.success) { setError(data.message); return; }
+      if (!data.success) { showToast(data.message, 'error'); return; }
       cancelEdit();
       fetchCats();
+      showToast('Kategori berhasil diperbarui', 'success');
     } finally { setSaving(false); }
   }
 
@@ -83,8 +89,8 @@ export default function CategoriesPage() {
     if (!confirmDelete) return;
     await fetch(`/api/categories?id=${confirmDelete.id}`, { method: 'DELETE' });
     setConfirmDelete(null);
-    setConfirmDelete(null);
     fetchCats();
+    showToast('Kategori berhasil dihapus', 'success');
   }
 
   const paginatedCats = cats.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -126,7 +132,6 @@ export default function CategoriesPage() {
                                   if (e.key === 'Escape') cancelEdit(); 
                                 }}
                               />
-                              {error && isEditing && <div style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{error}</div>}
                             </div>
                           ) : (
                             c.name
@@ -179,7 +184,6 @@ export default function CategoriesPage() {
 
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Tambah Kategori" maxWidth={500}>
         <div className="modal-body" style={{ padding: '24px' }}>
-          {error && !editingId && <div className="alert-banner alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
           <Input 
             label="Nama Kategori" 
             value={addName} 
@@ -203,6 +207,7 @@ export default function CategoriesPage() {
         confirmText="Hapus"
         danger={true}
       />
+      <Toast message={toast.message} type={toast.type} isOpen={toast.isOpen} onClose={hideToast} />
     </section>
   );
 }

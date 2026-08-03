@@ -12,6 +12,7 @@ import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
 interface Outlet { id: number; name: string; type: string; address?: string; street?: string; street2?: string; city?: string; state?: string; zip?: string; country?: string; pic_name?: string; email?: string; phone?: string; map_location?: string; is_active: boolean; created_at: string; }
 
 const TYPE_LABELS: Record<string, string> = { STORE: 'Toko', CENTRAL_KITCHEN: 'Dapur Pusat' };
+import { Toast } from '@/components/ui/Toast';
 
 export default function OutletsPage() {
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -21,7 +22,10 @@ export default function OutletsPage() {
   const [editing, setEditing] = useState<Outlet | null>(null);
   const [form, setForm] = useState({ name: '', type: 'STORE', address: '', street: '', street2: '', city: '', state: '', zip: '', country: '', pic_name: '', email: '', phone: '', map_location: '', is_active: true });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ isOpen: boolean, message: string, type: 'success' | 'error' | 'info' }>({ isOpen: false, message: '', type: 'info' });
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => setToast({ isOpen: true, message, type });
+  const hideToast = () => setToast(prev => ({ ...prev, isOpen: false }));
 
   const [confirmDelete, setConfirmDelete] = useState<Outlet | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,19 +41,47 @@ export default function OutletsPage() {
 
   useEffect(() => { fetchOutlets(); }, [fetchOutlets]);
 
-  function openAdd() { setEditing(null); setForm({ name: '', type: 'STORE', address: '', street: '', street2: '', city: '', state: '', zip: '', country: '', pic_name: '', email: '', phone: '', map_location: '', is_active: true }); setError(''); setShowModal(true); }
-  function openEdit(o: Outlet) { setEditing(o); setForm({ name: o.name, type: o.type, address: o.address ?? '', street: o.street ?? '', street2: o.street2 ?? '', city: o.city ?? '', state: o.state ?? '', zip: o.zip ?? '', country: o.country ?? '', pic_name: o.pic_name ?? '', email: o.email ?? '', phone: o.phone ?? '', map_location: o.map_location ?? '', is_active: o.is_active ?? true }); setError(''); setShowModal(true); }
+  function openAdd() { setEditing(null); setForm({ name: '', type: 'STORE', address: '', street: '', street2: '', city: '', state: '', zip: '', country: '', pic_name: '', email: '', phone: '', map_location: '', is_active: true }); hideToast(); setShowModal(true); }
+  function openEdit(o: Outlet) { setEditing(o); setForm({ name: o.name, type: o.type, address: o.address ?? '', street: o.street ?? '', street2: o.street2 ?? '', city: o.city ?? '', state: o.state ?? '', zip: o.zip ?? '', country: o.country ?? '', pic_name: o.pic_name ?? '', email: o.email ?? '', phone: o.phone ?? '', map_location: o.map_location ?? '', is_active: o.is_active ?? true }); hideToast(); setShowModal(true); }
 
   async function handleSave() {
-    if (!form.name) { setError('Nama outlet wajib diisi'); return; }
-    setSaving(true); setError('');
+    if (!form.name.trim()) { showToast('Nama outlet wajib diisi', 'error'); return; }
+
+    if (form.phone && !/^\d+$/.test(form.phone)) {
+      showToast('Nomor telepon hanya boleh berisi angka', 'error');
+      return;
+    }
+
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      showToast('Format email tidak valid (harus mengandung @)', 'error');
+      return;
+    }
+
+    if (form.zip) {
+      if (!/^\d+$/.test(form.zip)) {
+        showToast('Kode pos hanya boleh berisi angka', 'error');
+        return;
+      }
+      const isIndo = form.country.toLowerCase().includes('indo');
+      if (isIndo && form.zip.length > 5) {
+        showToast('Maksimal input kodepos adalah 5 digit', 'error');
+        return;
+      }
+      if (!isIndo && form.zip.length > 12) {
+        showToast('Maksimal input kodepos adalah 12 digit', 'error');
+        return;
+      }
+    }
+
+    setSaving(true); hideToast();
     try {
       const method = editing ? 'PATCH' : 'POST';
       const body = editing ? { id: editing.id, ...form } : form;
       const res = await fetch('/api/outlets', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!data.success) { setError(data.message); return; }
+      if (!data.success) { showToast(data.message, 'error'); return; }
       setShowModal(false); fetchOutlets();
+      showToast('Data outlet berhasil disimpan', 'success');
     } finally { setSaving(false); }
   }
 
@@ -58,6 +90,7 @@ export default function OutletsPage() {
     await fetch(`/api/outlets?id=${confirmDelete.id}`, { method: 'DELETE' });
     setConfirmDelete(null);
     fetchOutlets();
+    showToast('Data outlet berhasil dihapus', 'success');
   }
 
   function formatDate(iso: string) {
@@ -81,7 +114,7 @@ export default function OutletsPage() {
             <>
               <div className="table-responsive">
                 <Table>
-                  <thead><tr><th>No.</th><th>Nama Outlet</th><th>Tipe</th><th>PIC / Kontak</th><th>Status</th><th className="center">Aksi</th></tr></thead>
+                  <thead><tr><th>No.</th><th>Nama Outlet</th><th>Tipe</th><th>PIC</th><th>Telepon</th><th>Email</th><th>Status</th><th className="center">Aksi</th></tr></thead>
                   <tbody>
                     {paginatedOutlets.map((o, idx) => (
                       <tr key={o.id}>
@@ -91,23 +124,24 @@ export default function OutletsPage() {
                         </td>
                         <td><Badge variant={o.type === 'STORE' ? 'blue' : 'green'}>{TYPE_LABELS[o.type] ?? o.type}</Badge></td>
                         <td style={{ fontSize: 13 }}>
-                          {o.pic_name && <div style={{ fontWeight: 600 }}>{o.pic_name}</div>}
-                          {o.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e01b5c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                          {o.pic_name ? <div style={{ fontWeight: 600 }}>{o.pic_name}</div> : <span className="muted">—</span>}
+                        </td>
+                        <td style={{ fontSize: 13 }}>
+                          {o.phone ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             {o.phone}
-                          </div>}
-                          {o.email && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#016e3f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                          </div> : <span className="muted">—</span>}
+                        </td>
+                        <td style={{ fontSize: 13 }}>
+                          {o.email ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             {o.email}
-                          </div>}
-                          {(!o.pic_name && !o.phone && !o.email) && <span className="muted">—</span>}
+                          </div> : <span className="muted">—</span>}
                         </td>
                         <td>
-                          <span style={{ 
-                            display: 'inline-block', 
-                            padding: '2px 8px', 
-                            borderRadius: '12px', 
-                            fontSize: '11px', 
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
                             fontWeight: 600,
                             background: o.is_active ? '#dcfce7' : '#f1f5f9',
                             color: o.is_active ? '#166534' : '#475569'
@@ -128,7 +162,7 @@ export default function OutletsPage() {
                       </tr>
                     ))}
                     {paginatedOutlets.length === 0 && (
-                      <tr><td colSpan={6} className="center muted" style={{ padding: 32 }}>Outlet tidak ditemukan</td></tr>
+                      <tr><td colSpan={8} className="center muted" style={{ padding: 32 }}>Outlet tidak ditemukan</td></tr>
                     )}
                   </tbody>
                 </Table>
@@ -146,8 +180,7 @@ export default function OutletsPage() {
       </div>
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Outlet' : 'Outlet Baru'} maxWidth={850}>
-        <div className="modal-body" style={{ padding: '16px 24px' }}>
-          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
+        <div className="modal-body" style={{ padding: 24, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>
@@ -193,7 +226,7 @@ export default function OutletsPage() {
                     <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="Provinsi" />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} placeholder="Kode Pos" />
+                    <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '') }))} placeholder="Kode Pos" maxLength={form.country.toLowerCase().includes('indo') ? 5 : 12} />
                     <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="Negara" />
                   </div>
                 </div>
@@ -204,7 +237,7 @@ export default function OutletsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Telepon</label>
-                <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="misal: 0812-3456-7890" />
+                <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '') }))} placeholder="misal: 081234567890" />
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -234,6 +267,7 @@ export default function OutletsPage() {
         confirmText="Hapus"
         danger={true}
       />
+      <Toast message={toast.message} type={toast.type} isOpen={toast.isOpen} onClose={hideToast} />
     </section>
   );
 }

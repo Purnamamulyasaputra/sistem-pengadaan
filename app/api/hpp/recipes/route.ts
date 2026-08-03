@@ -6,7 +6,6 @@ import { getSession } from '@/lib/auth';
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const venueId = searchParams.get('venue_id');
-  const sourceSheet = searchParams.get('source_sheet');
   const search = searchParams.get('search') ?? undefined;
   const tab = searchParams.get('tab') ?? 'list';
   const page = parseInt(searchParams.get('page') ?? '1', 10);
@@ -25,14 +24,12 @@ export async function GET(request: NextRequest) {
     const result = isOutlet
       ? await getOutletHppRecipes(session.outletId as number, {
           venueId: venueId ? parseInt(venueId) : undefined,
-          sourceSheet: sourceSheet ?? undefined,
           search,
           limit,
           offset,
         })
       : await getHppRecipes({
           venueId: venueId ? parseInt(venueId) : undefined,
-          sourceSheet: sourceSheet ?? undefined,
           search,
           limit,
           offset,

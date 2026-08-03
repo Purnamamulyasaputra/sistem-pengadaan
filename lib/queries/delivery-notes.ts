@@ -768,8 +768,8 @@ export async function resolveDeliveryNoteIssue(issueId: number, action: 'REPLACE
 
       const uniqueBarcode = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000).toString();
       await client.query(
-        `INSERT INTO delivery_note_items (delivery_note_id, order_item_id, item_id, qty_shipped, price_at_shipment, unique_barcode, conversion_ratio)
-         VALUES ($1, $2, $3, $4, $5, $6, COALESCE((SELECT conversion_ratio FROM items WHERE id = $3), 1.00))`,
+        `INSERT INTO delivery_note_items (delivery_note_id, order_item_id, item_id, qty_shipped, price_at_shipment, unique_barcode)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
         [newDnId, oi.order_item_id, issue.item_id, issue.qty_issue, oi.price_at_shipment, uniqueBarcode]
       );
 

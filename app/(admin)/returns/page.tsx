@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
+import { Pagination } from '@/components/ui/Pagination';
+import { Toast } from '@/components/ui/Toast';
 import { Image as ImageIcon } from 'lucide-react';
 
 interface ReturnIssue {
@@ -36,7 +39,14 @@ export default function ReturnsPage() {
     isOpen: boolean; id: number | null; action: 'REPLACE' | 'WRITE_OFF' | null; notes: string;
   }>({ isOpen: false, id: null, action: null, notes: '' });
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [toast, setToast] = useState<{isOpen: boolean, message: string, type: 'error' | 'success' | 'info'}>({isOpen: false, message: '', type: 'info'});
+  const ITEMS_PER_PAGE = 20;
   const lastCountRef = useRef<number | null>(null);
+
+  const showToast = (message: string, type: 'error' | 'success' | 'info' = 'info') => setToast({isOpen: true, message, type});
+  const hideToast = () => setToast(prev => ({...prev, isOpen: false}));
 
   const fetchIssues = useCallback(async () => {
     setLoading(true);
@@ -72,8 +82,9 @@ export default function ReturnsPage() {
 
   useEffect(() => {
     setNewCount(0);
+    setCurrentPage(1);
     fetchIssues();
-  }, [fetchIssues]);
+  }, [fetchIssues, activeTab]);
 
   // Polling real-time setiap 15 detik + saat tab kembali aktif
   useEffect(() => {
@@ -106,15 +117,24 @@ export default function ReturnsPage() {
       }
       await fetchIssues();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Error');
+      showToast(err instanceof Error ? err.message : 'Error', 'error');
     } finally {
       setResolvingId(null);
     }
   };
 
+  const filteredIssues = issues.filter(i => 
+    i.delivery_note_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    i.outlet_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    i.item_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const totalPages = Math.ceil(filteredIssues.length / ITEMS_PER_PAGE);
+  const paginatedIssues = filteredIssues.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   return (
     <section className="screen">
       <div className="card">
+        <Toast isOpen={toast.isOpen} message={toast.message} type={toast.type} onClose={hideToast} />
         {/* Tabs */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
           <div style={{ display: 'flex' }}>
@@ -144,7 +164,7 @@ export default function ReturnsPage() {
               </button>
             ))}
           </div>
-          {/* Indikator live & notif tiket baru */}
+          {/* Indikator notif tiket baru dan pencarian */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {newCount > 0 && (
               <span style={{
@@ -155,25 +175,23 @@ export default function ReturnsPage() {
                 {newCount} tiket baru masuk
               </span>
             )}
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--muted)' }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: '#22c55e',
-                display: 'inline-block',
-                boxShadow: '0 0 0 2px #bbf7d0',
-                animation: 'pulse 2s infinite',
-              }} />
-              Live
-            </span>
+            <Input
+              placeholder="Cari SJ / Outlet / Item..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ width: 200, fontSize: 13, height: 32 }}
+            />
           </div>
         </div>
 
-        {/* Table */}
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Memuat...</div>
-        ) : issues.length === 0 ? (
+        ) : filteredIssues.length === 0 ? (
           <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-            {activeTab === 'PENDING' ? 'Tidak ada laporan masalah saat ini.' : 'Belum ada riwayat tindakan.'}
+            {searchQuery ? 'Data tidak ditemukan.' : (activeTab === 'PENDING' ? 'Tidak ada laporan masalah saat ini.' : 'Belum ada riwayat tindakan.')}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -190,7 +208,7 @@ export default function ReturnsPage() {
                 </tr>
               </thead>
               <tbody>
-                {issues.map(issue => {
+                {paginatedIssues.map(issue => {
                   const conv = Number(issue.conversion_ratio) || 1;
                   const qtyIssue = (Number(issue.qty_issue) / conv).toLocaleString('id-ID');
                   const qtyShipped = (Number(issue.qty_shipped) / conv).toLocaleString('id-ID');
@@ -275,6 +293,17 @@ export default function ReturnsPage() {
                 })}
               </tbody>
             </Table>
+            {totalPages > 1 && (
+              <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredIssues.length}
+                  itemsPerPage={ITEMS_PER_PAGE}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

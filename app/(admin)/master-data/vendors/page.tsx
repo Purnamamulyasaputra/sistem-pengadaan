@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Pagination } from '@/components/ui/Pagination';
 import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
+import { Toast } from '@/components/ui/Toast';
 
 interface Vendor { id: number; name: string; type?: string; email?: string; phone?: string; address?: string; tax_id?: string; website?: string; is_active: boolean; created_at: string; }
 
@@ -30,7 +31,12 @@ export default function VendorsPage() {
   const [form, setForm] = useState({ type: 'Company', name: '', street: '', street2: '', city: '', state: '', zip: '', country: '', tax_id: '', phone: '', email: '', contact_person: '', website: '', logo_url: '', is_active: true });
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  
+  const [toast, setToast] = useState<{ isOpen: boolean, message: string, type: 'success' | 'error' | 'info' }>({ isOpen: false, message: '', type: 'info' });
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => setToast({ isOpen: true, message, type });
+  const hideToast = () => setToast(prev => ({ ...prev, isOpen: false }));
+  
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   
   const [confirmDelete, setConfirmDelete] = useState<Vendor | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,7 +73,7 @@ export default function VendorsPage() {
     }
   }
 
-  function openAdd() { setEditing(null); setForm({ type: 'Company', name: '', street: '', street2: '', city: '', state: '', zip: '', country: '', tax_id: '', phone: '', email: '', contact_person: '', website: '', logo_url: '', is_active: true }); setError(''); setShowModal(true); }
+  function openAdd() { setEditing(null); setForm({ type: 'Company', name: '', street: '', street2: '', city: '', state: '', zip: '', country: '', tax_id: '', phone: '', email: '', contact_person: '', website: '', logo_url: '', is_active: true }); hideToast(); setShowModal(true); }
   function openEdit(v: Vendor & { type?: string, street?: string, street2?: string, city?: string, state?: string, zip?: string, country?: string, contact_person?: string, logo_url?: string }) { 
     setEditing(v); 
     setForm({ 
@@ -87,7 +93,7 @@ export default function VendorsPage() {
       logo_url: v.logo_url ?? '',
       is_active: v.is_active ?? true 
     }); 
-    setError(''); 
+    hideToast(); 
     setShowModal(true); 
   }
 
@@ -96,7 +102,7 @@ export default function VendorsPage() {
     if (!file) return;
 
     setUploading(true);
-    setError('');
+    hideToast();
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -107,18 +113,45 @@ export default function VendorsPage() {
       if (data.success) {
         setForm(f => ({ ...f, logo_url: data.url }));
       } else {
-        setError(data.message || 'Gagal mengunggah foto');
+        showToast(data.message || 'Gagal mengunggah foto', 'error');
       }
     } catch (err) {
-      setError('Terjadi kesalahan saat mengunggah foto');
+      showToast('Terjadi kesalahan saat mengunggah foto', 'error');
     } finally {
       setUploading(false);
     }
   }
 
   async function performSave() {
-    if (!form.name) { setError('Nama Supplier wajib diisi'); return false; }
-    setSaving(true); setError('');
+    if (!form.name.trim()) { showToast('Nama Supplier wajib diisi', 'error'); return false; }
+
+    if (form.phone && !/^\d+$/.test(form.phone)) {
+      showToast('Nomor telepon hanya boleh berisi angka', 'error');
+      return false;
+    }
+    
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      showToast('Format email tidak valid (harus mengandung @)', 'error');
+      return false;
+    }
+    
+    if (form.zip) {
+      if (!/^\d+$/.test(form.zip)) {
+        showToast('Kode pos hanya boleh berisi angka', 'error');
+        return false;
+      }
+      const isIndo = form.country.toLowerCase().includes('indo');
+      if (isIndo && form.zip.length > 5) {
+        showToast('Maksimal input kodepos adalah 5 digit untuk Indonesia', 'error');
+        return false;
+      }
+      if (!isIndo && form.zip.length > 12) {
+        showToast('Maksimal input kodepos adalah 12 digit', 'error');
+        return false;
+      }
+    }
+
+    setSaving(true); hideToast();
     try {
       const fullAddress = [form.street, form.street2, form.city, form.state, form.zip, form.country].filter(Boolean).join(', ');
       const method = editing ? 'PATCH' : 'POST';
@@ -132,7 +165,7 @@ export default function VendorsPage() {
       const body = editing ? { id: editing.id, ...bodyPayload } : bodyPayload;
       const res = await fetch('/api/vendors', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!data.success) { setError(data.message); return false; }
+      if (!data.success) { showToast(data.message, 'error'); return false; }
       fetchVendors();
       return true;
     } finally { setSaving(false); }
@@ -140,7 +173,10 @@ export default function VendorsPage() {
 
   async function handleSave() {
     const success = await performSave();
-    if (success) setShowModal(false);
+    if (success) {
+      setShowModal(false);
+      showToast('Data vendor berhasil disimpan', 'success');
+    }
   }
 
   async function executeDelete() {
@@ -148,6 +184,7 @@ export default function VendorsPage() {
     await fetch(`/api/vendors?id=${confirmDelete.id}`, { method: 'DELETE' });
     setConfirmDelete(null);
     fetchVendors();
+    showToast('Data vendor berhasil dihapus', 'success');
   }
 
   function formatDate(iso: string) {
@@ -234,8 +271,7 @@ export default function VendorsPage() {
       </div>
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Supplier' : 'Supplier Baru'} maxWidth={850}>
-        <div className="modal-body" style={{ padding: '16px 24px' }}>
-          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
+        <div className="modal-body" style={{ padding: 24, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>
@@ -256,16 +292,30 @@ export default function VendorsPage() {
                 {form.is_active ? 'Aktif' : 'Nonaktif'}
               </label>
             </div>
-            <div style={{ width: 64, height: 64, border: '1px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', cursor: 'pointer', background: '#f8fafc', position: 'relative', overflow: 'hidden' }} title="Upload Photo">
-              <input type="file" accept="image/*" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={handleFileUpload} disabled={uploading} />
-              {uploading ? <span style={{ fontSize: 12 }}>...</span> : form.logo_url ? <img src={form.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/><line x1="22" y1="2" x2="22" y2="8"/><line x1="19" y1="5" x2="25" y2="5"/></svg>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+              <div style={{ width: 64, height: 64, border: '1px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#f8fafc', position: 'relative', overflow: 'hidden' }} title={form.logo_url ? '' : 'Upload Photo'}>
+                {uploading ? <span style={{ fontSize: 12 }}>...</span> : form.logo_url ? (
+                  <>
+                    <img src={form.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => setPreviewImage(form.logo_url)} title="Preview Foto" />
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, logo_url: '' })); }} style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(220, 38, 38, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, lineHeight: 1 }} title="Hapus Foto">&times;</button>
+                  </>
+                ) : (
+                  <>
+                    <input type="file" accept="image/*" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 2 }} onChange={handleFileUpload} disabled={uploading} />
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/><line x1="22" y1="2" x2="22" y2="8"/><line x1="19" y1="5" x2="25" y2="5"/></svg>
+                  </>
+                )}
+              </div>
+              {form.logo_url && (
+                <label style={{ fontSize: 11, color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>
+                  Ubah Foto
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
+                </label>
               )}
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            {/* Left Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                  <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Nama Supplier</label>
@@ -277,12 +327,14 @@ export default function VendorsPage() {
                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
                    <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.street} onChange={e => setForm(f => ({ ...f, street: e.target.value }))} placeholder="Jalan 1..." />
                    <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.street2} onChange={e => setForm(f => ({ ...f, street2: e.target.value }))} placeholder="Jalan 2..." />
-                   <div style={{ display: 'flex', gap: 6 }}>
-                     <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Kota" />
-                     <input className="input" style={{ width: 70, padding: '6px 10px', fontSize: 13 }} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="Provinsi" />
-                     <input className="input" style={{ width: 70, padding: '6px 10px', fontSize: 13 }} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} placeholder="Kode Pos" />
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                     <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Kota" />
+                     <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="Provinsi" />
                    </div>
-                   <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="Negara" />
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                     <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '') }))} placeholder="Kode Pos" maxLength={form.country.toLowerCase().includes('indo') ? 5 : 12} />
+                     <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="Negara" />
+                   </div>
                  </div>
               </div>
 
@@ -293,10 +345,9 @@ export default function VendorsPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                  <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Telepon</label>
-                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="08..." />
+                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '') }))} placeholder="08..." />
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -331,6 +382,8 @@ export default function VendorsPage() {
         confirmText="Hapus"
         danger={true}
       />
+      
+      <Toast message={toast.message} type={toast.type} isOpen={toast.isOpen} onClose={hideToast} />
 
       <Modal isOpen={!!historyVendor} onClose={() => setHistoryVendor(null)} title={`Riwayat Pembelian: ${historyVendor?.name}`} maxWidth={800}>
         <div className="modal-body" style={{ padding: '20px 24px' }}>
@@ -372,6 +425,12 @@ export default function VendorsPage() {
               </table>
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} title="Preview Foto">
+        <div className="modal-body" style={{ padding: 24, textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
+          {previewImage && <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />}
         </div>
       </Modal>
     </section>

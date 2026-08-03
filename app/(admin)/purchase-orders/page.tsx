@@ -443,11 +443,11 @@ export default function PurchaseOrdersPage() {
 
 
   function handleDownloadPDF() {
-    const pdfDataUri = generatePDFBase64();
-    const link = document.createElement('a');
-    link.href = pdfDataUri;
-    link.download = `${draftPO?.po_number || 'Draft_PO'}.pdf`;
-    link.click();
+    if (!draftPO || !draftPO.id) {
+      setToast({ isOpen: true, message: 'Harap simpan PO terlebih dahulu sebelum melihat dokumen PDF.', type: 'info' });
+      return;
+    }
+    window.open(`/api/purchase-orders/${draftPO.id}/pdf`, '_blank');
   }
 
   function openEmailModal() {

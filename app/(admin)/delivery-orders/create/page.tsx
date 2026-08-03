@@ -56,7 +56,7 @@ export default function CreateDeliveryOrderPage() {
   useEffect(() => {
     // Fetch orders that are PROCESSING or READY
     async function fetchOrders() {
-      const res = await fetch('/api/orders/recap');
+      const res = await fetch('/api/orders/recap?status=PROCESSING');
       const data = await res.json();
 
       // Group items by order to get the orders list, filtering for ones that need shipping
@@ -276,6 +276,11 @@ export default function CreateDeliveryOrderPage() {
       return;
     }
 
+    if (!form.delivery_date) {
+      setError('Tanggal pengiriman wajib diisi.');
+      return;
+    }
+
     if (selectedOrderId !== 'DIRECT') {
       const orderData = orders.find(o => String(o.order_id) === selectedOrderId);
       if (!orderData) return;
@@ -343,8 +348,8 @@ export default function CreateDeliveryOrderPage() {
             <div className="form-group">
               <label className="req">Sumber Permintaan</label>
               <select className="input" value={selectedOrderId} onChange={e => handleSelectOrder(e.target.value)}>
-                <option value="">-- Pilih Permintaan --</option>
-                <option value="DIRECT">[ Pengiriman Langsung ]</option>
+                <option value="">Pilih Permintaan</option>
+                <option value="DIRECT">Pengiriman Langsung</option>
                 {orders.map(o => (
                   <option key={o.order_id} value={o.order_id}>
                     PO-{new Date(o.order_date).getFullYear()}-{String(o.order_id).padStart(5, '0')}
@@ -361,7 +366,7 @@ export default function CreateDeliveryOrderPage() {
                 disabled={!selectedOrderId || (selectedOrderId !== 'DIRECT' && !!selectedOrderId)}
                 style={{ fontWeight: 600, background: (!selectedOrderId || selectedOrderId !== 'DIRECT') ? '#f1f5f9' : '#fff' }}
               >
-                <option value="">-- Pilih Tujuan --</option>
+                <option value="">Pilih Tujuan</option>
                 {outlets.map(o => (
                   <option key={o.id} value={o.id}>{o.name}</option>
                 ))}
