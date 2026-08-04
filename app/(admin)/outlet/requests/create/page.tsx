@@ -73,8 +73,7 @@ export default function CreateRequestPage() {
   const [deliveryDate, setDeliveryDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
-
+  const [bulkAddQty, setBulkAddQty] = useState('5');
   useEffect(() => {
     const fetchAll = async () => {
       try {
@@ -285,7 +284,54 @@ export default function CreateRequestPage() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h4 style={{ margin: 0 }}>Barang ({cart.length})</h4>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', height: '32px' }}>
+                <input
+                  type="number"
+                  className="input num"
+                  style={{ width: '50px', padding: '4px 8px', borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0, fontSize: 13, height: '32px' }}
+                  value={bulkAddQty}
+                  onChange={(e) => setBulkAddQty(e.target.value)}
+                  placeholder="Qty"
+                />
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ borderRadius: 0, height: '32px', fontWeight: 600, background: '#fff', color: '#ef4444', border: '1px solid #ef4444', borderRight: 'none', padding: '0 12px' }}
+                  onClick={() => {
+                    const val = Number(bulkAddQty) || 0;
+                    if (val === 0) return;
+                    setCart(c => c.map(line => {
+                      if (line.item_id) {
+                        const currentQty = Number(line.qty) || 0;
+                        return { ...line, qty: String(Math.max(0, currentQty - val)) };
+                      }
+                      return line;
+                    }));
+                  }}
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, height: '32px', fontWeight: 600, background: 'var(--primary)', color: '#fff', border: '1px solid var(--primary)', padding: '0 12px' }}
+                  onClick={() => {
+                    const val = Number(bulkAddQty) || 0;
+                    if (val === 0) return;
+                    setCart(c => c.map(line => {
+                      if (line.item_id) {
+                        const currentQty = Number(line.qty) || 0;
+                        return { ...line, qty: String(currentQty + val) };
+                      }
+                      return line;
+                    }));
+                  }}
+                >
+                  +
+                </button>
+              </div>
+              <div style={{ width: '1px', height: '24px', background: '#cbd5e1', margin: '0 4px' }}></div>
               <Button variant="outline" size="sm" onClick={() => setCart([])} style={{ borderColor: '#fca5a5', color: '#ef4444', background: '#fef2f2' }} disabled={cart.length === 0}>
                 Bersihkan Semua
               </Button>

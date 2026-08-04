@@ -144,23 +144,56 @@ export async function createPurchaseOrder(data: {
 
     let subtotal = 0;
     let totalTax = 0;
-    for (let idx = 0; idx < data.items.length; idx++) {
-      const item = data.items[idx];
-      const q = item.qty ?? null;
-      const up = item.unit_price ?? null;
-      const d = item.disc_percent ?? 0;
-      const t = item.tax_percent ?? 0;
-      const lineSubtotal = ((q || 0) * (up || 0)) * (1 - d / 100);
-      
-      subtotal += lineSubtotal;
-      totalTax += lineSubtotal * (t / 100);
+    
+    if (data.items.length > 0) {
+      const poIds: number[] = [];
+      const lineTypes: string[] = [];
+      const itemIds: (number | null)[] = [];
+      const descriptions: (string | null)[] = [];
+      const qtys: (number | null)[] = [];
+      const packageQtys: (number | null)[] = [];
+      const packageUnits: (string | null)[] = [];
+      const purchaseUnits: (string | null)[] = [];
+      const packageInnerSizes: (number | null)[] = [];
+      const conversionRatios: (number | null)[] = [];
+      const unitPrices: (number | null)[] = [];
+      const taxPercents: number[] = [];
+      const discountPercents: number[] = [];
+      const subtotals: number[] = [];
+      const sortOrders: number[] = [];
+
+      for (let idx = 0; idx < data.items.length; idx++) {
+        const item = data.items[idx];
+        const q = item.qty ?? null;
+        const up = item.unit_price ?? null;
+        const d = item.disc_percent ?? 0;
+        const t = item.tax_percent ?? 0;
+        const lineSubtotal = ((q || 0) * (up || 0)) * (1 - d / 100);
+        
+        subtotal += lineSubtotal;
+        totalTax += lineSubtotal * (t / 100);
+
+        poIds.push(po.id);
+        lineTypes.push(item.line_type);
+        itemIds.push(item.item_id ?? null);
+        descriptions.push(item.description ?? null);
+        qtys.push(item.qty ?? null);
+        packageQtys.push(item.package_qty ?? null);
+        packageUnits.push(item.package_unit ?? null);
+        purchaseUnits.push(item.purchase_unit ?? null);
+        packageInnerSizes.push(item.package_inner_size ?? null);
+        conversionRatios.push(item.conversion_ratio ?? null);
+        unitPrices.push(item.unit_price ?? null);
+        taxPercents.push(item.tax_percent ?? 0);
+        discountPercents.push(item.disc_percent ?? 0);
+        subtotals.push(lineSubtotal);
+        sortOrders.push(item.sort_order ?? idx);
+      }
 
       await client.query(
         `INSERT INTO purchase_order_items (purchase_order_id, line_type, item_id, description, qty, package_qty, package_unit, purchase_unit, package_inner_size, conversion_ratio, unit_price, tax_percent, discount_percent, subtotal, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-        [po.id, item.line_type, item.item_id ?? null, item.description ?? null, item.qty ?? null,
-         item.package_qty ?? null, item.package_unit ?? null, item.purchase_unit ?? null, item.package_inner_size ?? null, item.conversion_ratio ?? null, item.unit_price ?? null,
-         item.tax_percent ?? 0, item.disc_percent ?? 0, lineSubtotal, item.sort_order ?? idx]
+         SELECT * FROM UNNEST ($1::int[], $2::varchar[], $3::int[], $4::text[], $5::numeric[], $6::numeric[], $7::varchar[], $8::varchar[], $9::numeric[], $10::numeric[], $11::numeric[], $12::numeric[], $13::numeric[], $14::numeric[], $15::int[])`,
+        [poIds, lineTypes, itemIds, descriptions, qtys, packageQtys, packageUnits, purchaseUnits, packageInnerSizes, conversionRatios, unitPrices, taxPercents, discountPercents, subtotals, sortOrders]
       );
     }
 

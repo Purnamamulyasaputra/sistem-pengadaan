@@ -836,9 +836,6 @@ thead th,
   border-bottom: 1px solid var(--border);
   font-weight: 700;
   white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 5;
 }
 
 tbody td,

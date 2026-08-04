@@ -19,6 +19,7 @@ interface RawOrderItem {
   smallest_unit?: string;
   conversion_ratio?: string | number;
   qty_request: number;
+  qty_approved?: number | string;
   current_stock?: string | number;
   current_average_price?: number;
   barcode?: string;
@@ -135,13 +136,16 @@ export default function CreateDeliveryOrderPage() {
     const selected = orders.find(o => String(o.order_id) === id);
     if (selected) {
       setTargetOutletId(String(selected.outlet_id));
-      setOrderItems(selected.items.map((i: RawOrderItem) => ({
-        ...i,
-        qty_shipped: i.qty_request,
-        current_stock: parseFloat(String(i.current_stock ?? '0')),
-        selected: i.item_status === 'READY_DI_GUDANG',
-        keterangan: ''
-      })));
+      setOrderItems(selected.items.map((i: RawOrderItem) => {
+        const initialQty = parseFloat(String(i.qty_approved ?? i.qty_request ?? '0'));
+        return {
+          ...i,
+          qty_shipped: String(initialQty).replace('.', ','),
+          current_stock: parseFloat(String(i.current_stock ?? '0')),
+          selected: i.item_status === 'READY_DI_GUDANG',
+          keterangan: ''
+        };
+      }));
     }
   };
 

@@ -20,9 +20,10 @@ interface SelectProps {
   inputStyle?: React.CSSProperties;
   optionStyle?: React.CSSProperties;
   disabled?: boolean;
+  creatable?: boolean;
 }
 
-export function Select({ value, onChange, options, style, className = '', placeholder, searchable = false, inputStyle, optionStyle, disabled = false }: SelectProps) {
+export function Select({ value, onChange, options, style, className = '', placeholder, searchable = false, creatable = false, inputStyle, optionStyle, disabled = false }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -136,7 +137,7 @@ export function Select({ value, onChange, options, style, className = '', placeh
               <input 
                 type="text" 
                 autoFocus
-                placeholder="Ketik untuk mencari..." 
+                placeholder={creatable ? "Cari atau ketik baru..." : "Ketik untuk mencari..."} 
                 value={searchTerm} 
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ width: '100%', border: 'none', outline: 'none', fontSize: 13, background: 'transparent' }}
@@ -183,8 +184,32 @@ export function Select({ value, onChange, options, style, className = '', placeh
                 </div>
               )
             ))}
-            {filteredOptions.length === 0 && (
+            {filteredOptions.length === 0 && !creatable && (
               <div style={{ padding: '12px', fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>Tidak ada pilihan</div>
+            )}
+            
+            {creatable && searchTerm.trim() !== '' && !options.some(o => String(o.label).toLowerCase() === searchTerm.toLowerCase()) && (
+              <div
+                onClick={() => {
+                  onChange(searchTerm.trim());
+                  setIsOpen(false);
+                  setSearchTerm('');
+                }}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  background: '#fff',
+                  color: 'var(--primary)',
+                  fontWeight: 600,
+                  transition: 'background 0.1s',
+                  borderTop: filteredOptions.length > 0 ? '1px solid #f1f5f9' : 'none'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f0fdf4'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+              >
+                + Tambah "{searchTerm}"
+              </div>
             )}
           </div>
         </div>,

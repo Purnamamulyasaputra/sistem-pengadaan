@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { OrderStatusBadge } from '@/components/shared/OrderStatusBadge';
 import TableRowLink from '@/components/shared/TableRowLink';
 import { DashboardChart } from '@/components/ui/DashboardChart';
+import { GrossProfitChart } from '@/components/ui/GrossProfitChart';
 import { OutletTrendChart } from '@/components/ui/OutletTrendChart';
 
 async function getDashboardStats(role: string, outletId: number | null) {
@@ -111,6 +112,33 @@ async function getFastMovingItems() {
   } catch { return []; }
 }
 
+async function getGrossProfitAnalytics() {
+  try {
+    const result = await query(
+      `SELECT 
+         o.name AS outlet_name,
+         SUM(mis.gross_sales) AS revenue,
+         SUM(mis.cogs) AS cogs
+       FROM moka_item_sales mis
+       JOIN outlets o ON o.id = mis.outlet_id
+       WHERE mis.period_start >= CURRENT_DATE - INTERVAL '7 days'
+       GROUP BY o.id, o.name
+       ORDER BY revenue DESC`
+    );
+    return result.rows.map(row => {
+      const revenue = parseFloat(row.revenue ?? '0');
+      const cogs = parseFloat(row.cogs ?? '0');
+      const marginPct = revenue > 0 ? ((revenue - cogs) / revenue) * 100 : 0;
+      return {
+        outletName: row.outlet_name,
+        revenue,
+        cogs,
+        marginPct: Math.round(marginPct)
+      };
+    });
+  } catch { return []; }
+}
+
 async function getPendingIssues() {
   try {
     const result = await query(
@@ -197,10 +225,10 @@ export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const [stats, recentOrders, fastMoving, pendingIssues, outletIssues, outletTrend] = await Promise.all([
+  const [stats, recentOrders, grossProfitData, pendingIssues, outletIssues, outletTrend] = await Promise.all([
     getDashboardStats(session.role, session.outletId),
     getRecentOrders(session.role, session.outletId),
-    session.role === 'ADMIN_PUSAT' ? getFastMovingItems() : Promise.resolve([]),
+    session.role === 'ADMIN_PUSAT' ? getGrossProfitAnalytics() : Promise.resolve([]),
     session.role === 'ADMIN_PUSAT' ? getPendingIssues() : Promise.resolve([]),
     session.role !== 'ADMIN_PUSAT' ? getOutletIssues(session.outletId) : Promise.resolve([]),
     session.role !== 'ADMIN_PUSAT' ? getOutletOrderTrend(session.outletId) : Promise.resolve([]),
@@ -260,16 +288,41 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <div className="card">
-        <div className="card-head">
-          <div>
-            <h3>{isCentral ? 'Tren Nilai Inventaris' : 'Aktivitas Permintaan (7 Hari Terakhir)'}</h3>
+      {isCentral ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px', marginTop: '24px' }}>
+          <div className="card" style={{ margin: 0 }}>
+            <div className="card-head">
+              <div>
+                <h3>Margin Kasar / Outlet (7 Hari Terakhir)</h3>
+              </div>
+            </div>
+            <div className="card-body">
+              <GrossProfitChart data={grossProfitData} />
+            </div>
+          </div>
+          <div className="card" style={{ margin: 0 }}>
+            <div className="card-head">
+              <div>
+                <h3>Tren Nilai Inventaris</h3>
+              </div>
+            </div>
+            <div className="card-body">
+              <DashboardChart data={trendData} />
+            </div>
           </div>
         </div>
-        <div className="card-body">
-          {isCentral ? <DashboardChart data={trendData} /> : <OutletTrendChart data={outletTrend} />}
+      ) : (
+        <div className="card" style={{ marginTop: '24px' }}>
+          <div className="card-head">
+            <div>
+              <h3>Aktivitas Permintaan (7 Hari Terakhir)</h3>
+            </div>
+          </div>
+          <div className="card-body">
+            <OutletTrendChart data={outletTrend} />
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginTop: '24px', alignItems: 'start' }}>
         
@@ -317,40 +370,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* 3. Notifikasi Retur/Masalah (PUSAT) */}
-          {isCentral && pendingIssues.length > 0 && (
-            <div className="card" style={{ margin: 0 }}>
-              <div className="card-head">
-                <div>
-                  <h3 style={{ color: 'var(--red)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-                    Retur / Masalah (Menunggu)
-                  </h3>
-                </div>
-              </div>
-              <div className="card-body flush">
-                <Table>
-                  <thead>
-                    <tr>
-                      <th>Surat Jalan</th>
-                      <th>Masalah</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingIssues.map((issue: any) => (
-                      <tr key={issue.id}>
-                        <td>
-                          <div className="font-bold">{issue.dn_number}</div>
-                          <div className="muted" style={{ fontSize: '11px' }}>{issue.outlet_name}</div>
-                        </td>
-                        <td>{issue.issue_type}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </div>
-            </div>
-          )}
+
 
 
 
@@ -400,46 +420,46 @@ export default async function DashboardPage() {
         
         {isCentral && (
           <>
-            
-            {/* 6. Top Fast Moving (PUSAT) */}
             <div className="card" style={{ margin: 0 }}>
               <div className="card-head">
                 <div>
-                  <h3>Top 5 Terlaris Minggu Ini (Keluar)</h3>
+                  <h3>Retur / Masalah (Menunggu)</h3>
                 </div>
+                <Link href="/returns"><Button variant="outline" size="sm">Lihat Semua</Button></Link>
               </div>
-              <div className="card-body">
-                {fastMoving.length === 0 ? (
-                   <div className="empty-state" style={{ padding: '24px 0' }}>
-                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                     <h4>Belum ada pengeluaran</h4>
-                     <p>Data distribusi minggu ini kosong</p>
-                   </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {fastMoving.map((item: any, idx: number) => {
-                      const maxOut = parseFloat(fastMoving[0].total_out);
-                      const currentOut = parseFloat(item.total_out);
-                      const pct = Math.round((currentOut / maxOut) * 100);
-                      return (
-                        <div key={idx}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                            <span className="font-bold">{item.name}</span>
-                            <span className="muted font-mono">{currentOut} {item.smallest_unit}</span>
-                          </div>
-                          <div style={{ width: '100%', background: 'var(--gray-light)', height: '6px', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{ width: `${pct}%`, background: 'var(--primary)', height: '100%', borderRadius: '4px' }}></div>
-                          </div>
-                        </div>
-                      );
-                    })}
+              <div className="card-body flush">
+                {pendingIssues.length === 0 ? (
+                  <div className="empty-state" style={{ padding: '24px 0' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 13l4 4L19 7"/></svg>
+                    <h4>Tidak ada tiket masalah</h4>
+                    <p>Semua retur dan komplain sudah diselesaikan</p>
                   </div>
+                ) : (
+                  <Table>
+                    <thead>
+                      <tr>
+                        <th>Surat Jalan</th>
+                        <th>Outlet</th>
+                        <th>Masalah</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingIssues.map((issue: any) => (
+                        <TableRowLink key={issue.id} href={`/delivery-orders/${issue.dn_number}`}>
+                          <td><span className="font-mono text-primary font-bold">{issue.dn_number}</span></td>
+                          <td>{issue.outlet_name}</td>
+                          <td>
+                            <span className={`badge ${issue.issue_type === 'BROKEN' ? 'badge-danger' : issue.issue_type === 'MISSING' ? 'badge-warning' : 'badge-default'}`}>
+                              {issue.issue_type === 'BROKEN' ? 'Barang Rusak' : issue.issue_type === 'MISSING' ? 'Kurang/Hilang' : issue.issue_type}
+                            </span>
+                          </td>
+                        </TableRowLink>
+                      ))}
+                    </tbody>
+                  </Table>
                 )}
               </div>
             </div>
-
-
-
           </>
         )}
         </div>

@@ -62,15 +62,14 @@ export default function OutletRequestsPage() {
         </div>
         <div style={{ background: '#f0fdf4', borderBottom: '1px solid #bbf7d0', padding: '16px 20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <Link href="/outlet/requests/create" style={{ textDecoration: 'none' }}>
-            <Button variant="outline" style={{ background: 'white', borderColor: '#86efac' }}>
+            <Button variant="primary" size="sm">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              Buat Permintaan PO
+              Buat Permintaan
             </Button>
           </Link>
-
         </div>
 
         <div className="card-body flush">
@@ -81,9 +80,6 @@ export default function OutletRequestsPage() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
               <h4>Belum ada permintaan</h4>
               <p>Anda belum membuat permintaan barang apapun.</p>
-              <Link href="/outlet/requests/create" style={{ textDecoration: 'none', display: 'inline-block', marginTop: 12 }}>
-                <Button variant="primary" size="sm">Buat Sekarang</Button>
-              </Link>
             </div>
           ) : (
             <>
@@ -99,7 +95,7 @@ export default function OutletRequestsPage() {
                   {orders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => (
                     <tr key={o.id} onClick={() => handleViewOrder(o)} style={{ cursor: 'pointer' }} className="hover-row">
                       <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
-                      <td className="muted">{o.created_by_name}</td>
+                      <td className="muted">{o.created_by_name?.replace('Coffeelab ', '')}</td>
                       <td>{new Date(o.order_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td>{new Date(o.delivery_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td className="center num font-bold">{o.item_count}</td>
@@ -179,9 +175,6 @@ export default function OutletRequestsPage() {
               </Table>
             )}
           </div>
-        </div>
-        <div className="modal-actions" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button variant="primary" onClick={() => setSelectedOrder(null)}>Tutup</Button>
         </div>
       </Modal>
     </section>

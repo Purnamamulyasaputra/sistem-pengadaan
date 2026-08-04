@@ -116,31 +116,62 @@ export async function createOrder(data: {
     );
     const order = orderResult.rows[0];
 
-    for (const item of data.items) {
-      const ratioRes = await client.query(
-        `SELECT conversion_ratio FROM items WHERE id = $1`, [item.item_id]
-      );
-      const ratio = Number(ratioRes.rows[0]?.conversion_ratio ?? 1);
-      const smallest_unit_qty = item.qty_request * ratio;
+    if (data.items.length > 0) {
+      const itemIds = data.items.map(i => i.item_id);
+      
+      const itemDataRes = await client.query(`
+        SELECT i.id, i.conversion_ratio, 
+          COALESCE((
+            SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1
+          ), 0) as stock
+        FROM items i WHERE i.id = ANY($1::int[])
+      `, [itemIds]);
+      
+      const itemDataMap = new Map();
+      for (const row of itemDataRes.rows) {
+        itemDataMap.set(Number(row.id), {
+          ratio: Number(row.conversion_ratio ?? 1),
+          stock: Number(row.stock ?? 0)
+        });
+      }
 
-      const stockRes = await client.query(
-        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
-        [item.item_id]
-      );
-      const stock = Number(stockRes.rows[0]?.ending_balance ?? 0);
+      const orderIds: number[] = [];
+      const _itemIds: number[] = [];
+      const qtyRequests: number[] = [];
+      const additionalNotes: (string | null)[] = [];
+      const smallestUnitQtys: number[] = [];
+      const fulfillmentStatuses: string[] = [];
+      const itemStatuses: string[] = [];
+      const qtyApproveds: number[] = [];
+      const approvedSmallestQtys: number[] = [];
 
-      let fulfillment_status = 'TIDAK';
-      let item_status = 'PROSES_BELANJA';
+      for (const item of data.items) {
+        const { ratio, stock } = itemDataMap.get(item.item_id) || { ratio: 1, stock: 0 };
+        const smallest_unit_qty = item.qty_request * ratio;
 
-      if (stock >= smallest_unit_qty) {
-        fulfillment_status = 'SANGGUP';
-        item_status = 'READY_DI_GUDANG';
+        let fulfillment_status = 'TIDAK';
+        let item_status = 'PROSES_BELANJA';
+
+        if (stock >= smallest_unit_qty) {
+          fulfillment_status = 'SANGGUP';
+          item_status = 'READY_DI_GUDANG';
+        }
+
+        orderIds.push(order.id);
+        _itemIds.push(item.item_id);
+        qtyRequests.push(Math.max(0.001, item.qty_request));
+        additionalNotes.push(item.additional_notes ?? null);
+        smallestUnitQtys.push(smallest_unit_qty);
+        fulfillmentStatuses.push(fulfillment_status);
+        itemStatuses.push(item_status);
+        qtyApproveds.push(Math.max(0.001, item.qty_request));
+        approvedSmallestQtys.push(smallest_unit_qty);
       }
 
       await client.query(
         `INSERT INTO order_items (order_id, item_id, qty_request, additional_notes, smallest_unit_qty, fulfillment_status, item_status, qty_approved, approved_smallest_qty)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [order.id, item.item_id, Math.max(0.001, item.qty_request), item.additional_notes ?? null, smallest_unit_qty, fulfillment_status, item_status, Math.max(0.001, item.qty_request), smallest_unit_qty]
+         SELECT * FROM UNNEST ($1::int[], $2::int[], $3::numeric[], $4::text[], $5::numeric[], $6::varchar[], $7::varchar[], $8::numeric[], $9::numeric[])`,
+        [orderIds, _itemIds, qtyRequests, additionalNotes, smallestUnitQtys, fulfillmentStatuses, itemStatuses, qtyApproveds, approvedSmallestQtys]
       );
     }
 

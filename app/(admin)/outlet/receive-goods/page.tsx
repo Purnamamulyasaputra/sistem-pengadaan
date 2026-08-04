@@ -32,8 +32,8 @@ interface DeliveryNoteItem {
 
 function getDisplayFormat(qty: number, unit: string) {
   const u = (unit || '').trim().toLowerCase();
-  if (u === 'gr' && qty >= 1000) return { unit: 'kg', mult: 1000, value: qty / 1000 };
-  if (u === 'ml' && qty >= 1000) return { unit: 'Liter', mult: 1000, value: qty / 1000 };
+  if (['g', 'gr', 'gram'].includes(u) && qty >= 1000) return { unit: 'kg', mult: 1000, value: qty / 1000 };
+  if (['ml', 'milliliter'].includes(u) && qty >= 1000) return { unit: 'Liter', mult: 1000, value: qty / 1000 };
   return { unit, mult: 1, value: qty };
 }
 
@@ -192,32 +192,31 @@ export default function ReceiveGoodsPage() {
     setProcessing(true);
     setToast({ ...toast, isOpen: false });
     try {
-      // Process all items
-      for (const item of itemsList) {
-        if (item.scanned_in_at) continue;
+      const itemsToScan = itemsList
+        .filter(item => !item.scanned_in_at)
+        .map(item => {
+          const inputQty = qtys[item.id];
+          const shippedFmt = getDisplayFormat(Number(item.qty_shipped), item.smallest_unit);
+          const actualQtyReceivedBase = Number(inputQty) * shippedFmt.mult;
+          const isDiscrepancy = actualQtyReceivedBase !== Number(item.qty_shipped);
+          const notesStr = discNotes[item.id] || '';
 
-        const inputQty = qtys[item.id];
-        const shippedFmt = getDisplayFormat(Number(item.qty_shipped), item.smallest_unit);
-        const actualQtyReceivedBase = Number(inputQty) * shippedFmt.mult;
-        const isDiscrepancy = actualQtyReceivedBase !== Number(item.qty_shipped);
-        const notesStr = discNotes[item.id] || '';
-
-        const res = await fetch(`/api/delivery-notes/${item.id}/scan`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          return {
             delivery_note_item_id: item.id,
-            item_id: item.item_id,
-            barcode_scanned: item.unique_barcode || item.barcode || scanModal.delivery_note_number,
-            scan_type: 'IN',
-            device_info: 'Web Dashboard Outlet',
             qty_received: actualQtyReceivedBase,
             discrepancy_reason: isDiscrepancy ? (discCategories[item.id] === 'Lainnya' ? notesStr.trim() : discCategories[item.id]) : undefined,
-          }),
+          };
+        });
+
+      if (itemsToScan.length > 0) {
+        const res = await fetch(`/api/delivery-notes/${scanModal.id}/bulk-scan-in`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: itemsToScan }),
         });
         const data = await res.json();
         if (!data.success) {
-          throw new Error(`Failed on ${item.item_name}: ${data.message}`);
+          throw new Error(`Gagal menyimpan data scan: ${data.message}`);
         }
       }
 
@@ -261,6 +260,17 @@ export default function ReceiveGoodsPage() {
   }
 
   const allScannedIn = itemsList.length > 0 && itemsList.every(i => i.scanned_in_at);
+
+  const handleFillAll = () => {
+    const newQtys = { ...qtys };
+    itemsList.forEach(item => {
+      if (!item.scanned_in_at) {
+        const shippedFmt = getDisplayFormat(Number(item.qty_shipped), item.smallest_unit);
+        newQtys[item.id] = shippedFmt.value;
+      }
+    });
+    setQtys(newQtys);
+  };
 
   return (
     <section className="screen">
@@ -342,11 +352,16 @@ export default function ReceiveGoodsPage() {
               </div>
 
               {!allScannedIn && scanModal?.status !== 'DITERIMA' && (
-                <form onSubmit={handleCompleteReceipt} style={{ display: 'flex', alignItems: 'center' }}>
-                  <Button variant="primary" type="submit" disabled={processing || (requireBarcode && !proofImage && !previewUrl)}>
-                    {processing ? 'Menyelesaikan...' : 'Selesaikan Penerimaan'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Button variant="outline" type="button" onClick={handleFillAll} disabled={processing} style={{ whiteSpace: 'nowrap', border: '1px solid var(--border)' }}>
+                    Terima Semua Sesuai DO
                   </Button>
-                </form>
+                  <form onSubmit={handleCompleteReceipt} style={{ display: 'flex', alignItems: 'center' }}>
+                    <Button variant="primary" type="submit" disabled={processing || (requireBarcode && !proofImage && !previewUrl)}>
+                      {processing ? 'Menyelesaikan...' : 'Selesaikan Penerimaan'}
+                    </Button>
+                  </form>
+                </div>
               )}
             </div>
           </div>

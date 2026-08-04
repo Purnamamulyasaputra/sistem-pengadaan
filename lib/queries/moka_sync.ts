@@ -168,3 +168,16 @@ export async function getMokaOutlets() {
         return [];
     }
 }
+
+export async function getOutletsByBusinessId(businessId: string | number) {
+    try {
+        const res = await query(
+            'SELECT id, name, type, phone, address, city, state FROM outlets WHERE moka_business_id = $1 ORDER BY name ASC',
+            [businessId]
+        );
+        return res.rows;
+    } catch (error) {
+        console.error("Error fetching outlets by business id:", error);
+        return [];
+    }
+}

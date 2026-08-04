@@ -526,8 +526,11 @@ export default function ItemsPage() {
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <label className="req">Satuan Beli (Terbesar)</label>
                   <Select
+                    searchable
+                    creatable
                     value={form.purchase_unit}
                     onChange={val => setForm(f => ({ ...f, purchase_unit: String(val) }))}
+                    placeholder="Pilih atau cari..."
                     options={[
                       { value: '', label: 'Pilih...' },
                       ...getUniqueUnits(['Kg', 'gr', 'Liter', 'ml', 'Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Galon', 'Jerigen', 'Roll', 'Pcs'], items.map(i => i.purchase_unit))
@@ -538,9 +541,12 @@ export default function ItemsPage() {
                 <div className="form-group" style={{ flex: 1, marginBottom: 0, opacity: form.has_conversion ? 1 : 0.4, transition: 'opacity 0.2s' }}>
                   <label className="req">Satuan Terkecil (Outlet)</label>
                   <Select
+                    searchable
+                    creatable
                     value={form.smallest_unit}
                     onChange={val => setForm(f => ({ ...f, smallest_unit: String(val) }))}
                     disabled={!form.has_conversion}
+                    placeholder="Pilih atau cari..."
                     options={[
                       { value: '', label: 'Pilih...' },
                       ...getUniqueUnits(['gr', 'ml', 'Pcs', 'Shoot', 'Slice', 'Lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks', 'Roll', 'Kg', 'Liter', 'Pack'], items.map(i => i.smallest_unit))

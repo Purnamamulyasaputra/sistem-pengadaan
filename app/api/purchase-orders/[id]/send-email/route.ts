@@ -48,12 +48,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ]
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent: ' + info.response);
+    transporter.sendMail(mailOptions)
+      .then(info => console.log('Email sent: ' + info.response))
+      .catch(error => console.error('Error sending email:', error));
 
-    return NextResponse.json({ success: true, message: 'Email berhasil dikirim ke ' + to });
+    return NextResponse.json({ success: true, message: 'Email sedang diproses dan akan segera terkirim ke ' + to });
   } catch (error: unknown) {
-    console.error('Error sending email:', error);
-    return NextResponse.json({ success: false, message: 'Gagal mengirim email: ' + (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
+    console.error('Error preparing email:', error);
+    return NextResponse.json({ success: false, message: 'Gagal memproses email: ' + (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }

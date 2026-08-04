@@ -1,5 +1,5 @@
 import { getAllActiveMokaTokens } from '@/lib/queries/moka';
-import { getSyncStatus } from '@/lib/queries/moka_sync';
+import { getSyncStatus, getOutletsByBusinessId } from '@/lib/queries/moka_sync';
 import { ConnectMokaButton, SyncMasterButton, DisconnectAccountButton, SyncSalesButton, SyncTransactionsButton, SyncCustomersButton } from '@/components/moka/MokaActions';
 import MokaToaster from '@/components/moka/MokaToaster';
 import { Store, AlertCircle, Database } from 'lucide-react';
@@ -17,6 +17,7 @@ export default async function MokaIntegrationPage(props: {
     
     const selectedAccountId = searchParams.account_id as string || (tokens.length > 0 ? tokens[0].business_id.toString() : null);
     const syncStatus = await getSyncStatus(selectedAccountId);
+    const mappedOutlets = selectedAccountId ? await getOutletsByBusinessId(selectedAccountId) : [];
 
     const errorMsg = searchParams.error as string;
     const successMsg = searchParams.success as string;
@@ -146,6 +147,38 @@ export default async function MokaIntegrationPage(props: {
                                         ))}
                                     </div>
                                 </div>
+                                {selectedAccountId && (
+                                    <div className="mt-6">
+                                        <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                            <Store className="w-4 h-4 text-[#016e3f]" />
+                                            Daftar Outlet Tersinkronisasi ({mappedOutlets.length})
+                                        </h3>
+                                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                            {mappedOutlets.length === 0 ? (
+                                                <div className="text-center py-4">
+                                                    <p className="text-xs text-gray-500 mb-3">Belum ada outlet yang ditarik dari akun Moka ini.</p>
+                                                    <p className="text-[10px] text-gray-400">Silakan klik "Sync Master Data" untuk menarik profil dan daftar outlet toko Anda dari Moka.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="divide-y divide-gray-100">
+                                                    {mappedOutlets.map((outlet: any) => (
+                                                        <div key={outlet.id} className="py-2.5 first:pt-0 last:pb-0">
+                                                            <div className="flex justify-between items-start">
+                                                                <div>
+                                                                    <div className="text-[12px] font-bold text-gray-800">{outlet.name}</div>
+                                                                    <div className="text-[10px] text-gray-500 mt-0.5">{outlet.city || outlet.address || '-'}</div>
+                                                                </div>
+                                                                <span className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded border border-gray-200">
+                                                                    ID: {outlet.id}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                         </div>

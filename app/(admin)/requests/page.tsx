@@ -361,7 +361,7 @@ function RequestsContent() {
                       >
                         <td className="font-mono text-primary font-bold">PO-{new Date(o.order_date).getFullYear()}-{String(o.id).padStart(5, '0')}</td>
                         <td className="font-bold">{o.outlet_name}</td>
-                        <td className="muted">{o.created_by_name}</td>
+                        <td className="muted">{o.created_by_name?.replace('Coffeelab ', '')}</td>
                         <td>{formatDate(o.order_date)}</td>
                         <td>{formatDate(o.delivery_date)}</td>
                         <td className="center num font-bold">{o.item_count}</td>

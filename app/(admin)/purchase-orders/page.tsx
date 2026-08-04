@@ -54,6 +54,7 @@ export default function PurchaseOrdersPage() {
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [deliverToFocused, setDeliverToFocused] = useState(false);
   const [shouldAutoFill, setShouldAutoFill] = useState(false);
+  const [bulkAddQty, setBulkAddQty] = useState('5');
 
   // Email state
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -98,7 +99,7 @@ export default function PurchaseOrdersPage() {
         handleViewPO({ id: Number(openId) } as any);
         window.history.replaceState({}, '', '/purchase-orders');
       }
-      
+
       const createItemsStr = urlParams.get('create_items');
       if (createItemsStr) {
         setShowModal(true);
@@ -132,10 +133,19 @@ export default function PurchaseOrdersPage() {
           return;
         }
 
-        if (!isAuto) setToast({ isOpen: true, message: `Berhasil menambahkan ${suggestions.length} barang ke dalam daftar.`, type: 'success' });
+        const existingItemIds = lines.map(l => String(l.item_id)).filter(Boolean);
+        const newSuggestions = suggestions.filter((s: any) => !existingItemIds.includes(String(s.item_id)));
+
+        if (newSuggestions.length === 0) {
+          if (!isAuto) setToast({ isOpen: true, message: 'Semua barang dengan stok rendah sudah ada di dalam daftar.', type: 'info' });
+          return;
+        }
+
+        if (!isAuto) setToast({ isOpen: true, message: `Berhasil menambahkan ${newSuggestions.length} barang ke dalam daftar.`, type: 'success' });
+
         setLines(current => {
           const valid = current.filter(l => l.description || l.item_id || (l.type === 'note' && l.description));
-          const newLines = suggestions.map((a: any) => {
+          const newLines = newSuggestions.map((a: any) => {
             const item = items.find((i: any) => String(i.id) === String(a.item_id));
             const conversion = Number(item && item.conversion_ratio > 0 ? item.conversion_ratio : 1) || 1;
             const deficit = a.minimum_threshold - Number(a.current_balance);
@@ -148,10 +158,7 @@ export default function PurchaseOrdersPage() {
               qty: String(suggestedPurchaseQty),
               unit_price: (() => {
                 if (!item) return '0';
-                const lastPrice = (item as any).last_purchase_price;
-                return lastPrice && Number(lastPrice) > 0
-                  ? String(Math.round(Number(lastPrice) * conversion))
-                  : String(Math.round((item.current_average_price || 0) * conversion));
+                return String(Math.round((item.current_average_price || 0) * conversion));
               })(),
               tax_percent: '11',
               disc_percent: '0',
@@ -174,12 +181,8 @@ export default function PurchaseOrdersPage() {
   function handleItemTextChange(lineIdx: number, text: string) {
     const item = items.find(i => i.name === text);
     if (item) {
-      // Pre-fill dari last_purchase_price (harga beli terakhir ke vendor).
-      // Fallback ke current_average_price (Moving Average) jika last_purchase_price belum ada.
-      const lastPrice = (item as any).last_purchase_price;
-      const prefillPricePerUnit = lastPrice && Number(lastPrice) > 0
-        ? Math.round(Number(lastPrice) * (item.conversion_ratio || 1))
-        : Math.round(item.current_average_price * (item.conversion_ratio || 1));
+      // Gunakan current_average_price (Harga Pokok dari Master Data)
+      const prefillPricePerUnit = Math.round((item.current_average_price || 0) * (item.conversion_ratio || 1));
       setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: String(item.id), description: text, unit_price: String(prefillPricePerUnit), purchase_unit: item.purchase_unit || '', package_qty: '', package_inner_size: '', conversion_ratio: item.conversion_ratio ? String(item.conversion_ratio) : '' } : line));
     } else {
       setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: '', description: text } : line));
@@ -208,6 +211,12 @@ export default function PurchaseOrdersPage() {
 
     const validLines = lines.filter(l => (l.type === 'product' ? (l.item_id && l.qty && l.unit_price) : l.description));
     if (!validLines.length) { setError('Minimal 1 item/bahan harus diisi dengan lengkap.'); return; }
+
+    const invalidQtyOrPrice = validLines.some(l => l.type === 'product' && (Number(l.qty) <= 0 || Number(l.unit_price) < 0));
+    if (invalidQtyOrPrice) {
+      setError('Kuantitas (Qty) produk harus lebih dari 0 dan Harga Satuan tidak boleh minus.');
+      return;
+    }
 
     setSaving(true); setError('');
     try {
@@ -296,7 +305,7 @@ export default function PurchaseOrdersPage() {
     if (status === 'PURCHASE_ORDER') setLoadingLabel('Mengkonfirmasi Order...');
     else if (status === 'DIBATALKAN') setLoadingLabel('Membatalkan Order...');
     else setLoadingLabel('Memproses...');
-    
+
     setSaving(true);
     try {
       await fetch(`/api/purchase-orders/${poId}`, {
@@ -804,10 +813,59 @@ export default function PurchaseOrdersPage() {
 
                   {activeTab === 'Bahan / Produk' && (
                     <div>
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
                         <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>+ Produk</button>
-                        <button type="button" className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => autoFillLowStock()}>+ Auto-fill Stok</button>
+                        <button type="button" className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => autoFillLowStock()}>+ Isi Otomatis Stok</button>
                         <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addNote}>+ Catatan</button>
+
+                        <div style={{ width: '1px', height: '24px', background: '#cbd5e1', margin: '0 8px' }}></div>
+
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <input
+                            type="number"
+                            className="input num"
+                            style={{ width: '50px', padding: '4px 8px', borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0, fontSize: 13, height: '32px' }}
+                            value={bulkAddQty}
+                            onChange={(e) => setBulkAddQty(e.target.value)}
+                            placeholder="Qty"
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            style={{ borderRadius: 0, height: '32px', fontWeight: 600, background: '#fff', color: '#ef4444', border: '1px solid #ef4444', borderRight: 'none', padding: '0 16px' }}
+                            onClick={() => {
+                              const val = Number(bulkAddQty) || 0;
+                              if (val === 0) return;
+                              setLines(l => l.map(line => {
+                                if (line.type === 'product' && line.item_id) {
+                                  const currentQty = Number(line.qty) || 0;
+                                  return { ...line, qty: String(Math.max(0, currentQty - val)) };
+                                }
+                                return line;
+                              }));
+                            }}
+                          >
+                            -
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, height: '32px', fontWeight: 600, background: 'var(--primary)', color: '#fff', border: '1px solid var(--primary)', padding: '0 16px' }}
+                            onClick={() => {
+                              const val = Number(bulkAddQty) || 0;
+                              if (val === 0) return;
+                              setLines(l => l.map(line => {
+                                if (line.type === 'product' && line.item_id) {
+                                  const currentQty = Number(line.qty) || 0;
+                                  return { ...line, qty: String(currentQty + val) };
+                                }
+                                return line;
+                              }));
+                            }}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                       <div className="table-responsive" style={{ overflow: 'visible' }}>
                         <table style={{ margin: 0, width: '100%' }}>
