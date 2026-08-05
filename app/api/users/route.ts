@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUsers, createUser } from '@/lib/queries/auth';
+import { getSession } from '@/lib/auth';
 
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
     const users = await getUsers();
     return NextResponse.json({ success: true, data: users });
   } catch (err) {
@@ -12,6 +18,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { name, email, role, outlet_id, password } = body;
     

@@ -75,22 +75,20 @@ export async function getPurchaseOrderById(id: number) {
   return { ...po, items: itemsRes.rows };
 }
 
+// BUG-08 Fix: Gunakan bounded retry (max 10 percobaan) bukan infinite while loop.
 export async function generatePoNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  let poNumber = '';
-  let isUnique = false;
-  
-  while (!isUnique) {
-    const random4 = Math.floor(1000 + Math.random() * 9000); // 1000 to 9999
-    poNumber = `PO-${year}${random4}`;
-    
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const random4 = Math.floor(1000 + Math.random() * 9000);
+    const poNumber = `PO-${year}${random4}`;
+
     const res = await query(`SELECT id FROM purchase_orders WHERE po_number = $1`, [poNumber]);
-    if (res.rows.length === 0) {
-      isUnique = true;
-    }
+    if (res.rows.length === 0) return poNumber;
   }
-  
-  return poNumber;
+
+  // Fallback: gunakan timestamp unik
+  return `PO-${year}${Date.now().toString().slice(-6)}`;
 }
 
 export async function createPurchaseOrder(data: {
@@ -209,6 +207,13 @@ export async function createPurchaseOrder(data: {
 
 export async function updatePurchaseOrder(id: number, data: Parameters<typeof createPurchaseOrder>[0]) {
   return withTransaction(async (client) => {
+    // Pastikan status PO masih RFQ (draft)
+    const { rows: checkRows } = await client.query(`SELECT status FROM purchase_orders WHERE id = $1`, [id]);
+    if (checkRows.length === 0) throw new Error('PO tidak ditemukan');
+    if (checkRows[0].status !== 'RFQ') {
+      throw new Error('Data PO tidak dapat diubah karena statusnya sudah ' + checkRows[0].status);
+    }
+
     const poRes = await client.query(
       `UPDATE purchase_orders SET vendor_id = $1, vendor_reference = $2, order_date = $3, order_deadline = $4,
          confirmation_required = $5, confirmation_days_before = $6, destination_outlet_id = $7, deliver_to = $8, payment_terms = $9, incoterm = $10,
@@ -226,23 +231,56 @@ export async function updatePurchaseOrder(id: number, data: Parameters<typeof cr
 
     let subtotal = 0;
     let totalTax = 0;
-    for (let idx = 0; idx < data.items.length; idx++) {
-      const item = data.items[idx];
-      const q = item.qty ?? null;
-      const up = item.unit_price ?? null;
-      const d = item.disc_percent ?? 0;
-      const t = item.tax_percent ?? 0;
-      const lineSubtotal = ((q || 0) * (up || 0)) * (1 - d / 100);
-      
-      subtotal += lineSubtotal;
-      totalTax += lineSubtotal * (t / 100);
+
+    if (data.items.length > 0) {
+      const poIds: number[] = [];
+      const lineTypes: string[] = [];
+      const itemIds: (number | null)[] = [];
+      const descriptions: (string | null)[] = [];
+      const qtys: (number | null)[] = [];
+      const packageQtys: (number | null)[] = [];
+      const packageUnits: (string | null)[] = [];
+      const purchaseUnits: (string | null)[] = [];
+      const packageInnerSizes: (number | null)[] = [];
+      const conversionRatios: (number | null)[] = [];
+      const unitPrices: (number | null)[] = [];
+      const taxPercents: number[] = [];
+      const discountPercents: number[] = [];
+      const subtotals: number[] = [];
+      const sortOrders: number[] = [];
+
+      for (let idx = 0; idx < data.items.length; idx++) {
+        const item = data.items[idx];
+        const q = item.qty ?? null;
+        const up = item.unit_price ?? null;
+        const d = item.disc_percent ?? 0;
+        const t = item.tax_percent ?? 0;
+        const lineSubtotal = ((q || 0) * (up || 0)) * (1 - d / 100);
+        
+        subtotal += lineSubtotal;
+        totalTax += lineSubtotal * (t / 100);
+
+        poIds.push(id);
+        lineTypes.push(item.line_type);
+        itemIds.push(item.item_id ?? null);
+        descriptions.push(item.description ?? null);
+        qtys.push(item.qty ?? null);
+        packageQtys.push(item.package_qty ?? null);
+        packageUnits.push(item.package_unit ?? null);
+        purchaseUnits.push(item.purchase_unit ?? null);
+        packageInnerSizes.push(item.package_inner_size ?? null);
+        conversionRatios.push(item.conversion_ratio ?? null);
+        unitPrices.push(item.unit_price ?? null);
+        taxPercents.push(item.tax_percent ?? 0);
+        discountPercents.push(item.disc_percent ?? 0);
+        subtotals.push(lineSubtotal);
+        sortOrders.push(item.sort_order ?? idx);
+      }
 
       await client.query(
         `INSERT INTO purchase_order_items (purchase_order_id, line_type, item_id, description, qty, package_qty, package_unit, purchase_unit, package_inner_size, conversion_ratio, unit_price, tax_percent, discount_percent, subtotal, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-        [id, item.line_type, item.item_id ?? null, item.description ?? null, item.qty ?? null,
-         item.package_qty ?? null, item.package_unit ?? null, item.purchase_unit ?? null, item.package_inner_size ?? null, item.conversion_ratio ?? null, item.unit_price ?? null,
-         item.tax_percent ?? 0, item.disc_percent ?? 0, lineSubtotal, item.sort_order ?? idx]
+         SELECT * FROM UNNEST ($1::int[], $2::varchar[], $3::int[], $4::text[], $5::numeric[], $6::numeric[], $7::varchar[], $8::varchar[], $9::numeric[], $10::numeric[], $11::numeric[], $12::numeric[], $13::numeric[], $14::numeric[], $15::int[])`,
+        [poIds, lineTypes, itemIds, descriptions, qtys, packageQtys, packageUnits, purchaseUnits, packageInnerSizes, conversionRatios, unitPrices, taxPercents, discountPercents, subtotals, sortOrders]
       );
     }
 
@@ -268,6 +306,14 @@ export async function updatePurchaseOrderStatus(id: number, status: string, user
       `UPDATE purchase_orders SET status = $1, updated_at = now() WHERE id = $2 RETURNING *`,
       [status, id]
     );
+
+    if (status === 'DIBATALKAN') {
+      // Revert stock alerts if this PO was supposed to resolve them
+      await client.query(
+        `UPDATE stock_alerts SET is_resolved = FALSE, reference_po_id = NULL WHERE reference_po_id = $1`,
+        [id]
+      );
+    }
 
     if (status === 'SELESAI') {
       const { rows: items } = await client.query(
@@ -317,4 +363,32 @@ export async function updatePurchaseOrderStatus(id: number, status: string, user
 
     return result.rows[0];
   });
+}
+
+export async function getPurchaseOrderSuggestions() {
+  const result = await query(`
+    WITH item_balances AS (
+      SELECT 
+        i.id as item_id, 
+        i.name as item_name, 
+        c.name as category_name,
+        i.smallest_unit, 
+        i.minimum_threshold,
+        COALESCE((
+          SELECT ending_balance 
+          FROM inventory_logs 
+          WHERE item_id = i.id 
+          ORDER BY created_at DESC 
+          LIMIT 1
+        ), 0) as current_balance
+      FROM items i
+      LEFT JOIN categories c ON i.category_id = c.id
+      WHERE i.is_active = TRUE
+    )
+    SELECT * 
+    FROM item_balances
+    WHERE current_balance <= COALESCE(minimum_threshold, 0)
+    ORDER BY current_balance ASC, item_name ASC;
+  `);
+  return result.rows;
 }

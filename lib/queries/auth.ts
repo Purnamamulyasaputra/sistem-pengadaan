@@ -44,6 +44,13 @@ export async function getUsers() {
   return result.rows;
 }
 
+export async function getDemoUsers() {
+  const result = await query(
+    'SELECT name, email, role, outlet_id FROM users ORDER BY id ASC'
+  );
+  return result.rows;
+}
+
 export async function createUser(data: {
   name: string;
   email: string;

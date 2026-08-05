@@ -813,6 +813,7 @@ export default function PurchaseOrdersPage() {
 
                   {activeTab === 'Bahan / Produk' && (
                     <div>
+                      <fieldset disabled={draftPO ? draftPO.status !== 'RFQ' : false} style={{ border: 'none', padding: 0, margin: 0 }}>
                       <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
                         <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={addLine}>+ Produk</button>
                         <button type="button" className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => autoFillLowStock()}>+ Isi Otomatis Stok</button>
@@ -1001,11 +1002,13 @@ export default function PurchaseOrdersPage() {
                           </div>
                         </div>
                       </div>
+                      </fieldset>
                     </div>
                   )}
 
                   {activeTab === 'Info Lainnya' && (
                     <div className="form-grid" style={{ columnGap: 60 }}>
+                      <fieldset disabled={draftPO ? draftPO.status !== 'RFQ' : false} style={{ border: 'none', padding: 0, margin: 0, display: 'contents' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                           <div style={{ width: 140, fontWeight: 600, fontSize: 13, color: '#475569' }}>Admin Pembelian</div>
@@ -1034,6 +1037,7 @@ export default function PurchaseOrdersPage() {
                           </select>
                         </div>
                       </div>
+                      </fieldset>
                     </div>
                   )}
                 </div>

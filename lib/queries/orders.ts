@@ -65,6 +65,19 @@ export async function getOrders(opts?: { outletId?: number; status?: string; sta
   return result.rows;
 }
 
+export async function getActiveRequestedItemIds(outletId: number) {
+  const result = await query(
+    `SELECT DISTINCT oi.item_id 
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     WHERE o.outlet_id = $1 
+       AND o.status NOT IN ('COMPLETED', 'CANCELLED', 'DIBATALKAN')
+       AND oi.item_status NOT IN ('SELESAI', 'DIBATALKAN')`,
+    [outletId]
+  );
+  return result.rows.map(r => Number(r.item_id));
+}
+
 export async function getPendingOrderCount() {
   // Valid orders.status values: PENDING, PROCESSING, SHIPPED, COMPLETED
   // PROSES_BELANJA is only valid for order_items.item_status, NOT orders.status
@@ -122,7 +135,7 @@ export async function createOrder(data: {
       const itemDataRes = await client.query(`
         SELECT i.id, i.conversion_ratio, 
           COALESCE((
-            SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1
+            SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC, id DESC LIMIT 1
           ), 0) as stock
         FROM items i WHERE i.id = ANY($1::int[])
       `, [itemIds]);
@@ -146,7 +159,7 @@ export async function createOrder(data: {
       const approvedSmallestQtys: number[] = [];
 
       for (const item of data.items) {
-        const { ratio, stock } = itemDataMap.get(item.item_id) || { ratio: 1, stock: 0 };
+        const { ratio, stock } = itemDataMap.get(Number(item.item_id)) || { ratio: 1, stock: 0 };
         const smallest_unit_qty = item.qty_request * ratio;
 
         let fulfillment_status = 'TIDAK';
@@ -158,7 +171,7 @@ export async function createOrder(data: {
         }
 
         orderIds.push(order.id);
-        _itemIds.push(item.item_id);
+        _itemIds.push(Number(item.item_id));
         qtyRequests.push(Math.max(0.001, item.qty_request));
         additionalNotes.push(item.additional_notes ?? null);
         smallestUnitQtys.push(smallest_unit_qty);
@@ -189,23 +202,32 @@ export async function getOrderRecap(opts?: { status?: string; outletId?: number 
   if (opts?.outletId) { conditions.push(`o.outlet_id = $${i++}`); params.push(opts.outletId); }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+  // WARN-04 Fix: Ganti correlated subquery per-baris dengan LEFT JOIN ke subquery
+  // yang menghitung ending_balance terbaru sekali untuk semua item (DISTINCT ON).
   const result = await query(
     `SELECT o.id AS order_id, o.outlet_id, outlet.name AS outlet_name, o.order_date, o.delivery_date, o.status,
             oi.id AS order_item_id, oi.item_id, i.name AS item_name, i.barcode, i.purchase_unit, i.smallest_unit, i.conversion_ratio,
             oi.qty_request, oi.qty_approved, oi.smallest_unit_qty, oi.approved_smallest_qty, oi.additional_notes, oi.center_notes, oi.fulfillment_status, oi.item_status, oi.distribution_price,
             c.name AS category_name, i.current_average_price,
-            COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock
+            COALESCE(latest_bal.ending_balance, 0) AS current_stock
      FROM orders o
      LEFT JOIN outlets outlet ON outlet.id = o.outlet_id
      LEFT JOIN order_items oi ON oi.order_id = o.id
      LEFT JOIN items i ON i.id = oi.item_id
      LEFT JOIN categories c ON c.id = i.category_id
+     -- WARN-04 Fix: JOIN ke saldo terbaru per item (bukan correlated subquery per baris)
+     LEFT JOIN (
+       SELECT DISTINCT ON (item_id) item_id, ending_balance
+       FROM inventory_logs
+       ORDER BY item_id, created_at DESC, id DESC
+     ) latest_bal ON latest_bal.item_id = i.id
      ${where}
      ORDER BY o.created_at DESC, outlet.name, i.name`,
     params
   );
   return result.rows;
 }
+
 
 export async function updateOrderItemStatus(
   orderItemId: number,
@@ -253,11 +275,12 @@ export async function autoFulfillPendingRequests(client: PoolClient, itemId: num
     WHERE oi.item_id = $1 
       AND oi.item_status IN ('PROSES_BELANJA', 'PENDING')
       AND oi.fulfillment_status != 'SANGGUP'
-      AND o.status NOT IN ('COMPLETED', 'CANCELLED')
+      AND o.status NOT IN ('COMPLETED', 'CANCELLED', 'DIBATALKAN')
     ORDER BY oi.created_at ASC
   `, [itemId]);
 
   let availableStock = currentStock;
+  const updatedOrderIds = new Set<number>();
 
   for (const row of pendingRes.rows) {
     const neededQty = parseFloat(row.needed_qty || '0');
@@ -270,10 +293,12 @@ export async function autoFulfillPendingRequests(client: PoolClient, itemId: num
       `, [row.id]);
       
       availableStock -= neededQty;
-      
-      // Update status order induk (mungkin berubah dari PENDING menjadi PROCESSING)
-      await recalculateOrderStatus(row.order_id, client);
+      updatedOrderIds.add(row.order_id);
     }
+  }
+
+  for (const orderId of updatedOrderIds) {
+    await recalculateOrderStatus(orderId, client);
   }
 }
 
@@ -326,7 +351,7 @@ export async function getAggregatedRequestsByProduct(opts?: { status?: string; s
        SELECT ending_balance
        FROM inventory_logs
        WHERE item_id = i.id
-       ORDER BY created_at DESC
+       ORDER BY created_at DESC, id DESC
        LIMIT 1
      ) latest ON true
      WHERE ${whereClause}

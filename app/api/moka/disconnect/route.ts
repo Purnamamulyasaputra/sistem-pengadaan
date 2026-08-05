@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth';
 import { deactivateMokaAccount } from '@/lib/queries/moka';
 
 export async function POST(request: NextRequest) {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     try {
         const body = await request.json();
         const { business_id } = body;

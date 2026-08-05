@@ -1,18 +1,17 @@
-import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from '@/lib/auth';
+import { getTransactionItems } from "@/lib/queries/moka_transactions";
 
-export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     try {
         const { id } = await context.params;
 
-        const res = await query(`
-            SELECT * FROM moka_transaction_items
-            WHERE transaction_id = $1
-            ORDER BY uuid ASC
-        `, [id]);
+        const items = await getTransactionItems(id);
 
         return NextResponse.json({
-            data: res.rows
+            data: items
         });
 
     } catch (error: unknown) {

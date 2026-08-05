@@ -1,6 +1,74 @@
 import { query } from '@/lib/db';
 import type { HppMenu, HppRecipe } from './hpp';
 
+export async function getOutletMenus(outletId: number) {
+  // Get venues assigned to this outlet
+  const venues = await query('SELECT venue_id FROM outlet_venues WHERE outlet_id = $1', [outletId]);
+  if (!venues.rows || venues.rows.length === 0) {
+    return [];
+  }
+  const venueIds = venues.rows.map(r => r.venue_id);
+
+  const recipes = await query(`
+    SELECT r.id, r.name, r.yield, r.yield_unit, r.subtotal, r.total_cost, r.sale_price,
+           v.name as venue_name, mc.name as category_name
+    FROM recipes r
+    JOIN venues v ON v.id = r.venue_id
+    LEFT JOIN menus m ON m.id = r.menu_id
+    LEFT JOIN menu_categories mc ON mc.id = m.category_id
+    WHERE r.venue_id = ANY($1)
+    ORDER BY v.name ASC, r.name ASC
+  `, [venueIds]);
+
+  return recipes.rows;
+}
+
+export async function upsertOutletMenuPrice(outletId: number, menuId: number, salePrice: number) {
+  await query(`
+    INSERT INTO outlet_menu_prices (outlet_id, menu_id, sale_price)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (outlet_id, menu_id) 
+    DO UPDATE SET sale_price = EXCLUDED.sale_price
+  `, [outletId, menuId, salePrice]);
+}
+
+export async function getOutletMenuDetail(outletId: number, menuId: number) {
+  const venuesRes = await query(`SELECT venue_id FROM outlet_venues WHERE outlet_id = $1`, [outletId]);
+  const venueIds = venuesRes.rows.map(r => r.venue_id);
+  if (!venueIds.length) return null;
+
+  const menuRes = await query(`
+    SELECT 
+      m.id, m.name, m.variant, m.display_name, m.sale_price AS master_price, m.hpp,
+      COALESCE(omp.sale_price, m.sale_price) AS sale_price,
+      (omp.sale_price IS NOT NULL) AS is_overridden
+    FROM menus m
+    LEFT JOIN outlet_menu_prices omp ON omp.menu_id = m.id AND omp.outlet_id = $1
+    WHERE m.id = $2
+  `, [outletId, menuId]);
+
+  const menu = menuRes.rows[0];
+  if (!menu) return null;
+
+  const ingredientsRes = await query(`
+    SELECT 
+      ri.id, ri.quantity AS qty, ri.unit, 
+      ri.cost_per_unit, ri.extension AS cost,
+      i.name AS ingredient_name,
+      r.id AS recipe_id, r.name AS recipe_name
+    FROM recipe_ingredients ri
+    JOIN recipes r ON r.id = ri.recipe_id
+    JOIN ingredients i ON i.id = ri.ingredient_id
+    WHERE r.menu_id = $1 AND r.venue_id = ANY($2)
+    ORDER BY ri.sort_order, i.name
+  `, [menuId, venueIds]);
+
+  return {
+    menu,
+    ingredients: ingredientsRes.rows
+  };
+}
+
 export async function getOutletHppStats(outletId: number) {
   const venuesRes = await query(`SELECT venue_id FROM outlet_venues WHERE outlet_id = $1`, [outletId]);
   const venueIds = venuesRes.rows.map(r => r.venue_id);

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth';
 import { getHppIngredients, createIngredient } from '@/lib/queries/hpp';
 
 export async function GET(request: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { searchParams } = request.nextUrl;
   const search = searchParams.get('search') ?? undefined;
   const page = parseInt(searchParams.get('page') ?? '1', 10);
@@ -23,6 +27,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
   try {
     const data = await request.json();
     const ingredientId = await createIngredient(data);

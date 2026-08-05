@@ -1,25 +1,15 @@
 import { Suspense } from 'react';
-import { query } from '@/lib/db';
 import TransactionTableClient from '@/components/moka/TransactionTableClient';
+
+import { getOutlets } from '@/lib/queries/master';
 
 export const metadata = {
     title: 'Data Transaksi Moka | Sunrise Daily',
 };
 
-async function getOutlets(): Promise<{ id: string; name: string }[]> {
-    try {
-        const res = await query('SELECT id, name FROM outlets ORDER BY name ASC');
-        return res.rows.map((row) => ({
-            id: String(row.id),
-            name: String(row.name)
-        }));
-    } catch (e) {
-        return [];
-    }
-}
-
 export default async function TransactionsPage() {
-    const outlets = await getOutlets();
+    const outletsRaw = await getOutlets();
+    const outlets = outletsRaw.map(o => ({ id: String(o.id), name: o.name }));
 
     return (
         <section className="screen">

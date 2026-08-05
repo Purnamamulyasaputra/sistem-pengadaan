@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from '@/lib/auth';
 import { syncTransactions } from "@/lib/queries/moka_transactions";
 import { getAllActiveMokaTokens } from "@/lib/queries/moka";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
     try {
         const body = await req.json();
         const { start_date, end_date, outlet_id } = body;
@@ -19,9 +22,17 @@ export async function POST(req: Request) {
         const end = new Date(`${end_date}T23:59:59+07:00`);
         const untilEpoch = Math.floor(end.getTime() / 1000);
 
-        const tokens = await getAllActiveMokaTokens();
+        let tokens = await getAllActiveMokaTokens();
         if (!tokens || tokens.length === 0) {
             return NextResponse.json({ message: "No active Moka accounts connected." }, { status: 400 });
+        }
+
+        if (outlet_id) {
+            const { getOutletMokaBusinessId } = await import('@/lib/queries/master');
+            const businessId = await getOutletMokaBusinessId(outlet_id);
+            if (businessId) {
+                tokens = tokens.filter((t: any) => t.business_id === businessId);
+            }
         }
 
         let totalCount = 0;
@@ -36,7 +47,7 @@ export async function POST(req: Request) {
             if (r.status === 'fulfilled' && r.value.success) {
                 successful++;
                 if (r.value.count) totalCount += r.value.count;
-                if (r.value.itemsCount) totalItemsCount += r.value.itemsCount;
+                if (r.value.items_count) totalItemsCount += r.value.items_count;
             }
         });
 

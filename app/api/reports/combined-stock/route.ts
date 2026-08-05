@@ -1,34 +1,20 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { getCombinedStockReport } from '@/lib/queries/inventory';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     
-    let sql = `
-      SELECT 
-        i.id, i.name as item_name, c.name as category_name, i.category_id,
-        i.smallest_unit, i.purchase_unit, i.conversion_ratio, i.minimum_threshold,
-        COALESCE((SELECT ending_balance FROM inventory_logs il WHERE il.item_id = i.id ORDER BY il.created_at DESC LIMIT 1), 0)::numeric AS central_stock,
-        COALESCE((SELECT SUM(current_balance) FROM outlet_stocks os WHERE os.item_id = i.id), 0)::numeric AS outlet_stock,
-        i.current_average_price
-      FROM items i
-      LEFT JOIN categories c ON c.id = i.category_id
-      WHERE i.is_active = TRUE
-    `;
+    const rows = await getCombinedStockReport(search);
     
-    const params: any[] = [];
-    if (search) {
-      params.push(`%${search}%`);
-      sql += ` AND i.name ILIKE $1`;
-    }
-    
-    sql += ` ORDER BY i.name ASC`;
-    
-    const res = await query(sql, params);
-    
-    return NextResponse.json({ success: true, data: res.rows });
+    return NextResponse.json({ success: true, data: rows });
   } catch (error: any) {
     console.error('Error fetching combined stock:', error);
     return NextResponse.json({ success: false, message: 'Gagal mengambil data report stok gabungan' }, { status: 500 });

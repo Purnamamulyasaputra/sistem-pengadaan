@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { query, withTransaction } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getMenuDetail, updateMenuPrice, deleteMenu } from '@/lib/queries/hpp';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,38 +12,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const { id } = await params;
     const menuId = parseInt(id, 10);
 
-    // 1. Get menu detail
-    const menuRes = await query(`
-      SELECT 
-        m.id, m.name, m.variant, m.display_name, m.sale_price, m.hpp
-      FROM menus m
-      WHERE m.id = $1
-    `, [menuId]);
+    const result = await getMenuDetail(menuId);
+    if (!result) return NextResponse.json({ error: 'Menu not found' }, { status: 404 });
 
-    const menu = menuRes.rows[0];
-    if (!menu) return NextResponse.json({ error: 'Menu not found' }, { status: 404 });
-
-    // 2. Get ingredients used in this menu's recipes across all venues
-    const ingredientsRes = await query(`
-      SELECT 
-        ri.id, ri.quantity AS qty, 
-        COALESCE(it.smallest_unit, i.default_unit, ri.unit) AS unit, 
-        COALESCE(it.current_average_price, i.standard_cost_per_unit, ri.cost_per_unit) AS cost_per_unit, 
-        (ri.quantity * COALESCE(it.current_average_price, i.standard_cost_per_unit, ri.cost_per_unit)) AS cost,
-        COALESCE(it.name, i.name) AS ingredient_name,
-        r.venue_id, r.id AS recipe_id, r.name AS recipe_name
-      FROM recipe_ingredients ri
-      JOIN recipes r ON r.id = ri.recipe_id
-      JOIN ingredients i ON i.id = ri.ingredient_id
-      LEFT JOIN items it ON it.id = i.item_id
-      WHERE r.menu_id = $1
-      ORDER BY ri.sort_order, i.name
-    `, [menuId]);
-
-    return NextResponse.json({
-      menu,
-      ingredients: ingredientsRes.rows
-    });
+    return NextResponse.json(result);
   } catch (err: unknown) {
     console.error('Error fetching menu detail:', err);
     return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
@@ -65,11 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Invalid sale_price' }, { status: 400 });
     }
 
-    await query(`
-      UPDATE menus
-      SET sale_price = $1, updated_at = NOW()
-      WHERE id = $2
-    `, [sale_price, menuId]);
+    await updateMenuPrice(menuId, sale_price);
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
@@ -88,10 +56,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const { id } = await params;
     const menuId = parseInt(id, 10);
 
-    await withTransaction(async (client) => {
-      await client.query('DELETE FROM recipes WHERE menu_id = $1', [menuId]);
-      await client.query('DELETE FROM menus WHERE id = $1', [menuId]);
-    });
+    await deleteMenu(menuId);
+
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     console.error('Error deleting menu:', err);

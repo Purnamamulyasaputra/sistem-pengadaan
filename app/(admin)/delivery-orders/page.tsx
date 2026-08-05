@@ -127,7 +127,7 @@ export default function DeliveryOrdersPage() {
                   { label: 'Draft', value: 'DRAFT' },
                   { label: 'Dikirim', value: 'DIKIRIM' },
                   { label: 'Diterima', value: 'DITERIMA' },
-                  { label: 'Dibatalkan', value: 'CANCELED' }
+                  { label: 'Dibatalkan', value: 'DIBATALKAN' }
                 ]}
               />
             </div>
@@ -171,8 +171,8 @@ export default function DeliveryOrdersPage() {
                     <td className="font-bold">{n.outlet_name}</td>
                     <td>{new Date(n.delivery_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
                     <td className="center">
-                      <Badge variant={n.status === 'DITERIMA' ? 'green' : n.status === 'DIKIRIM' ? 'blue' : n.status === 'CANCELED' ? 'red' : 'gray'}>
-                        {n.status === 'CANCELED' ? 'Dibatalkan' : 
+                      <Badge variant={n.status === 'DITERIMA' ? 'green' : n.status === 'DIKIRIM' ? 'blue' : n.status === 'DIBATALKAN' ? 'red' : 'gray'}>
+                        {n.status === 'DIBATALKAN' ? 'Dibatalkan' : 
                          n.status === 'DITERIMA' ? 'Diterima' : 
                          n.status === 'DIKIRIM' ? 'Dikirim' : 
                          n.status === 'DRAFT' ? 'Draft' : n.status}

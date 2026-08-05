@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { upsertOutletMenuPrice } from '@/lib/queries/outlet-menus';
 import { getSession } from '@/lib/auth';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -19,12 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     // Upsert the price override
-    await query(`
-      INSERT INTO outlet_menu_prices (outlet_id, menu_id, sale_price)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (outlet_id, menu_id) 
-      DO UPDATE SET sale_price = EXCLUDED.sale_price
-    `, [session.outletId, menuId, salePrice]);
+    await upsertOutletMenuPrice(session.outletId, menuId, salePrice);
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

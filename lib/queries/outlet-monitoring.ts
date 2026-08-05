@@ -84,7 +84,7 @@ export async function getOutletMonitoringData() {
         o.id, 
         o.name,
         (SELECT MAX(created_at) FROM orders WHERE outlet_id = o.id) AS last_request_date,
-        (SELECT COALESCE(MAX(delivery_date), MAX(created_at)::date) FROM delivery_notes WHERE outlet_id = o.id AND status != 'CANCELLED') AS last_do_date,
+        (SELECT COALESCE(MAX(delivery_date), MAX(created_at)::date) FROM delivery_notes WHERE outlet_id = o.id AND status != 'DIBATALKAN') AS last_do_date,
         (SELECT MAX(period_end) FROM moka_item_sales WHERE outlet_id = o.id) AS last_sales_sync
       FROM outlets o
       WHERE o.type = 'STORE'
@@ -322,7 +322,7 @@ export async function getOutletConsumptionSinceLastRestock(outletId: number): Pr
   const doRes = await query<{ last_do_date: string | null }>(`
     SELECT MAX(delivery_date) AS last_do_date
     FROM delivery_notes
-    WHERE outlet_id = $1 AND status != 'CANCELLED'
+    WHERE outlet_id = $1 AND status != 'DIBATALKAN'
   `, [outletId]);
 
   const reqRes = await query<{ last_request_date: string | null }>(`

@@ -6,6 +6,70 @@
 import { query, withTransaction } from '@/lib/db';
 import type { PoolClient } from 'pg';
 
+export async function updateMenuPrice(id: number, price: number) {
+  const res = await query(`
+    UPDATE menus
+    SET sale_price = $1, updated_at = NOW()
+    WHERE id = $2
+  `, [price, id]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function getMenuCategories() {
+  const res = await query(`SELECT id, name FROM menu_categories ORDER BY name`);
+  return res.rows;
+}
+
+export async function createMenu(categoryId: number, name: string, variant: string | null, salePrice: number, displayName: string) {
+  const res = await query(
+    `INSERT INTO menus (category_id, name, variant, sale_price, display_name)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id`,
+    [categoryId, name, variant, salePrice, displayName]
+  );
+  return res.rows[0];
+}
+
+export async function deleteMenu(id: number) {
+  await withTransaction(async (client) => {
+    await client.query('DELETE FROM recipes WHERE menu_id = $1', [id]);
+    await client.query('DELETE FROM menus WHERE id = $1', [id]);
+  });
+  return true;
+}
+
+export async function getMenuDetail(menuId: number) {
+  const menuRes = await query(`
+    SELECT 
+      m.id, m.category_id, m.name, m.variant, m.display_name, m.sale_price, m.hpp
+    FROM menus m
+    WHERE m.id = $1
+  `, [menuId]);
+
+  if (menuRes.rowCount === 0) return null;
+
+  const ingredientsRes = await query(`
+    SELECT 
+      ri.id, ri.quantity AS qty, 
+      COALESCE(it.smallest_unit, i.default_unit, ri.unit) AS unit, 
+      COALESCE(it.current_average_price, i.standard_cost_per_unit, ri.cost_per_unit) AS cost_per_unit, 
+      (ri.quantity * COALESCE(it.current_average_price, i.standard_cost_per_unit, ri.cost_per_unit)) AS cost,
+      COALESCE(it.name, i.name) AS ingredient_name,
+      r.venue_id, r.id AS recipe_id, r.name AS recipe_name
+    FROM recipe_ingredients ri
+    JOIN recipes r ON r.id = ri.recipe_id
+    JOIN ingredients i ON i.id = ri.ingredient_id
+    LEFT JOIN items it ON it.id = i.item_id
+    WHERE r.menu_id = $1
+    ORDER BY ri.sort_order, i.name
+  `, [menuId]);
+
+  return {
+    menu: menuRes.rows[0],
+    ingredients: ingredientsRes.rows
+  };
+}
+
 // ─────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────

@@ -311,8 +311,8 @@ export default function DeliveryOrderDetailPage({ params }: { params: Promise<{ 
             <div>
               <h3 style={{ fontSize: 24 }}>{dn.delivery_note_number}</h3>
               <div style={{ marginTop: 8, display: 'flex', gap: 12, alignItems: 'center' }}>
-                <Badge variant={dn.status === 'DITERIMA' ? 'green' : dn.status === 'DIKIRIM' ? 'blue' : dn.status === 'CANCELED' ? 'red' : 'gray'}>
-                  {dn.status === 'CANCELED' ? 'Dibatalkan' :
+                <Badge variant={dn.status === 'DITERIMA' ? 'green' : dn.status === 'DIKIRIM' ? 'blue' : dn.status === 'DIBATALKAN' ? 'red' : 'gray'}>
+                  {dn.status === 'DIBATALKAN' ? 'Dibatalkan' :
                     dn.status === 'DITERIMA' ? 'Diterima' :
                       dn.status === 'DIKIRIM' ? 'Dikirim' :
                         dn.status === 'DRAFT' ? 'Draft' : dn.status}

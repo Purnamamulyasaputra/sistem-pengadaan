@@ -5,6 +5,26 @@ export async function getOutlets() {
   const result = await query(`SELECT * FROM outlets ORDER BY type, name`);
   return result.rows;
 }
+export async function getOutletsWithBusiness() {
+  const result = await query(`
+    SELECT o.id, o.name as outlet_name, 'Sunrise Daily' as business_name
+    FROM outlets o
+    ORDER BY o.name
+  `);
+  
+  const grouped: Record<string, { id: number; name: string }[]> = {};
+  for (const row of result.rows) {
+      const bName = row.business_name || 'Unknown Business';
+      if (!grouped[bName]) grouped[bName] = [];
+      grouped[bName].push({ id: row.id, name: row.outlet_name });
+  }
+  return grouped;
+}
+
+export async function getActiveStoreOutlets() {
+  const result = await query(`SELECT id FROM outlets WHERE type = 'STORE' AND is_active = TRUE`);
+  return result.rows;
+}
 
 export async function createOutlet(data: { name: string; type: string; address?: string; street?: string; street2?: string; city?: string; state?: string; zip?: string; country?: string; pic_name?: string; email?: string; phone?: string; map_location?: string; is_active?: boolean }) {
   const result = await query(
@@ -18,9 +38,19 @@ export async function updateOutlet(id: number, data: Record<string, unknown>) {
   const fields = Object.keys(data).map((f, i) => `${f} = $${i + 2}`).join(', ');
   const values = Object.values(data);
   const result = await query(
-    `UPDATE outlets SET ${fields} WHERE id = $1 RETURNING *`, [id, ...values]
+    `UPDATE outlets SET ${fields}, updated_at = now() WHERE id = $1 RETURNING *`,
+    [id, ...values]
   );
-  return result.rows[0] ?? null;
+  return result.rows[0];
+}
+
+export async function getOutletMokaBusinessId(outletId: number) {
+  const result = await query('SELECT moka_business_id FROM outlets WHERE id = $1', [outletId]);
+  return result.rows[0]?.moka_business_id ?? null;
+}
+
+export async function updateOutletMokaBusinessId(outletId: number, businessId: string) {
+  await query('UPDATE outlets SET moka_business_id = $1 WHERE id = $2', [businessId, outletId]);
 }
 
 export async function deleteOutlet(id: number) {

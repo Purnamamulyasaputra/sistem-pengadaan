@@ -124,9 +124,98 @@ export async function syncTransactions(token: { access_token: string; refresh_to
             }
         }
 
-        return { success: true, count: totalTrxSynced, itemsCount: totalItemsSynced };
+        return { success: true, count: totalTrxSynced, items_count: totalItemsSynced };
     } catch (error: unknown) {
         console.error("Error syncing transactions:", error);
         return { success: false, message: error instanceof Error ? error.message : String(error) };
     }
 }
+
+export async function getTransactionItems(transactionId: string) {
+    const res = await query(`
+        SELECT * FROM moka_transaction_items
+        WHERE transaction_id = $1
+        ORDER BY uuid ASC
+    `, [transactionId]);
+    return res.rows;
+}
+
+export async function getTransactions(
+    outletId: string | null,
+    startDate: string | null,
+    endDate: string | null,
+    search: string | null,
+    page: number,
+    limit: number
+) {
+    const offset = (page - 1) * limit;
+
+    let queryStr = `
+        SELECT t.*, o.name as outlet_name 
+        FROM moka_transactions t
+        LEFT JOIN outlets o ON t.outlet_id = o.id
+        WHERE 1=1
+    `;
+    let summaryQueryStr = `
+        SELECT 
+            COALESCE(SUM(t.total_collected), 0) AS total_revenue,
+            COUNT(t.id) AS total_count,
+            COALESCE(SUM(CASE WHEN t.is_refunded = true THEN 1 ELSE 0 END), 0) AS total_refunded,
+            COALESCE(SUM(CASE WHEN LOWER(t.payment_type) LIKE '%cash%' OR LOWER(t.payment_type_label) LIKE '%cash%' THEN 1 ELSE 0 END), 0) AS cash_count
+        FROM moka_transactions t
+        LEFT JOIN outlets o ON t.outlet_id = o.id
+        WHERE 1=1
+    `;
+    
+    const params: unknown[] = [];
+    let paramCount = 1;
+
+    if (outletId) {
+        queryStr += ` AND t.outlet_id = $${paramCount}`;
+        summaryQueryStr += ` AND t.outlet_id = $${paramCount}`;
+        params.push(outletId);
+        paramCount++;
+    }
+
+    if (startDate && endDate) {
+        queryStr += ` AND t.created_at >= $${paramCount} AND t.created_at < ($${paramCount + 1}::date + interval '1 day')`;
+        summaryQueryStr += ` AND t.created_at >= $${paramCount} AND t.created_at < ($${paramCount + 1}::date + interval '1 day')`;
+        params.push(startDate);
+        params.push(endDate);
+        paramCount += 2;
+    }
+
+    if (search) {
+        queryStr += ` AND (t.payment_no ILIKE $${paramCount} OR t.collected_by ILIKE $${paramCount})`;
+        summaryQueryStr += ` AND (t.payment_no ILIKE $${paramCount} OR t.collected_by ILIKE $${paramCount})`;
+        params.push(`%${search}%`);
+        paramCount++;
+    }
+
+    queryStr += ` ORDER BY t.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    const queryParams = [...params, limit, offset];
+
+    const [dataRes, summaryRes] = await Promise.all([
+        query(queryStr, queryParams),
+        query(summaryQueryStr, params)
+    ]);
+
+    const summary = summaryRes.rows[0] || {};
+
+    return {
+        data: dataRes.rows,
+        total: parseInt(summary.total_count || '0'),
+        summary: {
+            totalRevenue: parseFloat(summary.total_revenue || '0'),
+            totalCount: parseInt(summary.total_count || '0'),
+            totalRefunded: parseInt(summary.total_refunded || '0'),
+            cashCount: parseInt(summary.cash_count || '0')
+        }
+    };
+}
+
+export async function getLastSyncTime(outletId: number) {
+    const syncRes = await query(`SELECT MAX(created_at) as last_sync FROM moka_transactions WHERE outlet_id = $1`, [outletId]);
+    return syncRes.rows[0]?.last_sync || null;
+}
+

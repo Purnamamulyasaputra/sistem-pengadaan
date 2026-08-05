@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth';
 import { 
   getOutletMonitoringData, 
   getOutletConsumptionSinceLastRestock,
@@ -8,6 +9,10 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN_PUSAT') {
+    return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
+  }
   try {
     const data = await getOutletMonitoringData();
 

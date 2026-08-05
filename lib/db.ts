@@ -12,11 +12,13 @@ export const pool =
   globalForPg.pgPool ??
   new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 3,                          // Neon free tier: max 5, keep at 3 to leave headroom
-    ssl: { rejectUnauthorized: false },
-    idleTimeoutMillis: 30000,        // Neon sering disconnect setelah idle — beri waktu lebih
-    connectionTimeoutMillis: 15000,  // Neon cold start bisa sampai ~10s; 15s memberi ruang aman
+    max: 5,                          // Dinaikkan dari 3→5 untuk mendukung 10 user concurrent.
+    // SSL dikontrol penuh oleh parameter sslmode=verify-full di DATABASE_URL
+    // Jangan set ssl:{} secara manual agar tidak konflik dengan channel_binding=require
+    idleTimeoutMillis: 30000,        // Neon sering disconnect setelah idle
+    connectionTimeoutMillis: 30000,  // Neon cold start bisa sampai ~20s; 30s memberi ruang aman
     keepAlive: true,                 // Cegah koneksi idle di-drop oleh firewall/proxy Neon
+    keepAliveInitialDelayMillis: 10000,
   });
 
 pool.on('error', (err) => {
@@ -27,30 +29,43 @@ pool.on('error', (err) => {
 globalForPg.pgPool = pool;
 
 // query() helper — strictly parameterized, no string interpolation allowed
-// Includes one automatic retry for transient Neon "connection terminated" / cold-start errors
+// Includes exponential-backoff retry for transient Neon cold-start / idle eviction errors
+const TRANSIENT_ERRORS = [
+  'Connection terminated',
+  'connection timeout',
+  'timeout exceeded',   // Neon cold-start: "timeout exceeded when trying to connect"
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'connect ETIMEDOUT',
+  'end called on pool',
+];
+
+// Retry delays (ms): 1s → 3s → 5s (Neon cold start bisa butuh hingga 20 detik)
+const RETRY_DELAYS = [1000, 3000, 5000];
+
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[]
 ): Promise<QueryResult<T>> {
-  try {
-    return await pool.query<T>(text, params);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : '';
-    // Retry sekali untuk error koneksi transien (Neon cold start / idle eviction / timeout)
-    if (
-      msg.includes('Connection terminated') ||
-      msg.includes('connection timeout') ||
-      msg.includes('timeout exceeded') ||       // Neon cold-start: "timeout exceeded when trying to connect"
-      msg.includes('ECONNRESET') ||
-      msg.includes('ECONNREFUSED') ||
-      msg.includes('connect ETIMEDOUT')
-    ) {
-      console.warn('[db] Retrying query after transient connection error:', msg);
-      await new Promise(r => setTimeout(r, 500)); // pause lebih lama sebelum retry agar Neon sempat warm-up
-      return pool.query<T>(text, params);
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+    try {
+      return await pool.query<T>(text, params);
+    } catch (err: unknown) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : '';
+      const isTransient = TRANSIENT_ERRORS.some(e => msg.includes(e));
+
+      if (isTransient && attempt < RETRY_DELAYS.length) {
+        const delay = RETRY_DELAYS[attempt];
+        console.warn(`[db] Transient connection error (attempt ${attempt + 1}/${RETRY_DELAYS.length}), retrying in ${delay}ms:`, msg);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
+  throw lastErr;
 }
 
 export async function withTransaction<T>(

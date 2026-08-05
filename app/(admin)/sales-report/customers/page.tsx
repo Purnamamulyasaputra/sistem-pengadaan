@@ -1,27 +1,10 @@
 import { Suspense } from 'react';
 import CustomerTableClient from '@/components/moka/CustomerTableClient';
-import { query } from '@/lib/db';
+import { getOutletsWithBusiness } from '@/lib/queries/master';
 
 export const metadata = {
     title: 'Data Pelanggan Moka | Sunrise Daily',
 };
-
-async function getOutletsWithBusiness() {
-    const res = await query(`
-        SELECT o.id, o.name as outlet_name, 'Sunrise Daily' as business_name
-        FROM outlets o
-        ORDER BY o.name
-    `);
-    
-    // Group outlets by business
-    const grouped: Record<string, { id: number; name: string }[]> = {};
-    for (const row of res.rows) {
-        const bName = row.business_name || 'Unknown Business';
-        if (!grouped[bName]) grouped[bName] = [];
-        grouped[bName].push({ id: row.id, name: row.outlet_name });
-    }
-    return grouped;
-}
 
 export default async function CustomersPage(props: { searchParams: Promise<{ outlet_id?: string }> }) {
     const searchParams = await props.searchParams;

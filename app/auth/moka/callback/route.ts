@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveMokaToken } from '@/lib/queries/moka';
-import { query } from '@/lib/db';
+import { saveMokaToken, getMokaOauthState, deleteMokaOauthState } from '@/lib/queries/moka';
 
 // Force Turbopack recompile for Multi-Account Private App support
 export async function GET(request: NextRequest) {
@@ -22,19 +21,20 @@ export async function GET(request: NextRequest) {
 
     try {
         // Fetch credentials from DB based on the state token
-        const stateRes = await query(`SELECT client_id, client_secret FROM moka_oauth_states WHERE state = $1`, [state]);
-        if (stateRes.rows.length === 0) {
+        const stateRes = await getMokaOauthState(state);
+        if (!stateRes) {
             console.error('State token not found or expired:', state);
             return NextResponse.redirect(new URL('/settings/moka?error=missing_credentials', request.url));
         }
 
-        clientId = stateRes.rows[0].client_id;
-        clientSecret = stateRes.rows[0].client_secret;
+        clientId = stateRes.client_id;
+        clientSecret = stateRes.client_secret;
 
         // Delete state immediately to prevent reuse (one-time use only)
-        await query(`DELETE FROM moka_oauth_states WHERE state = $1`, [state]);
+        await deleteMokaOauthState(state);
     } catch (dbError) {
         console.error('Error fetching state from DB:', dbError);
+
         return NextResponse.redirect(new URL('/settings/moka?error=db_error', request.url));
     }
 

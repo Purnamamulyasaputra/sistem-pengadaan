@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getProductSalesMatrix } from '@/lib/queries/sales-transactions';
 import { getOutlets } from '@/lib/queries/master';
-import { query } from '@/lib/db';
+import { getMenuCategories } from '@/lib/queries/hpp';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
@@ -18,7 +24,7 @@ export async function GET(request: Request) {
     const [matrix, outlets, categoriesRes] = await Promise.all([
       getProductSalesMatrix(dateFrom, dateTo, categoryId, search),
       getOutlets(),
-      query(`SELECT id, name FROM menu_categories ORDER BY name`),
+      getMenuCategories(),
     ]);
 
     // Format the columns based on outlets
@@ -31,7 +37,7 @@ export async function GET(request: Request) {
       data: {
         matrix,
         outletColumns,
-        categories: categoriesRes.rows,
+        categories: categoriesRes,
       },
     });
   } catch (error: unknown) {

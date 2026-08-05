@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { query } from '@/lib/db';
 import { getAllActiveMokaTokens } from '@/lib/queries/moka';
+import { getOutletMokaBusinessId, updateOutletMokaBusinessId } from '@/lib/queries/master';
 import { syncTransactions } from '@/lib/queries/moka_transactions';
 import { deductOutletStockFromSales } from '@/lib/queries/outlet-inventory';
 
@@ -33,17 +33,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Find the outlet's business_id
-    const outletRes = await query('SELECT moka_business_id FROM outlets WHERE id = $1', [outletId]);
-    if (outletRes.rows.length === 0) {
-      return NextResponse.json({ success: false, message: 'Outlet tidak ditemukan' }, { status: 404 });
-    }
-    let businessId = outletRes.rows[0].moka_business_id;
-
+    let businessId = await getOutletMokaBusinessId(outletId);
+    
     // Auto-fallback: Jika moka_business_id NULL dan tepat ada 1 token Moka aktif di sistem, hubungkan otomatis
     if (!businessId && tokens.length === 1 && tokens[0].business_id) {
       businessId = tokens[0].business_id;
-      await query('UPDATE outlets SET moka_business_id = $1 WHERE id = $2', [businessId, outletId]);
+      await updateOutletMokaBusinessId(outletId, businessId);
     }
+
 
     if (!businessId) {
       return NextResponse.json({ success: false, message: 'Outlet belum terhubung dengan Moka Business ID. Silakan hubungkan outlet di menu Pengaturan Moka.' }, { status: 400 });

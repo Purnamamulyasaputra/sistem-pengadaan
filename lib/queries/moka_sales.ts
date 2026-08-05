@@ -1,6 +1,38 @@
 import { fetchMokaAPIWithToken } from '@/lib/moka/api';
 import { query } from '@/lib/db';
 
+export async function getMokaItemSalesReport(startDate: string, endDate: string, outletId?: string | number) {
+    let salesQuery = `
+        SELECT name, sku, category_name, SUM(item_sold) as item_sold, 
+               SUM(gross_sales) as gross_sales, SUM(net_sales) as net_sales, 
+               SUM(discount) as discount, SUM(refund) as refund, SUM(cogs) as cogs
+        FROM moka_item_sales
+        WHERE period_start >= $1 AND period_end <= $2
+    `;
+    let salesParams: unknown[] = [startDate, endDate];
+    
+    if (outletId) {
+        salesQuery += ` AND outlet_id = $3`;
+        salesParams.push(outletId);
+    }
+    
+    salesQuery += ` GROUP BY name, sku, category_name ORDER BY net_sales DESC`;
+    
+    const salesRes = await query(salesQuery, salesParams);
+    return salesRes.rows.map(row => ({
+        name: String(row.name || ''),
+        sku: row.sku ? String(row.sku) : null,
+        category_name: String(row.category_name || ''),
+        item_sold: Number(row.item_sold) || 0,
+        gross_sales: Number(row.gross_sales) || 0,
+        net_sales: Number(row.net_sales) || 0,
+        discount: Number(row.discount) || 0,
+        refund: Number(row.refund) || 0,
+        cogs: Number(row.cogs) || 0,
+    }));
+}
+
+
 export async function syncSales(token: { access_token: string; refresh_token: string; expires_at?: Date | string; [key: string]: unknown }, startDateStr: string, endDateStr: string, outletId?: string) {
     try {
         if (!token) throw new Error("No token provided");
@@ -31,6 +63,9 @@ export async function syncSales(token: { access_token: string; refresh_token: st
             // Since we can't test it directly, we will try to parse it.
             const sales = salesData.data?.item_sales || salesData.data || [];
             
+            // Delete old data for this outlet ONLY AFTER we successfully fetched from Moka API
+            await query('DELETE FROM moka_item_sales WHERE period_start = $1 AND period_end = $2 AND outlet_id = $3', [startDateStr, endDateStr, out.id]);
+
             if (Array.isArray(sales)) {
                 for (const sale of sales) {
                     await query(`

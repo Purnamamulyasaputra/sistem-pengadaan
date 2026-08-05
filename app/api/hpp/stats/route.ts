@@ -6,7 +6,9 @@ import { getSession } from '@/lib/auth';
 export async function GET() {
   try {
     const session = await getSession();
-    if (session?.role === 'ADMIN_OUTLET' && session.outletId) {
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    if (session.role === 'ADMIN_OUTLET' && session.outletId) {
       const stats = await getOutletHppStats(session.outletId);
       return NextResponse.json(stats);
     }

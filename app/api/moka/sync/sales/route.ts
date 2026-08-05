@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from '@/lib/auth';
 import { syncSales } from "@/lib/queries/moka_sales";
-import { query } from "@/lib/db";
 import { getAllActiveMokaTokens } from "@/lib/queries/moka";
+import { getActiveStoreOutlets } from "@/lib/queries/master";
 import { syncTransactions } from "@/lib/queries/moka_transactions";
 import { deductOutletStockFromSales } from "@/lib/queries/outlet-inventory";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
     try {
         const body = await req.json();
         const { start_date, end_date, outlet_id } = body;
@@ -14,20 +17,20 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: "Tanggal Mulai dan Tanggal Akhir harus diisi (YYYY-MM-DD)" }, { status: 400 });
         }
 
-        const tokens = await getAllActiveMokaTokens();
+        let tokens = await getAllActiveMokaTokens();
         if (!tokens || tokens.length === 0) {
             return NextResponse.json({ message: "Tidak ada akun Moka yang terhubung." }, { status: 400 });
         }
 
-        // ── LANGKAH 1: Sync moka_item_sales (untuk tampilan cups/revenue di dashboard) ──
-        // Hapus data lama untuk periode ini sebelum insert ulang agar tidak ada duplikasi ringkasan
-        let deleteQuery = 'DELETE FROM moka_item_sales WHERE period_start = $1 AND period_end = $2';
-        let deleteParams: unknown[] = [start_date, end_date];
         if (outlet_id) {
-            deleteQuery += ' AND outlet_id = $3';
-            deleteParams.push(outlet_id);
+            const { getOutletMokaBusinessId } = await import('@/lib/queries/master');
+            const businessId = await getOutletMokaBusinessId(outlet_id);
+            if (businessId) {
+                tokens = tokens.filter((t: any) => t.business_id === businessId);
+            }
         }
-        await query(deleteQuery, deleteParams);
+
+        // ── LANGKAH 1: Sync moka_item_sales (untuk tampilan cups/revenue di dashboard) ──
 
         const salesResults = await Promise.allSettled(
             tokens.map((token: any) => syncSales(token, start_date, end_date, outlet_id))
@@ -64,9 +67,9 @@ export async function POST(req: Request) {
         // → Jika Pusat klik lebih dulu, transaksi di-set TRUE → Outlet sync tidak double.
         // → Jika keduanya klik bersamaan, DB transaction lock memastikan hanya satu yang proses.
         if (salesSynced > 0 || trxSynced > 0) {
-            const outletQuery = outlet_id
-                ? await query('SELECT id FROM outlets WHERE id = $1', [outlet_id])
-                : await query("SELECT id FROM outlets WHERE type = 'STORE' AND is_active = TRUE");
+            const activeOutlets = outlet_id
+                ? [{ id: outlet_id }]
+                : await getActiveStoreOutlets();
 
             // Jalankan deduct per tanggal dalam rentang start_date..end_date
             const dates: string[] = [];
@@ -78,7 +81,7 @@ export async function POST(req: Request) {
             }
 
             const deductResults = await Promise.allSettled(
-                outletQuery.rows.flatMap((o: any) =>
+                activeOutlets.flatMap((o: any) =>
                     dates.map(d => deductOutletStockFromSales(Number(o.id), d))
                 )
             );

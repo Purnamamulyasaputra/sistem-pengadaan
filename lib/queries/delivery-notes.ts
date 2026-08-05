@@ -1,6 +1,17 @@
 import { query, withTransaction } from '@/lib/db';
 import { checkAndCreateAlert } from './alerts';
 
+export async function getPendingDeliveryNoteIssuesCount(since?: string | null): Promise<number> {
+  let sql = `SELECT count(*)::int AS cnt FROM delivery_note_issues WHERE status = 'PENDING'`;
+  const params: any[] = [];
+  if (since) {
+    sql += ` AND created_at > $1`;
+    params.push(new Date(Number(since)).toISOString());
+  }
+  const res = await query(sql, params);
+  return res.rows[0]?.cnt ?? 0;
+}
+
 export interface DeliveryNote {
   id: number;
   delivery_note_number: string;
@@ -15,17 +26,28 @@ export interface DeliveryNote {
   updated_at: string;
 }
 
-let seqCache = 0;
-
+// BUG-07 Fix: Gunakan advisory lock + sequence DB-side agar tidak ada race condition
+// di lingkungan serverless/concurrent. Tidak gunakan module-level variable karena
+// Vercel dapat menjalankan beberapa cold-start secara bersamaan.
 export async function generateDeliveryNoteNumber(): Promise<string> {
   const year = new Date().getFullYear();
+  // pg_advisory_xact_lock memastikan hanya satu proses yang menghitung seq pada satu waktu.
+  // Lock otomatis dilepas di akhir transaksi.
   const res = await query(
-    `SELECT COUNT(*)::int AS cnt FROM delivery_notes WHERE EXTRACT(YEAR FROM created_at) = $1`,
-    [year]
-  );
-  const seq = (res.rows[0]?.cnt ?? 0) + 1 + seqCache;
-  seqCache++;
-  setTimeout(() => { seqCache = Math.max(0, seqCache - 1); }, 5000);
+    `SELECT pg_advisory_lock(12345678);
+     SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(delivery_note_number, '^SJ/\\d{4}/', '') AS BIGINT)), 0) + 1 AS next_seq
+     FROM delivery_notes
+     WHERE delivery_note_number LIKE $1;
+     SELECT pg_advisory_unlock(12345678);`,
+    [`SJ/${year}/%`]
+  ).catch(async () => {
+    // Fallback: count-based jika advisory lock tidak tersedia (Neon pooled)
+    return query(
+      `SELECT COUNT(*)::int + 1 AS next_seq FROM delivery_notes WHERE EXTRACT(YEAR FROM created_at) = $1`,
+      [year]
+    );
+  });
+  const seq = res.rows[0]?.next_seq ?? 1;
   return `SJ/${year}/${String(seq).padStart(5, '0')}`;
 }
 
@@ -50,11 +72,11 @@ export async function createDeliveryNote(data: {
       const itemIds = data.items.map(i => i.item_id);
 
       const balRes = await client.query(
-        `SELECT DISTINCT ON (log.item_id) log.item_id, log.ending_balance, i.name as item_name, i.smallest_unit, i.purchase_unit, i.conversion_ratio 
-         FROM inventory_logs log
-         JOIN items i ON i.id = log.item_id 
-         WHERE log.item_id = ANY($1::int[]) 
-         ORDER BY log.item_id, log.created_at DESC`,
+        `SELECT DISTINCT ON (i.id) i.id as item_id, log.ending_balance, i.name as item_name, i.smallest_unit, i.purchase_unit, i.conversion_ratio 
+         FROM items i
+         LEFT JOIN inventory_logs log ON log.item_id = i.id 
+         WHERE i.id = ANY($1::int[]) 
+         ORDER BY i.id, log.created_at DESC`,
         [itemIds]
       );
       const balMap = new Map();
@@ -78,14 +100,14 @@ export async function createDeliveryNote(data: {
 
       for (let i = 0; i < data.items.length; i++) {
         const item = data.items[i];
-        const balData = balMap.get(item.item_id);
+        const balData = balMap.get(Number(item.item_id));
         const currentStock = parseFloat(balData?.ending_balance ?? '0');
         const itemName = balData?.item_name ?? 'Unknown Item';
         const purchaseUnit = balData?.purchase_unit ?? '';
         const conversionRatio = parseFloat(balData?.conversion_ratio ?? '1');
 
         const actualQtyShipped = item.qty_shipped * conversionRatio;
-        const reservedStock = reservedMap.get(item.item_id) ?? 0;
+        const reservedStock = reservedMap.get(Number(item.item_id)) ?? 0;
         const availableStock = currentStock - reservedStock;
 
         if (actualQtyShipped > availableStock) {
@@ -125,7 +147,7 @@ export async function createDeliveryNote(data: {
 
       for (let i = 0; i < data.items.length; i++) {
         const item = data.items[i];
-        const conversionRatio = parseFloat(balMap.get(item.item_id)?.conversion_ratio ?? '1');
+        const conversionRatio = parseFloat(balMap.get(Number(item.item_id))?.conversion_ratio ?? '1');
         const actualQtyShipped = item.qty_shipped * conversionRatio;
         const uniqueBarcode = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000).toString();
         
@@ -267,6 +289,11 @@ export async function processPublicReceive(data: {
   }>;
 }) {
   return withTransaction(async (client) => {
+    // BUG-05 Fix: Guard double-deduction — jangan proses SJ yang sudah DITERIMA
+    const statusRes = await client.query(`SELECT status FROM delivery_notes WHERE id = $1`, [data.delivery_note_id]);
+    if (statusRes.rows[0]?.status === 'DITERIMA') {
+      throw new Error('Surat Jalan ini sudah dikonfirmasi sebelumnya (status: DITERIMA). Tidak dapat diproses ulang.');
+    }
     // Update delivery note to DITERIMA
     await client.query(
       `UPDATE delivery_notes SET status = 'DITERIMA', recipient_name = $1, proof_image_url = $2, updated_at = now() WHERE id = $3`,
@@ -516,6 +543,29 @@ export async function recordScan(data: {
 
 export async function confirmReceipt(deliveryNoteId: number, recipientName: string, proofImageUrl?: string) {
   return withTransaction(async (client) => {
+    // Guard: cek status DN terlebih dahulu
+    const dnStatusRes = await client.query(
+      `SELECT status FROM delivery_notes WHERE id = $1 FOR UPDATE`,
+      [deliveryNoteId]
+    );
+    const currentStatus = dnStatusRes.rows[0]?.status;
+
+    // Jika sudah DITERIMA (dari bulkRecordScan IN atau call sebelumnya),
+    // hanya update proof_image_url saja jika ada — jangan transfer stok lagi.
+    if (currentStatus === 'DITERIMA') {
+      if (proofImageUrl) {
+        await client.query(
+          `UPDATE delivery_notes SET proof_image_url = $1, recipient_name = $2, updated_at = now() WHERE id = $3`,
+          [proofImageUrl, recipientName, deliveryNoteId]
+        );
+      }
+      return { success: true, alreadyReceived: true };
+    }
+
+    if (currentStatus === 'DIBATALKAN') {
+      throw new Error('Surat Jalan sudah dibatalkan, tidak dapat dikonfirmasi.');
+    }
+
     // Check all items scanned in
     const pendingRes = await client.query(
       `SELECT COUNT(*)::int AS cnt FROM delivery_note_items WHERE delivery_note_id = $1 AND scanned_in_at IS NULL`,
@@ -563,9 +613,9 @@ export async function confirmReceipt(deliveryNoteId: number, recipientName: stri
         const qty = parseFloat(dni.qty_received ?? dni.qty_shipped ?? '0');
         if (qty <= 0) continue;
 
-        const centralOldBalance = balMap.get(dni.item_id) ?? 0;
+        const centralOldBalance = balMap.get(Number(dni.item_id)) ?? 0;
         const centralNewBalance = centralOldBalance - qty;
-        balMap.set(dni.item_id, centralNewBalance); // update for next item if duplicate
+        balMap.set(Number(dni.item_id), centralNewBalance); // update for next item if duplicate
 
         centralLog_itemIds.push(dni.item_id);
         centralLog_qtyChanges.push(-qty);
@@ -612,11 +662,11 @@ export async function confirmReceipt(deliveryNoteId: number, recipientName: stri
         const qty = parseFloat(dni.qty_received ?? dni.qty_shipped ?? '0');
         if (qty <= 0) continue;
 
-        let outletOldBalance = stockMap.get(dni.item_id);
+        let outletOldBalance = stockMap.get(Number(dni.item_id));
         
         if (outletOldBalance !== undefined) {
           const outletNewBalance = outletOldBalance + qty;
-          stockMap.set(dni.item_id, outletNewBalance); // update for duplicates
+          stockMap.set(Number(dni.item_id), outletNewBalance); // update for duplicates
           updateStock_itemIds.push(dni.item_id);
           updateStock_balances.push(outletNewBalance);
           
@@ -624,7 +674,7 @@ export async function confirmReceipt(deliveryNoteId: number, recipientName: stri
           outletLog_qtyChanges.push(qty);
           outletLog_newBalances.push(outletNewBalance);
         } else {
-          stockMap.set(dni.item_id, qty);
+          stockMap.set(Number(dni.item_id), qty);
           insertStock_itemIds.push(dni.item_id);
           insertStock_balances.push(qty);
           
@@ -684,17 +734,24 @@ export async function confirmReceipt(deliveryNoteId: number, recipientName: stri
 export async function cancelDeliveryNote(deliveryNoteId: number) {
   return withTransaction(async (client) => {
     // Check if it can be canceled
-    const dnRes = await client.query(`SELECT status FROM delivery_notes WHERE id = $1`, [deliveryNoteId]);
+    const dnRes = await client.query(`SELECT status, order_id FROM delivery_notes WHERE id = $1`, [deliveryNoteId]);
     const dn = dnRes.rows[0];
     if (!dn) throw new Error('Delivery Note not found');
     if (dn.status !== 'DRAFT') {
       throw new Error('Only DRAFT Delivery Orders can be canceled.');
     }
 
+    // BUG-01 Fix: Gunakan 'DIBATALKAN' konsisten dengan status orders & seluruh sistem
     await client.query(
-      `UPDATE delivery_notes SET status = 'CANCELED', updated_at = now() WHERE id = $1`,
+      `UPDATE delivery_notes SET status = 'DIBATALKAN', updated_at = now() WHERE id = $1`,
       [deliveryNoteId]
     );
+
+    if (dn.order_id) {
+      // Revert order status by recalculating it based on its items
+      const { recalculateOrderStatus } = await import('./orders');
+      await recalculateOrderStatus(dn.order_id, client);
+    }
 
     return { success: true };
   });
@@ -746,6 +803,8 @@ export async function bulkRecordScan(data: {
   delivery_note_id: number;
   scan_type: 'OUT' | 'IN';
   scanned_by: number;
+  // Hanya digunakan untuk scan_type 'IN': data aktual dari user (qty, selisih)
+  items?: Array<{ delivery_note_item_id: number; qty_received: number; discrepancy_reason?: string }>;
 }) {
   return withTransaction(async (client) => {
     const dnItemsRes = await client.query(
@@ -768,8 +827,11 @@ export async function bulkRecordScan(data: {
         out_prices.push(dni.price_at_shipment);
         processed_count++;
       } else if (data.scan_type === 'IN' && !dni.scanned_in_at) {
+        // Gunakan qty_received dari input user jika ada, fallback ke qty_shipped
+        const userItem = data.items?.find(u => u.delivery_note_item_id === dni.id);
+        const qtyRecv = userItem?.qty_received ?? parseFloat(dni.qty_shipped);
         in_dniIds.push(dni.id);
-        in_qtyRecvs.push(dni.qty_shipped);
+        in_qtyRecvs.push(qtyRecv);
         processed_count++;
       }
     }
@@ -791,20 +853,52 @@ export async function bulkRecordScan(data: {
            WHERE order_items.id = u.id`,
           [out_orderItemIds, out_prices]
         );
-        
         // Semua item sudah di-scan OUT → Surat Jalan berstatus DIKIRIM
         await client.query(`UPDATE delivery_notes SET status = 'DIKIRIM', updated_at = now() WHERE id = $1`, [data.delivery_note_id]);
+
       } else if (data.scan_type === 'IN') {
-        await client.query(
-          `UPDATE delivery_note_items 
-           SET scanned_in_at = now(), scanned_in_by = $1, qty_received = u.qty 
-           FROM UNNEST($2::int[], $3::numeric[]) AS u(id, qty)
-           WHERE delivery_note_items.id = u.id`,
-          [data.scanned_by, in_dniIds, in_qtyRecvs]
-        );
-        
-        // Semua item sudah di-scan IN → status jadi SIAP_TRANSFER
-        await client.query(`UPDATE delivery_notes SET status = 'SIAP_TRANSFER', updated_at = now() WHERE id = $1`, [data.delivery_note_id]);
+        // Simpan discrepancy_reason per item dari input user
+        if (in_dniIds.length > 0) {
+          // Update qty_received & scanned_in_at per item menggunakan UNNEST
+          // Juga update discrepancy_reason jika ada dari input user
+          const in_discReasons: (string | null)[] = in_dniIds.map(id => {
+            const dni = items.find(d => d.id === id);
+            const userItem = data.items?.find(u => u.delivery_note_item_id === id);
+            return userItem?.discrepancy_reason ?? null;
+          });
+
+          await client.query(
+            `UPDATE delivery_note_items 
+             SET scanned_in_at = now(), scanned_in_by = $1,
+                 qty_received = u.qty,
+                 discrepancy_reason = COALESCE(u.reason, discrepancy_reason)
+             FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS u(id, qty, reason)
+             WHERE delivery_note_items.id = u.id`,
+            [data.scanned_by, in_dniIds, in_qtyRecvs, in_discReasons]
+          );
+
+          // Insert delivery_note_issues untuk item yang ada selisih
+          for (let i = 0; i < in_dniIds.length; i++) {
+            const dniId = in_dniIds[i];
+            const dniRow = items.find(d => d.id === dniId);
+            if (!dniRow) continue;
+            const qtyShipped = parseFloat(dniRow.qty_shipped);
+            const qtyRecv = in_qtyRecvs[i];
+            if (qtyRecv < qtyShipped) {
+              const qtyIssue = qtyShipped - qtyRecv;
+              const reason = in_discReasons[i] || 'Barang tidak lengkap';
+              await client.query(
+                `INSERT INTO delivery_note_issues (delivery_note_item_id, qty_issue, reason, photo_url, status)
+                 VALUES ($1, $2, $3, '', 'PENDING')
+                 ON CONFLICT DO NOTHING`,
+                [dniId, qtyIssue, reason]
+              );
+            }
+          }
+        }
+        // PENTING: Tidak ada transfer stok di sini.
+        // Transfer stok dan perubahan status DN ke DITERIMA dilakukan EKSKLUSIF
+        // oleh confirmReceipt() untuk mencegah double-deduction.
       }
     }
 
@@ -919,17 +1013,17 @@ export async function resolveDeliveryNoteIssue(issueId: number, action: 'REPLACE
         [newDnId, oi.order_item_id, issue.item_id, issue.qty_issue, oi.price_at_shipment, uniqueBarcode]
       );
 
-      // We should probably revert order_item_id status back to DIKEMAS or something so it can be shipped, 
-      // but since we already created a DRAFT DO, it will handle it.
+      // BUG-02 Fix: DIKEMAS bukan status valid. Gunakan READY_DI_GUDANG agar item dapat
+      // diproses ulang melalui Surat Jalan pengganti yang baru saja dibuat (DRAFT).
       await client.query(
-        `UPDATE order_items SET item_status = 'DIKEMAS' WHERE id = $1`,
+        `UPDATE order_items SET item_status = 'READY_DI_GUDANG' WHERE id = $1`,
         [oi.order_item_id]
       );
       await client.query(
         `UPDATE orders SET status = 'PROCESSING' WHERE id = $1`,
         [issue.order_id]
       );
-      
+
       return { success: true, new_dn_id: newDnId };
     }
 
@@ -937,6 +1031,8 @@ export async function resolveDeliveryNoteIssue(issueId: number, action: 'REPLACE
   });
 }
 
+// WARN-01 Fix: Refactor approveAndTransferDeliveryNote dari N-item loop (8N query)
+// menjadi bulk UNNEST. Untuk SJ 20 item: ~160 query → ~10 query.
 export async function approveAndTransferDeliveryNote(deliveryNoteId: number, adminId: number) {
   return withTransaction(async (client) => {
     // 1. Dapatkan informasi Delivery Note
@@ -946,7 +1042,7 @@ export async function approveAndTransferDeliveryNote(deliveryNoteId: number, adm
     );
     const dn = dnRes.rows[0];
     if (!dn) throw new Error('Surat Jalan tidak ditemukan');
-    if (dn.status === 'DITERIMA' || dn.status === 'CANCELLED') {
+    if (dn.status === 'DITERIMA' || dn.status === 'DIBATALKAN') {
       throw new Error(`Surat Jalan dengan status ${dn.status} tidak dapat diproses transfer stok.`);
     }
 
@@ -957,88 +1053,150 @@ export async function approveAndTransferDeliveryNote(deliveryNoteId: number, adm
        WHERE delivery_note_id = $1`,
       [deliveryNoteId]
     );
-
     if (itemsRes.rows.length === 0) {
       throw new Error('Surat Jalan tidak memiliki item untuk ditransfer.');
     }
+
+    const itemIds = itemsRes.rows.map((r: { item_id: number }) => r.item_id);
+
+    // STEP 1 (BULK): Baca saldo pusat sekaligus
+    const balRes = await client.query(
+      `SELECT DISTINCT ON (item_id) item_id, ending_balance 
+       FROM inventory_logs WHERE item_id = ANY($1::int[]) ORDER BY item_id, created_at DESC`,
+      [itemIds]
+    );
+    const balMap = new Map<number, number>();
+    for (const row of balRes.rows) balMap.set(Number(row.item_id), parseFloat(row.ending_balance));
+
+    const central_itemIds: number[] = [];
+    const central_qtyChanges: number[] = [];
+    const central_newBalances: number[] = [];
+
+    const dni_ids: number[] = [];
+    const dni_qtys: number[] = [];
+    const oi_ids: number[] = [];
+    const oi_prices: number[] = [];
 
     for (const dni of itemsRes.rows) {
       const qty = parseFloat(dni.qty_received ?? dni.qty_shipped ?? '0');
       if (qty <= 0) continue;
 
-      // STEP 1: Potong stok dari Gudang Pusat (inventory_logs)
-      const balRes = await client.query(
-        `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
-        [dni.item_id]
-      );
-      const centralOldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
-      const centralNewBalance = centralOldBalance - qty;
+      const oldBal = balMap.get(Number(dni.item_id)) ?? 0;
+      const newBal = oldBal - qty;
+      balMap.set(Number(dni.item_id), newBal);
 
+      central_itemIds.push(Number(dni.item_id));
+      central_qtyChanges.push(-qty);
+      central_newBalances.push(newBal);
+
+      dni_ids.push(Number(dni.id));
+      dni_qtys.push(qty);
+
+      if (dni.order_item_id) {
+        oi_ids.push(Number(dni.order_item_id));
+        oi_prices.push(Number(dni.price_at_shipment));
+      }
+    }
+
+    // STEP 1 (BULK): Insert semua OUT ke central inventory_logs
+    if (central_itemIds.length > 0) {
       await client.query(
         `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
-         VALUES ($1, 'OUT', $2, $3, 'ATOMIC_TRANSFER', $4)`,
-        [dni.item_id, -qty, centralNewBalance, deliveryNoteId]
+         SELECT u.item_id, 'OUT', u.qty, u.bal, 'ATOMIC_TRANSFER', $1
+         FROM UNNEST($2::int[], $3::numeric[], $4::numeric[]) AS u(item_id, qty, bal)`,
+        [deliveryNoteId, central_itemIds, central_qtyChanges, central_newBalances]
       );
+      // Run alerts parallel (non-blocking untuk performa)
+      await Promise.all(central_itemIds.map((id, idx) =>
+        checkAndCreateAlert(id, central_newBalances[idx], client)
+      ));
+    }
 
-      // Panggil alert pengecekan
-      await checkAndCreateAlert(dni.item_id, centralNewBalance, client);
+    // STEP 2 (BULK): Update outlet stocks
+    const stockRes = await client.query(
+      `SELECT item_id, current_balance FROM outlet_stocks 
+       WHERE outlet_id = $1 AND item_id = ANY($2::int[]) FOR UPDATE`,
+      [dn.outlet_id, itemIds]
+    );
+    const stockMap = new Map<number, number>();
+    for (const row of stockRes.rows) stockMap.set(Number(row.item_id), parseFloat(row.current_balance));
 
-      // STEP 2: Tambahkan stok ke Gudang Outlet (outlet_stocks & outlet_inventory_logs)
-      const stockRes = await client.query(
-        `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2 FOR UPDATE`,
-        [dn.outlet_id, dni.item_id]
-      );
+    const ins_itemIds: number[] = [], ins_bals: number[] = [];
+    const upd_itemIds: number[] = [], upd_bals: number[] = [];
+    const log_itemIds: number[] = [], log_qtys: number[] = [], log_bals: number[] = [];
 
-      let outletOldBalance = 0;
-      if (stockRes.rows.length > 0) {
-        outletOldBalance = parseFloat(stockRes.rows[0].current_balance);
-        const outletNewBalance = outletOldBalance + qty;
-        await client.query(
-          `UPDATE outlet_stocks SET current_balance = $1, updated_at = NOW() WHERE outlet_id = $2 AND item_id = $3`,
-          [outletNewBalance, dn.outlet_id, dni.item_id]
-        );
+    for (const dni of itemsRes.rows) {
+      const qty = parseFloat(dni.qty_received ?? dni.qty_shipped ?? '0');
+      if (qty <= 0) continue;
+      const existing = stockMap.get(Number(dni.item_id));
+      if (existing !== undefined) {
+        const newBal = existing + qty;
+        stockMap.set(Number(dni.item_id), newBal);
+        upd_itemIds.push(Number(dni.item_id)); upd_bals.push(newBal);
+        log_itemIds.push(Number(dni.item_id)); log_qtys.push(qty); log_bals.push(newBal);
       } else {
-        await client.query(
-          `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at) VALUES ($1, $2, $3, NOW())`,
-          [dn.outlet_id, dni.item_id, qty]
-        );
+        stockMap.set(Number(dni.item_id), qty);
+        ins_itemIds.push(Number(dni.item_id)); ins_bals.push(qty);
+        log_itemIds.push(Number(dni.item_id)); log_qtys.push(qty); log_bals.push(qty);
       }
+    }
 
-      const outletLogBalance = outletOldBalance + qty;
+    if (ins_itemIds.length > 0) {
+      await client.query(
+        `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at)
+         SELECT $1, u.item_id, u.bal, NOW() FROM UNNEST($2::int[], $3::numeric[]) AS u(item_id, bal)`,
+        [dn.outlet_id, ins_itemIds, ins_bals]
+      );
+    }
+    if (upd_itemIds.length > 0) {
+      await client.query(
+        `UPDATE outlet_stocks SET current_balance = u.bal, updated_at = NOW()
+         FROM UNNEST($1::int[], $2::numeric[]) AS u(item_id, bal)
+         WHERE outlet_stocks.outlet_id = $3 AND outlet_stocks.item_id = u.item_id`,
+        [upd_itemIds, upd_bals, dn.outlet_id]
+      );
+    }
+    if (log_itemIds.length > 0) {
       await client.query(
         `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
-         VALUES ($1, $2, 'IN', $3, $4, 'ATOMIC_TRANSFER', $5)`,
-        [dn.outlet_id, dni.item_id, qty, outletLogBalance, deliveryNoteId]
+         SELECT $1, u.item_id, 'IN', u.qty, u.bal, 'ATOMIC_TRANSFER', $2
+         FROM UNNEST($3::int[], $4::numeric[], $5::numeric[]) AS u(item_id, qty, bal)`,
+        [dn.outlet_id, deliveryNoteId, log_itemIds, log_qtys, log_bals]
       );
+    }
 
-      // STEP 3: Update delivery_note_items menjadi sudah scan IN dan OUT
+    // STEP 3 (BULK): Update delivery_note_items
+    if (dni_ids.length > 0) {
       await client.query(
         `UPDATE delivery_note_items 
          SET scanned_out_at = COALESCE(scanned_out_at, NOW()),
              scanned_out_by = COALESCE(scanned_out_by, $1),
              scanned_in_at = COALESCE(scanned_in_at, NOW()),
              scanned_in_by = COALESCE(scanned_in_by, $1),
-             qty_received = $2
-         WHERE id = $3`,
-        [adminId, qty, dni.id]
+             qty_received = u.qty
+         FROM UNNEST($2::int[], $3::numeric[]) AS u(id, qty)
+         WHERE delivery_note_items.id = u.id`,
+        [adminId, dni_ids, dni_qtys]
       );
-
-      // STEP 4: Update order item menjadi SELESAI
-      if (dni.order_item_id) {
-        await client.query(
-          `UPDATE order_items SET item_status = 'SELESAI', distribution_price = $1, updated_at = NOW() WHERE id = $2`,
-          [dni.price_at_shipment, dni.order_item_id]
-        );
-      }
     }
 
-    // 3. Update status Delivery Note menjadi DITERIMA
+    // STEP 4 (BULK): Update order items → SELESAI
+    if (oi_ids.length > 0) {
+      await client.query(
+        `UPDATE order_items SET item_status = 'SELESAI', distribution_price = u.price, updated_at = NOW()
+         FROM UNNEST($1::int[], $2::numeric[]) AS u(id, price)
+         WHERE order_items.id = u.id`,
+        [oi_ids, oi_prices]
+      );
+    }
+
+    // 3. Update status Delivery Note → DITERIMA
     await client.query(
       `UPDATE delivery_notes SET status = 'DITERIMA', updated_at = NOW() WHERE id = $1`,
       [deliveryNoteId]
     );
 
-    // 4. Update status Order menjadi COMPLETED
+    // 4. Update status Order → COMPLETED
     if (dn.order_id) {
       await client.query(
         `UPDATE orders SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,

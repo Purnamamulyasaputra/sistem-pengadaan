@@ -13,13 +13,13 @@ import { Toast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const REASON_CATEGORIES = [
-  { value: 'SALAH_CATAT', label: 'Salah Catat / Koreksi (+ / -)' },
-  { value: 'BONUS_SUPPLIER', label: 'Bonus / Kelebihan Kirim (+)' },
-  { value: 'RETUR_BELUM_CATAT', label: 'Retur Belum Dicatat (+)' },
-  { value: 'RUSAK', label: 'Rusak (-)' },
-  { value: 'KADALUARSA', label: 'Kadaluarsa (-)' },
-  { value: 'HILANG_SUSUT', label: 'Hilang / Susut (-)' },
-  { value: 'LAINNYA', label: 'Lainnya (+ / -)' },
+  { value: 'SALAH_CATAT', label: 'Salah Catat' },
+  { value: 'BONUS_SUPPLIER', label: 'Kelebihan Kirim' },
+  { value: 'RETUR_BELUM_CATAT', label: 'Retur Belum Dicatat' },
+  { value: 'RUSAK', label: 'Rusak' },
+  { value: 'KADALUARSA', label: 'Kadaluarsa' },
+  { value: 'HILANG_SUSUT', label: 'Hilang / Susut' },
+  { value: 'LAINNYA', label: 'Lainnya' },
 ];
 
 const formatUnit = (unit: string | undefined | null) => {
@@ -224,6 +224,8 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                 const detail = getDetail(item.item_id);
                 const actual = detail ? detail.actual_physical_qty : '';
                 const variance = Number(detail ? detail.variance : 0);
+                const sysBal = detail ? Number(detail.system_balance) : Number(item.system_balance);
+                
                 // Cost calculation: absolute variance * current average price
                 const cost = Math.abs(Number(variance)) * Number(item.current_average_price);
 
@@ -245,11 +247,11 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                     <td className="muted">{item.category_name}</td>
                     <td className="right num">
                       <div className="font-bold">
-                        {Number(item.system_balance).toLocaleString('id-ID', { maximumFractionDigits: 0 })} {smallUnit}
+                        {sysBal.toLocaleString('id-ID', { maximumFractionDigits: 0 })} {smallUnit}
                       </div>
                       {hasLargeUnit && (
                         <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
-                          {(Number(item.system_balance) / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} {largeUnit}
+                          {(sysBal / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} {largeUnit}
                         </div>
                       )}
                     </td>
@@ -258,7 +260,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                         type="text"
                         className="input right"
                         value={String(actual ?? '')}
-                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, e.target.value)}
+                        onChange={(e) => handleQtyChange(item.item_id, sysBal, e.target.value)}
                         disabled={isLocked}
                         placeholder="0"
                         style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: String(actual ?? '') === '' ? '#fca5a5' : 'var(--border)' }}

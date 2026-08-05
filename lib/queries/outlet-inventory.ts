@@ -29,6 +29,8 @@ export type OutletStockRow = {
 };
 
 export async function getOutletStocks(outletId: number): Promise<OutletStockRow[]> {
+  // WARN-03 Fix: Gunakan LATERAL JOIN + agregasi inline untuk menghitung incoming_balance
+  // alih-alih correlated subquery per baris yang berjalan N kali (sekali per item).
   const result = await query<OutletStockRow>(`
     SELECT DISTINCT
       i.id AS item_id,
@@ -43,14 +45,7 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
       (os.outlet_id IS NOT NULL) AS has_stock_history,
       (ois.minimum_threshold IS NOT NULL) AS is_custom_threshold,
       COALESCE(ois.minimum_threshold, i.minimum_threshold) AS minimum_threshold,
-      (
-        SELECT COALESCE(SUM(COALESCE(oi.approved_smallest_qty, oi.smallest_unit_qty)), 0)
-        FROM order_items oi
-        JOIN orders o ON o.id = oi.order_id
-        WHERE o.outlet_id = $1 AND oi.item_id = i.id 
-          AND oi.item_status IN ('PROSES_BELANJA', 'READY_DI_GUDANG', 'DIKIRIM')
-          AND o.status NOT IN ('COMPLETED', 'CANCELLED', 'DIBATALKAN')
-      )::numeric AS incoming_balance
+      COALESCE(agg_in.incoming_balance, 0)::numeric AS incoming_balance
     FROM items i
     LEFT JOIN categories c ON c.id = i.category_id
     LEFT JOIN outlet_stocks os ON os.item_id = i.id AND os.outlet_id = $1
@@ -59,6 +54,16 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
     LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = ing.id
     LEFT JOIN recipes r ON r.id = ri.recipe_id
     LEFT JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $1
+    -- WARN-03 Fix: JOIN ke subquery agregat (bukan correlated subquery per-baris)
+    LEFT JOIN (
+      SELECT oi.item_id, SUM(COALESCE(oi.approved_smallest_qty, oi.smallest_unit_qty)) AS incoming_balance
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.outlet_id = $1
+        AND oi.item_status IN ('PROSES_BELANJA', 'READY_DI_GUDANG', 'DIKIRIM')
+        AND o.status NOT IN ('COMPLETED', 'DIBATALKAN')
+      GROUP BY oi.item_id
+    ) agg_in ON agg_in.item_id = i.id
     WHERE i.is_active = true
       AND (
         os.outlet_id IS NOT NULL 
@@ -69,6 +74,7 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
   `, [outletId]);
   return result.rows;
 }
+
 
 export async function deductOutletStockFromSales(outletId: number, dateStr: string) {
   // dateStr format: YYYY-MM-DD
@@ -176,108 +182,22 @@ export async function deductOutletStockFromSales(outletId: number, dateStr: stri
   });
 }
 
+
 /**
- * Membaca data penjualan dari moka_item_sales untuk periode tertentu,
- * lalu menghitung & menulis pemotongan bahan ke outlet_inventory_logs.
- * Dijalankan otomatis setelah sync moka_item_sales agar kolom OUT dan LIVE real-time.
- * 
- * Idempotent: hapus log MOKA_SALES_REPORT lama untuk outlet+periode ini sebelum insert ulang.
+ * Upsert minimum threshold untuk satu item di satu outlet.
+ * Digunakan oleh Admin Outlet untuk mengatur batas stok minimal per item.
  */
-export async function deductFromMokaItemSales(outletId: number, startDate: string, endDate: string) {
-  return withTransaction(async (client) => {
-    // 1. Ambil data penjualan dari moka_item_sales untuk periode ini
-    const salesRes = await client.query(`
-      SELECT name, COALESCE(SUM(item_sold - item_refunded), 0) AS net_sold
-      FROM moka_item_sales
-      WHERE outlet_id = $1
-        AND period_start = $2
-        AND period_end = $3
-      GROUP BY name
-    `, [outletId, startDate, endDate]);
-
-    if (salesRes.rows.length === 0) return { count: 0, ingredientsDeducted: 0 };
-
-    // 2. Hapus log lama reference_type=MOKA_SALES_REPORT untuk outlet+periode ini
-    //    Gunakan hash numerik dari outletId+startDate+endDate sebagai reference_id.
-    const periodHash = BigInt(outletId) * BigInt(100000000) + BigInt(startDate.replace(/-/g, '')) % BigInt(100000);
-    const refId = Number(periodHash);
-
-    await client.query(`
-      DELETE FROM outlet_inventory_logs
-      WHERE outlet_id = $1
-        AND reference_type = 'MOKA_SALES_REPORT'
-        AND reference_id = $2
-    `, [outletId, refId]);
-
-    let totalIngredientsDeducted = 0;
-    const ingredientTotals: Record<number, number> = {};
-
-    // 3. Hitung total pemotongan per bahan dari resep
-    for (const sale of salesRes.rows) {
-      const netSold = Number(sale.net_sold);
-      if (netSold <= 0) continue;
-
-      // Cari bahan-bahan dari resep menu ini, difilter hanya dari venue yang dimiliki outlet ini.
-      // JOIN outlet_venues memastikan resep dari outlet/venue lain tidak ikut terhitung (cross-venue contamination).
-      const ingRes = await client.query(`
-        SELECT i.id AS ingredient_id, ri.quantity
-        FROM menus m
-        JOIN recipes r ON r.menu_id = m.id
-        JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $2
-        JOIN recipe_ingredients ri ON ri.recipe_id = r.id
-        JOIN ingredients ing ON ing.id = ri.ingredient_id
-        JOIN items i ON (i.id = ing.item_id OR i.ingredient_id = ing.id)
-        WHERE LOWER(TRIM(m.name)) = LOWER(TRIM($1))
-           OR (m.display_name IS NOT NULL AND m.display_name <> '' AND LOWER(TRIM(m.display_name)) = LOWER(TRIM($1)))
-           OR (
-             m.name IS NOT NULL AND m.name <> '' 
-             AND m.variant IS NOT NULL AND m.variant <> ''
-             AND LOWER(TRIM($1)) LIKE LOWER(TRIM(m.name)) || ' %'
-             AND LOWER(TRIM($1)) LIKE '%' || LOWER(TRIM(m.variant))
-           )
-      `, [sale.name, outletId]);
-
-      for (const ing of ingRes.rows) {
-        const qtyToDeduct = Number(ing.quantity) * netSold;
-        ingredientTotals[ing.ingredient_id] = (ingredientTotals[ing.ingredient_id] || 0) + qtyToDeduct;
-      }
-    }
-
-    // 4. Terapkan pemotongan ke outlet_stocks dan catat ke outlet_inventory_logs
-    for (const [ingredientIdStr, totalDeduct] of Object.entries(ingredientTotals)) {
-      const ingredientId = Number(ingredientIdStr);
-      if (totalDeduct <= 0) continue;
-
-      // Pastikan record ada di outlet_stocks
-      await client.query(`
-        INSERT INTO outlet_stocks (outlet_id, item_id, current_balance)
-        VALUES ($1, $2, 0)
-        ON CONFLICT (outlet_id, item_id) DO NOTHING
-      `, [outletId, ingredientId]);
-
-      // Potong stok
-      const stockRes = await client.query(`
-        UPDATE outlet_stocks
-        SET current_balance = current_balance - $3, updated_at = NOW()
-        WHERE outlet_id = $1 AND item_id = $2
-        RETURNING current_balance
-      `, [outletId, ingredientId, totalDeduct]);
-
-      const newBalance = Number(stockRes.rows[0]?.current_balance ?? 0);
-
-      // Catat log dengan reference_type MOKA_SALES_REPORT dan reference_id = period hash
-      await client.query(`
-        INSERT INTO outlet_inventory_logs
-        (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
-        VALUES ($1, $2, 'SALES', $3, $4, 'MOKA_SALES_REPORT', $5)
-      `, [outletId, ingredientId, -totalDeduct, newBalance, refId]);
-
-      totalIngredientsDeducted++;
-    }
-
-    return {
-      count: salesRes.rows.length,
-      ingredientsDeducted: totalIngredientsDeducted
-    };
-  });
+export async function upsertOutletItemSetting(data: {
+  outlet_id: number;
+  item_id: number;
+  minimum_threshold: number | null;
+}): Promise<void> {
+  await query(
+    `INSERT INTO outlet_item_settings (outlet_id, item_id, minimum_threshold, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (outlet_id, item_id) DO UPDATE
+     SET minimum_threshold = EXCLUDED.minimum_threshold,
+         updated_at = NOW()`,
+    [data.outlet_id, data.item_id, data.minimum_threshold]
+  );
 }

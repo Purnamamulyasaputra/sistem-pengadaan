@@ -428,7 +428,9 @@ function RequestsContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedOrder?.items?.map(item => (
+                  {selectedOrder?.items?.map(item => {
+                    const isReadOnly = ['SHIPPED', 'COMPLETED', 'DIKIRIM', 'SELESAI'].includes(selectedOrder.order.status);
+                    return (
                     <tr key={item.id}>
                       <td className="font-bold">{item.item_name}</td>
                       <td className="muted">{item.category_name}</td>
@@ -440,8 +442,9 @@ function RequestsContent() {
                           <input 
                             type="number"
                             className="input right font-bold"
-                            style={{ width: 70, height: 28, padding: '2px 8px' }}
+                            style={{ width: 70, height: 28, padding: '2px 8px', backgroundColor: isReadOnly ? '#f1f5f9' : 'white' }}
                             defaultValue={item.qty_approved ?? item.qty_request}
+                            disabled={isReadOnly}
                             onBlur={(e) => {
                               const val = parseFloat(e.target.value);
                               if (!isNaN(val) && val >= 0) {
@@ -459,9 +462,10 @@ function RequestsContent() {
                         <input 
                           type="text"
                           className="input"
-                          style={{ width: 140, height: 28, padding: '2px 8px', fontSize: 12 }}
+                          style={{ width: 140, height: 28, padding: '2px 8px', fontSize: 12, backgroundColor: isReadOnly ? '#f1f5f9' : 'white' }}
                           placeholder="Alasan / Catatan..."
                           defaultValue={item.center_notes ?? ''}
+                          disabled={isReadOnly}
                           onBlur={(e) => {
                             if (e.target.value !== (item.center_notes ?? '')) {
                               handleUpdateItem(item.id, { center_notes: e.target.value });
@@ -476,9 +480,10 @@ function RequestsContent() {
                       </td>
                       <td>
                         <Select
-                          inputStyle={{ height: 30, padding: '2px 8px', ...getFulfillmentStyle(item.fulfillment_status) }}
+                          inputStyle={{ height: 30, padding: '2px 8px', ...getFulfillmentStyle(item.fulfillment_status), opacity: isReadOnly ? 0.7 : 1 }}
                           value={item.fulfillment_status}
                           onChange={val => handleUpdateItem(item.id, { fulfillment_status: String(val) })}
+                          disabled={isReadOnly}
                           options={[
                             { value: 'MENUNGGU', label: 'Menunggu' },
                             { value: 'SANGGUP', label: 'Sanggup' },
@@ -488,9 +493,10 @@ function RequestsContent() {
                       </td>
                       <td>
                         <Select
-                          inputStyle={{ height: 30, padding: '2px 8px', ...getStatusStyle(item.item_status) }}
+                          inputStyle={{ height: 30, padding: '2px 8px', ...getStatusStyle(item.item_status), opacity: isReadOnly ? 0.7 : 1 }}
                           value={item.item_status}
                           onChange={val => handleUpdateItem(item.id, { item_status: String(val) })}
+                          disabled={isReadOnly}
                           options={Object.entries(ITEM_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l as string }))}
                         />
                       </td>
@@ -498,7 +504,7 @@ function RequestsContent() {
                         {saving === item.id && <span className="muted" style={{ fontSize: 11 }}>...</span>}
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </Table>
             )}

@@ -1,5 +1,21 @@
 import { query } from "@/lib/db";
 
+export async function saveMokaOauthState(state: string, clientId: string, clientSecret: string) {
+    await query(`
+        INSERT INTO moka_oauth_states (state, client_id, client_secret)
+        VALUES ($1, $2, $3)
+    `, [state, clientId, clientSecret]);
+}
+
+export async function getMokaOauthState(state: string) {
+    const res = await query(`SELECT client_id, client_secret FROM moka_oauth_states WHERE state = $1`, [state]);
+    return res.rows[0] || null;
+}
+
+export async function deleteMokaOauthState(state: string) {
+    await query(`DELETE FROM moka_oauth_states WHERE state = $1`, [state]);
+}
+
 // Mempertahankan kompatibilitas untuk kode lama (mengambil 1 token aktif sembarang)
 export async function getMokaToken() {
     try {
@@ -90,13 +106,3 @@ export async function deactivateMokaAccount(businessId: number) {
     }
 }
 
-// Dipertahankan: menghapus semua token (hati-hati)
-export async function deleteMokaTokens() {
-    try {
-        await query('DELETE FROM moka_tokens');
-        return true;
-    } catch (error) {
-        console.error("Error deleting Moka tokens:", error);
-        return false;
-    }
-}

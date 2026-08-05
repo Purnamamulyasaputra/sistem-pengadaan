@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmail, validatePassword } from '@/lib/queries/auth';
+import { getUserByEmail, validatePassword, getDemoUsers } from '@/lib/queries/auth';
 import { signToken, COOKIE_NAME, getSecondsToNextMidnight } from '@/lib/auth';
-import { query } from '@/lib/db';
 
 export async function GET() {
   try {
-    const result = await query('SELECT name, email, role, outlet_id FROM users ORDER BY id ASC');
-    return NextResponse.json({ success: true, data: result.rows });
+    const users = await getDemoUsers();
+    return NextResponse.json({ success: true, data: users });
   } catch (err) {
     console.error('Failed to fetch demo users:', err);
     return NextResponse.json({ success: false, data: [] }, { status: 500 });

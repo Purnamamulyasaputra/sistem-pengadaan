@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { upsertOutletItemSetting } from '@/lib/queries/outlet-inventory';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,17 +15,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing item ID' }, { status: 400 });
     }
 
-    // Upsert the setting
-    await query(`
-      INSERT INTO outlet_item_settings (outlet_id, item_id, minimum_threshold, updated_at)
-      VALUES ($1, $2, $3, NOW())
-      ON CONFLICT (outlet_id, item_id) DO UPDATE 
-      SET minimum_threshold = EXCLUDED.minimum_threshold,
-          updated_at = NOW()
-    `, [session.outletId, itemId, minimumThreshold]);
+    await upsertOutletItemSetting({
+      outlet_id: session.outletId,
+      item_id: Number(itemId),
+      minimum_threshold: minimumThreshold ?? null,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: (error instanceof Error ? error.message : 'Unknown error') },
+      { status: 500 }
+    );
   }
 }

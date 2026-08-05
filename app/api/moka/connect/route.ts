@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { getSession } from '@/lib/auth';
+import { saveMokaOauthState } from '@/lib/queries/moka';
 
 // POST: Receive client_id & client_secret from UI form, store in DB with state token, return Moka auth URL
 export async function POST(request: NextRequest) {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const body = await request.json();
     const { client_id, client_secret } = body;
 
@@ -20,10 +23,8 @@ export async function POST(request: NextRequest) {
 
     try {
         // Store credentials in DB mapped to the state token
-        await query(`
-            INSERT INTO moka_oauth_states (state, client_id, client_secret)
-            VALUES ($1, $2, $3)
-        `, [state, client_id, client_secret]);
+        await saveMokaOauthState(state, client_id, client_secret);
+
     } catch (dbError) {
         console.error('Failed to save Moka state to DB:', dbError);
         return NextResponse.json({ error: 'Database error while preparing auth' }, { status: 500 });

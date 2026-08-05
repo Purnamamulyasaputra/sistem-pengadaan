@@ -115,6 +115,25 @@ export default function RecipeBuilderPage({ params: paramsPromise }: { params: P
     loadMasterData().then(() => {
       if (!isNew) {
         loadRecipe();
+      } else {
+        // If it's a new recipe, check if menu_id is provided to auto-fill
+        const params = new URLSearchParams(window.location.search);
+        const menuIdQuery = params.get('menu_id');
+        if (menuIdQuery) {
+          fetch(`/api/hpp/menus/${menuIdQuery}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (data && data.menu) {
+                setForm(f => ({
+                  ...f,
+                  name: data.menu.display_name || data.menu.name,
+                  category_id: data.menu.category_id ? String(data.menu.category_id) : '',
+                  sale_price: data.menu.sale_price ? String(Math.round(Number(data.menu.sale_price))) : '0',
+                }));
+              }
+            })
+            .catch(console.error);
+        }
       }
     });
   }, [isNew]);

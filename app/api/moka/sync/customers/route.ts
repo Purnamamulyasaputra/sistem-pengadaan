@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from '@/lib/auth';
 import { syncCustomers } from "@/lib/queries/moka_customers";
-import { query } from "@/lib/db";
 import { getAllActiveMokaTokens } from "@/lib/queries/moka";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
     try {
         const tokens = await getAllActiveMokaTokens();
         if (!tokens || tokens.length === 0) {

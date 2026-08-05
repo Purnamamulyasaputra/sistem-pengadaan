@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { getExportMasterData } from '@/lib/queries/export';
 import * as XLSX from 'xlsx';
 
 export async function GET(req: NextRequest) {
@@ -13,33 +13,24 @@ export async function GET(req: NextRequest) {
 
   try {
     // 1. Fetch all master data
-    const [itemsRes, ingredientsRes, outletsRes, vendorsRes] = await Promise.all([
-      query('SELECT * FROM items ORDER BY id ASC'),
-      query('SELECT * FROM ingredients ORDER BY id ASC'),
-      query('SELECT * FROM outlets ORDER BY id ASC'),
-      query('SELECT * FROM vendors ORDER BY id ASC')
-    ]);
+    const data = await getExportMasterData();
 
     if (format === 'json') {
       return NextResponse.json({
         success: true,
-        data: {
-          items: itemsRes.rows,
-          ingredients: ingredientsRes.rows,
-          outlets: outletsRes.rows,
-          vendors: vendorsRes.rows
-        }
+        data: data
       });
     }
+
 
     // 2. Create workbook
     const wb = XLSX.utils.book_new();
 
     // 3. Create worksheets
-    const wsItems = XLSX.utils.json_to_sheet(itemsRes.rows);
-    const wsIngredients = XLSX.utils.json_to_sheet(ingredientsRes.rows);
-    const wsOutlets = XLSX.utils.json_to_sheet(outletsRes.rows);
-    const wsVendors = XLSX.utils.json_to_sheet(vendorsRes.rows);
+    const wsItems = XLSX.utils.json_to_sheet(data.items);
+    const wsIngredients = XLSX.utils.json_to_sheet(data.ingredients);
+    const wsOutlets = XLSX.utils.json_to_sheet(data.outlets);
+    const wsVendors = XLSX.utils.json_to_sheet(data.vendors);
 
     // 4. Append worksheets to workbook
     XLSX.utils.book_append_sheet(wb, wsItems, 'Data Item');

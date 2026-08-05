@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { createMenu } from '@/lib/queries/hpp';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,20 +16,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 });
     }
 
-    const res = await query(
-      `INSERT INTO menus (category_id, name, variant, sale_price, display_name)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
-      [
-        parseInt(category_id),
-        name,
-        variant || null,
-        parseFloat(sale_price),
-        variant ? `${name} - ${variant}` : name
-      ]
+    const displayName = variant ? `${name} - ${variant}` : name;
+    
+    const menuRow = await createMenu(
+      parseInt(category_id),
+      name,
+      variant || null,
+      parseFloat(sale_price),
+      displayName
     );
 
-    return NextResponse.json({ success: true, data: res.rows[0] });
+    return NextResponse.json({ success: true, data: menuRow });
   } catch (error: any) {
     console.error('Error creating menu:', error);
     return NextResponse.json({ error: error.message || 'Terjadi kesalahan' }, { status: 500 });

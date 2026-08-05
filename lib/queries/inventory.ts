@@ -42,7 +42,7 @@ export async function receiveGoods(input: {
     // 1. Get current average price & stock (row lock to secure against race conditions)
     const current = await client.query(
       `SELECT current_average_price, conversion_ratio,
-              (SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1) AS last_balance
+              (SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1) AS last_balance
        FROM items WHERE id = $1 FOR UPDATE`,
       [item_id]
     );
@@ -144,7 +144,7 @@ export async function outboundStock(input: {
   const doQuery = client ? client.query.bind(client) : query;
 
   const balanceRes = await doQuery(
-    `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
     [input.item_id]
   );
   const currentBalance = parseFloat(balanceRes.rows[0]?.ending_balance ?? '0');
@@ -171,7 +171,7 @@ export async function adjustStock(input: {
   const { item_id, qty_change, reference_id, client } = input;
 
   const balanceRes = await client.query(
-    `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
     [item_id]
   );
   const currentBalance = parseFloat(balanceRes.rows[0]?.ending_balance ?? '0');
@@ -206,7 +206,7 @@ export async function getInventoryReport(month: number, year: number) {
        SUM(CASE WHEN il.movement_type = 'OUT' AND il.reference_type IN ('BARCODE_SCAN', 'BULK_SHIP', 'ATOMIC_TRANSFER', 'PUBLIC_SCAN_OUT') THEN ABS(il.qty_change) ELSE 0 END) AS total_distribution_qty,
        SUM(CASE WHEN il.movement_type = 'ADJ' THEN il.qty_change ELSE 0 END) AS total_adj_qty,
        i.current_average_price,
-       (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_balance
+       (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC, id DESC LIMIT 1) AS current_balance
      FROM inventory_logs il
      LEFT JOIN items i ON i.id = il.item_id
      LEFT JOIN categories c ON c.id = i.category_id
@@ -219,34 +219,35 @@ export async function getInventoryReport(month: number, year: number) {
   return result.rows;
 }
 
+// BUG-06 Fix: Gunakan JOIN ke items alih-alih correlated subquery per-baris.
+// Versi lama menjalankan satu subquery `SELECT current_average_price FROM items WHERE id = item_id`
+// untuk setiap baris di inventory_logs (N+1 query). Sekarang single query dengan JOIN.
 export async function getInventoryValueTrend(currentTotalValue: number) {
-  // Get net value change per day for the last 7 days
   const res = await query(
     `SELECT 
-       DATE(created_at) as date,
-       SUM(qty_change * (SELECT current_average_price FROM items WHERE id = item_id)) as daily_value_change,
-       SUM(CASE WHEN movement_type = 'OUT' THEN ABS(qty_change) * (SELECT current_average_price FROM items WHERE id = item_id) ELSE 0 END) as daily_outbound_value
-     FROM inventory_logs
-     WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
-     GROUP BY DATE(created_at)
+       DATE(il.created_at) as date,
+       SUM(il.qty_change * i.current_average_price) as daily_value_change,
+       SUM(CASE WHEN il.movement_type = 'OUT' THEN ABS(il.qty_change) * i.current_average_price ELSE 0 END) as daily_outbound_value
+     FROM inventory_logs il
+     JOIN items i ON i.id = il.item_id
+     WHERE il.created_at >= CURRENT_DATE - INTERVAL '6 days'
+     GROUP BY DATE(il.created_at)
      ORDER BY date ASC`
   );
 
   const changesByDate: Record<string, { change: number, outbound: number }> = {};
   for (const row of res.rows) {
-    // Force format YYYY-MM-DD
     const d = new Date(row.date);
     const dateStr = d.toISOString().split('T')[0];
     changesByDate[dateStr] = {
       change: parseFloat(row.daily_value_change || '0'),
-      outbound: parseFloat(row.daily_outbound_value || '0')
+      outbound: parseFloat(row.daily_outbound_value || '0'),
     };
   }
 
   const trend = [];
   let runningValue = currentTotalValue;
 
-  // We work backwards from today to 6 days ago (total 7 days)
   for (let i = 0; i < 7; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -255,14 +256,114 @@ export async function getInventoryValueTrend(currentTotalValue: number) {
     trend.unshift({
       date: dateStr,
       value: runningValue,
-      outboundValue: changesByDate[dateStr]?.outbound || 0
+      outboundValue: changesByDate[dateStr]?.outbound || 0,
     });
     
-    // To get yesterday's value, we subtract today's net change
     const todaysChange = changesByDate[dateStr]?.change || 0;
     runningValue -= todaysChange;
   }
 
+
   return trend;
 }
 
+/**
+ * Menetapkan saldo awal stok gudang pusat (Opening Balance).
+ * Setiap item akan mendapatkan satu log OB yang menyesuaikan saldo ke angka
+ * yang diberikan pengguna (input dalam satuan kemasan, dikonversi ke satuan terkecil).
+ * Jika saldo sudah sama dengan target, tidak ada log yang dibuat.
+ */
+export async function setOpeningBalance(
+  items: Array<{ item_id: number; actual_qty: number }>
+): Promise<{ processed: number; skipped: number }> {
+  return withTransaction(async (client) => {
+    // Filter valid items
+    const validItems = items.filter(
+      i => !isNaN(Number(i.item_id)) && !isNaN(Number(i.actual_qty)) && Number(i.actual_qty) > 0
+    );
+    if (validItems.length === 0) return { processed: 0, skipped: items.length };
+
+    const itemIds = validItems.map(i => Number(i.item_id));
+
+    // Fetch conversion_ratio untuk semua item sekaligus (bulk)
+    const itemDataRes = await client.query(
+      `SELECT id, conversion_ratio FROM items WHERE id = ANY($1::int[])`,
+      [itemIds]
+    );
+    const itemDataMap = new Map<number, number>();
+    for (const row of itemDataRes.rows) {
+      itemDataMap.set(Number(row.id), parseFloat(row.conversion_ratio || '1'));
+    }
+
+    // Fetch saldo terakhir di inventory_logs untuk semua item sekaligus (bulk)
+    const lastBalRes = await client.query(
+      `SELECT DISTINCT ON (item_id) item_id, ending_balance
+       FROM inventory_logs WHERE item_id = ANY($1::int[])
+       ORDER BY item_id, created_at DESC, id DESC`,
+      [itemIds]
+    );
+    const balanceMap = new Map<number, number>();
+    for (const row of lastBalRes.rows) {
+      balanceMap.set(Number(row.item_id), parseFloat(row.ending_balance));
+    }
+
+    // Hitung qty_change per item
+    const log_itemIds: number[] = [];
+    const log_movTypes: string[] = [];
+    const log_qtyChanges: number[] = [];
+    const log_endingBals: number[] = [];
+
+    let skipped = 0;
+    for (const item of validItems) {
+      const id = Number(item.item_id);
+      const ratio = itemDataMap.get(id) ?? 1;
+      const qty_in_smallest = Number(item.actual_qty) * ratio;
+      const existingStock = balanceMap.get(id) ?? 0;
+      const qty_change = qty_in_smallest - existingStock;
+
+      if (qty_change === 0) { skipped++; continue; }
+
+      log_itemIds.push(id);
+      log_movTypes.push(qty_change > 0 ? 'IN' : 'OUT');
+      log_qtyChanges.push(qty_change);
+      log_endingBals.push(qty_in_smallest);
+    }
+
+    // Bulk INSERT semua log sekaligus (satu query, bukan N query per item)
+    if (log_itemIds.length > 0) {
+      await client.query(
+        `INSERT INTO inventory_logs (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
+         SELECT u.item_id, u.mov, u.qty_change, u.ending_bal, 'OB', NULL
+         FROM UNNEST($1::int[], $2::varchar[], $3::numeric[], $4::numeric[]) AS u(item_id, mov, qty_change, ending_bal)`,
+        [log_itemIds, log_movTypes, log_qtyChanges, log_endingBals]
+      );
+    }
+
+    return { processed: log_itemIds.length, skipped };
+  });
+}
+
+export async function getCombinedStockReport(search: string | null) {
+  let sql = `
+    SELECT 
+      i.id, i.name as item_name, c.name as category_name, i.category_id,
+      i.smallest_unit, i.purchase_unit, i.conversion_ratio, i.minimum_threshold,
+      COALESCE((SELECT ending_balance FROM inventory_logs il WHERE il.item_id = i.id ORDER BY il.created_at DESC, id DESC LIMIT 1), 0)::numeric AS central_stock,
+      COALESCE((SELECT SUM(current_balance) FROM outlet_stocks os WHERE os.item_id = i.id), 0)::numeric AS outlet_stock,
+      i.current_average_price
+    FROM items i
+    LEFT JOIN categories c ON c.id = i.category_id
+    WHERE i.is_active = TRUE
+  `;
+  
+  const params: any[] = [];
+  if (search) {
+    params.push(`%${search}%`);
+    sql += ` AND i.name ILIKE $1`;
+  }
+  
+  sql += ` ORDER BY i.name ASC`;
+  
+  const res = await query(sql, params);
+  return res.rows;
+}

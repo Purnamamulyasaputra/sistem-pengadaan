@@ -283,3 +283,61 @@ export async function getSalesIngredientRequirements(outletId: number, dateFrom:
   // Convert map ke array dan filter yang tidak punya item (karena request ke Gudang butuh Item ID)
   return Array.from(reqMap.values()).sort((a, b) => b.total_raw_qty - a.total_raw_qty);
 }
+
+export async function getSalesEstimationData(outletId: number) {
+  // 1. Get all mapped Moka Items (Variants) for this outlet and their recipes
+  const mokaItemsRes = await query(`
+    SELECT 
+      mv.id as moka_item_id,
+      CASE WHEN mv.name = 'Regular' OR mv.name IS NULL THEN mi.name ELSE mi.name || ' - ' || mv.name END as moka_item_name,
+      mv.internal_recipe_id,
+      r.yield_unit
+    FROM moka_item_variants mv
+    JOIN moka_items mi ON mv.item_id = mi.id
+    LEFT JOIN recipes r ON r.id = mv.internal_recipe_id
+    WHERE mi.outlet_id = $1 AND mv.internal_recipe_id IS NOT NULL
+    ORDER BY moka_item_name
+  `, [outletId]);
+
+  const mokaItems = mokaItemsRes.rows;
+  if (mokaItems.length === 0) return { mokaItems: [], ingredients: [], stockMap: {} };
+
+  // 2. Get all recipe ingredients for the mapped recipes, joining with ingredients to get item_id
+  const recipeIds = [...new Set(mokaItems.map(m => m.internal_recipe_id))];
+  const ingredientsRes = await query(`
+    SELECT 
+      ri.recipe_id,
+      ri.ingredient_id,
+      ing.item_id,
+      ri.quantity,
+      i.name as ingredient_name,
+      i.smallest_unit
+    FROM recipe_ingredients ri
+    JOIN ingredients ing ON ing.id = ri.ingredient_id
+    LEFT JOIN items i ON i.id = ing.item_id
+    WHERE ri.recipe_id = ANY($1::int[])
+  `, [recipeIds]);
+
+  const ingredients = ingredientsRes.rows;
+
+  // 3. Get current stock for these inventory items at this outlet
+  const itemIds = [...new Set(ingredients.map(i => i.item_id).filter(Boolean))];
+  const stockRes = await query(`
+    SELECT 
+      item_id,
+      COALESCE(current_balance, 0)::numeric AS current_balance
+    FROM outlet_stocks
+    WHERE outlet_id = $1 AND item_id = ANY($2::int[])
+  `, [outletId, itemIds.length > 0 ? itemIds : [-1]]);
+
+  const stockMap: Record<number, number> = {};
+  for (const row of stockRes.rows) {
+    stockMap[Number(row.item_id)] = Number(row.current_balance);
+  }
+
+  return {
+    mokaItems,
+    ingredients,
+    stockMap
+  };
+}

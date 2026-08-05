@@ -58,6 +58,23 @@ function getUniqueUnits(defaultUnits: string[], dynamicUnits: (string | null | u
   return result.map(u => ({ value: u, label: u }));
 }
 
+function formatNumberInput(val: string | number): string {
+  if (!val && val !== 0) return '';
+  const str = String(val);
+  if (str.endsWith('.')) {
+    return Number(str.slice(0, -1)).toLocaleString('id-ID') + ',';
+  }
+  const parts = str.split('.');
+  if (parts.length === 2) {
+    return Number(parts[0]).toLocaleString('id-ID') + ',' + parts[1];
+  }
+  return Number(str).toLocaleString('id-ID', { maximumFractionDigits: 5 });
+}
+
+function parseNumberInput(val: string): string {
+  return val.replace(/\./g, '').replace(',', '.');
+}
+
 function getStockStatus(item: Item): 'MERAH' | 'MENIPIS' | 'AMAN' {
   const stock = Number(item.current_stock || 0);
   const min = Number(item.minimum_threshold || 0);
@@ -572,7 +589,17 @@ export default function ItemsPage() {
                     />
                   </div>
                   <div style={{ position: 'relative' }}>
-                    <input className="input" type="number" min="0.01" step="0.01" value={form.conversion_ratio} onChange={e => setForm(f => ({ ...f, conversion_ratio: e.target.value }))} disabled={!form.has_conversion} style={{ paddingRight: 60, cursor: form.has_conversion ? 'text' : 'not-allowed' }} />
+                    <input 
+                      className="input" 
+                      type="text" 
+                      value={formatNumberInput(form.conversion_ratio)} 
+                      onChange={e => {
+                        const raw = parseNumberInput(e.target.value);
+                        if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, conversion_ratio: raw }));
+                      }} 
+                      disabled={!form.has_conversion} 
+                      style={{ paddingRight: 60, cursor: form.has_conversion ? 'text' : 'not-allowed' }} 
+                    />
                     <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)' }}>{form.smallest_unit}</span>
                   </div>
                 </div>
@@ -588,17 +615,33 @@ export default function ItemsPage() {
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ marginBottom: 0 }}>Batas Min.</label>
+                    <label style={{ marginBottom: 0 }}>Batas Min. {form.smallest_unit ? `(${form.smallest_unit})` : ''}</label>
                     <InfoTooltip align="left" width={230} text="Stok kritis terendah di outlet. Jika stok mencapai angka ini, sistem memberi peringatan merah (Reorder Point)." />
                   </div>
-                  <input className="input" type="number" min="0" value={form.minimum_threshold} onChange={e => setForm(f => ({ ...f, minimum_threshold: e.target.value }))} />
+                  <input 
+                    className="input" 
+                    type="text" 
+                    value={formatNumberInput(form.minimum_threshold)} 
+                    onChange={e => {
+                      const raw = parseNumberInput(e.target.value);
+                      if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, minimum_threshold: raw }));
+                    }} 
+                  />
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ marginBottom: 0 }}>Target Stok.</label>
+                    <label style={{ marginBottom: 0 }}>Target Stok. {form.smallest_unit ? `(${form.smallest_unit})` : ''}</label>
                     <InfoTooltip align="left" width={230} text="Stok ideal/maksimal di outlet. Sistem menghitung saran pembelian berdasarkan selisih Target Stok dikurangi Stok Saat Ini." />
                   </div>
-                  <input className="input" type="number" min="0" value={form.target_stock} onChange={e => setForm(f => ({ ...f, target_stock: e.target.value }))} />
+                  <input 
+                    className="input" 
+                    type="text" 
+                    value={formatNumberInput(form.target_stock)} 
+                    onChange={e => {
+                      const raw = parseNumberInput(e.target.value);
+                      if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, target_stock: raw }));
+                    }} 
+                  />
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>

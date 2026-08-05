@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from '@/lib/auth';
+import { mapMokaItemVariant } from "@/lib/queries/moka_items";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
     try {
         const body = await req.json();
         const { moka_variant_id, internal_recipe_id } = body;
@@ -12,11 +15,7 @@ export async function POST(req: Request) {
 
         // internal_recipe_id can be null to remove the mapping
         
-        await query(`
-            UPDATE moka_item_variants 
-            SET internal_recipe_id = $1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2
-        `, [internal_recipe_id, moka_variant_id]);
+        await mapMokaItemVariant(moka_variant_id, internal_recipe_id);
 
         return NextResponse.json({ 
             success: true, 

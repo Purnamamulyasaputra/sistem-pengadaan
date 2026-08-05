@@ -418,11 +418,17 @@ export default function CreateDeliveryOrderPage() {
               <Table>
                 <thead>
                   <tr>
-                    <th style={{ width: 40 }} className="center" title="Pilih Barang">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                        <polyline points="9 11 12 14 22 4"></polyline>
-                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                      </svg>
+                    <th style={{ width: 40 }} className="center">
+                      <input
+                        type="checkbox"
+                        checked={orderItems.length > 0 && orderItems.every(i => i.selected)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setOrderItems(orderItems.map(i => ({ ...i, selected: checked })));
+                        }}
+                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary)' }}
+                        title="Pilih Semua Barang"
+                      />
                     </th>
                     <th>Barang</th>
                     <th className="center">Jml Diminta</th>

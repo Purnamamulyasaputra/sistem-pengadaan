@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth';
 import { updateIngredient, deleteIngredient } from '@/lib/queries/hpp';
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
   const resolvedParams = await params;
   try {
     const id = parseInt(resolvedParams.id, 10);
@@ -15,6 +19,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN_PUSAT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
   const resolvedParams = await params;
   try {
     const id = parseInt(resolvedParams.id, 10);
