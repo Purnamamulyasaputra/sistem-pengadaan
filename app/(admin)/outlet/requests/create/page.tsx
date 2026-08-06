@@ -65,7 +65,17 @@ function calculateSuggestedOrder(
 export default function CreateRequestPage() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
-  const [cart, setCart] = useState<RequestLine[]>([]);
+  const [cart, setCart] = useState<RequestLine[]>([{
+    id: 1,
+    item_id: null,
+    name: '',
+    uom: '',
+    qty: '',
+    note: '',
+    smallest_unit: '',
+    purchase_unit: '',
+    ratio: 1
+  }]);
   const [activeItemIds, setActiveItemIds] = useState<number[]>([]);
   const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success'|'error'|'info' });
 
@@ -364,7 +374,6 @@ export default function CreateRequestPage() {
                         value={c.item_id || ''}
                         onChange={val => updateCartItemSelect(c.id, String(val))}
                         options={[
-                          { value: '', label: '-- Pilih Barang --' },
                           ...items.map(i => {
                             const isActive = activeItemIds.includes(i.id);
                             const inCart = cart.some(cartItem => String(cartItem.item_id) === String(i.id));
@@ -376,7 +385,7 @@ export default function CreateRequestPage() {
                           })
                         ]}
                         searchable
-                        placeholder="-- Pilih Barang --"
+                        placeholder="Pilih Barang..."
                         style={{ width: '100%', maxWidth: 300 }}
                         inputStyle={{ height: 32, fontSize: 13 }}
                         optionStyle={{ fontSize: 13 }}

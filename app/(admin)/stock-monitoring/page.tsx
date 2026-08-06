@@ -138,17 +138,10 @@ export default function StockMonitoringPage() {
 
 
   const handleTriggerAllOutlets = async () => {
-    const outletStatus = data?.outlets?.map(o => {
-      const lastDo = o.last_do_date
-        ? new Date(o.last_do_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-        : 'Belum ada pengiriman';
-      return `• ${o.name}: Terakhir pengiriman ${lastDo}`;
-    }).join('\n') || '';
-
     setConfirmDialog({
       open: true,
       title: 'Trigger Semua Outlet',
-      message: `Proses seluruh pengiriman ke semua outlet sekarang?\n\n📅 Status Terakhir Pengiriman Pusat ke Outlet:\n${outletStatus}`,
+      message: 'Apakah Anda yakin ingin memproses dan menyetujui seluruh pengiriman stok ke semua outlet secara otomatis sekarang?',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, open: false }));
         setTransferring(true);
