@@ -205,6 +205,7 @@ export default function CreateDeliveryOrderPage() {
       ...i,
       item_id: itemData.id,
       item_name: itemData.name,
+      purchase_unit: itemData.purchase_unit,
       smallest_unit: itemData.smallest_unit,
       conversion_ratio: itemData.conversion_ratio,
       current_average_price: itemData.current_average_price,
@@ -265,8 +266,7 @@ export default function CreateDeliveryOrderPage() {
       return parseLocalNumber(i.qty_shipped) > roundedStock;
     });
     if (overStockItems.length > 0) {
-      const names = overStockItems.map(i => i.item_name).join(', ');
-      setError(`Stok tidak mencukupi untuk: ${names}. (Atau stok sedang direservasi untuk pesanan lain. Coba muat ulang halaman untuk update realtime).`);
+      setError(`Terdapat ${overStockItems.length} barang dengan kuantitas melebihi stok yang tersedia. Silakan periksa kembali baris yang berwarna merah pada tabel.`);
       return;
     }
 

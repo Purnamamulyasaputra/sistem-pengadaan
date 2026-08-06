@@ -124,8 +124,7 @@ export default function OutletOpnamePage() {
             <div className="empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
               <h4>Belum ada riwayat opname</h4>
-              <p>Anda belum pernah melakukan opname stok outlet.</p>
-              <Button variant="primary" size="sm" onClick={handleStartOpname} style={{ marginTop: 12 }}>Mulai Opname Pertama</Button>
+              <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Pilih outlet untuk memulai atau melihat riwayat opname.</p>
             </div>
           ) : (
             <div style={{ padding: '24px 20px 20px' }}>

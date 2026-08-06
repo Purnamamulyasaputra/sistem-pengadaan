@@ -95,12 +95,21 @@ export default function StockCardPage() {
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const paginatedItems = filteredItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // Auto-convert smallest unit value to a human-readable central unit
-  function toCentralDisplay(valueInSmallest: number, smallestUnit: string) {
-    const u = (smallestUnit || '').toLowerCase();
+  // Auto-convert smallest unit value to a human-readable central unit based on Master Data
+  function toCentralDisplay(valueInSmallest: number, item: any) {
+    const ratio = parseFloat(item?.conversion_ratio || '1');
+    const pUnit = item?.purchase_unit;
+    const sUnit = item?.smallest_unit;
+
+    if (ratio > 1 && pUnit) {
+      return { value: valueInSmallest / ratio, unit: pUnit };
+    }
+    
+    // Fallback if no conversion ratio exists
+    const u = (sUnit || '').toLowerCase();
     if (u === 'ml') return { value: valueInSmallest / 1000, unit: 'Liter' };
     if (u === 'gr' || u === 'g') return { value: valueInSmallest / 1000, unit: 'Kg' };
-    return { value: valueInSmallest, unit: smallestUnit };
+    return { value: valueInSmallest, unit: sUnit || '' };
   }
 
   return (
@@ -166,8 +175,8 @@ export default function StockCardPage() {
                     {paginatedItems.map((item: any) => {
                       const currentStockSmallest = Number(item.current_stock ?? 0);
                       const minStockSmallest = Number(item.minimum_threshold ?? 0);
-                      const centralStock = toCentralDisplay(currentStockSmallest, String(item.smallest_unit || ''));
-                      const centralMin = toCentralDisplay(minStockSmallest, String(item.smallest_unit || ''));
+                      const centralStock = toCentralDisplay(currentStockSmallest, item);
+                      const centralMin = toCentralDisplay(minStockSmallest, item);
 
                       const isLow = currentStockSmallest < minStockSmallest;
                       const isOut = currentStockSmallest <= 0;

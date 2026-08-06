@@ -59,7 +59,7 @@ export async function getAlerts(opts?: { resolved?: boolean }) {
   const params = opts?.resolved !== undefined ? [opts.resolved] : [];
 
   const result = await query(
-    `SELECT sa.*, i.name AS item_name, i.smallest_unit, i.minimum_threshold, i.threshold_type,
+    `SELECT sa.*, i.name AS item_name, i.smallest_unit, i.purchase_unit, i.conversion_ratio, i.minimum_threshold, i.threshold_type,
             i.current_average_price, c.name AS category_name,
             (SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1) AS current_balance
      FROM stock_alerts sa

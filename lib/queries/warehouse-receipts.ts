@@ -138,6 +138,13 @@ export async function createGoodsReceipt(data: {
         const stockData = stockMap.get(Number(item.item_id));
         const currentStock = stockData ? parseFloat(stockData.ending_balance || '0') : 0;
         const newStock = currentStock + qtyInSmallestUnit;
+        
+        // Update stockMap agar jika ada item yang sama di baris PO berikutnya, perhitungan stoknya tetap sinkron
+        if (stockData) {
+          stockData.ending_balance = newStock.toString();
+        } else {
+          stockMap.set(Number(item.item_id), { ending_balance: newStock.toString() });
+        }
 
         const effectiveOldStock = currentStock > 0 ? currentStock : 0;
         const effectiveNewStock = effectiveOldStock + qtyInSmallestUnit;

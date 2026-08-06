@@ -12,6 +12,8 @@ interface Alert {
   item_name: string;
   category_name: string;
   smallest_unit: string;
+  purchase_unit?: string;
+  conversion_ratio?: string | number;
   current_balance: number;
   threshold_at_alert: number;
   minimum_threshold: number;
@@ -113,6 +115,11 @@ export default function AlertsPage() {
                 {alerts.map(a => {
                   const threshold = a.threshold_at_alert || a.minimum_threshold || 1;
                   const stockPct = (Number(a.current_balance) / threshold) * 100;
+                  const ratio = Number(a.conversion_ratio || 1);
+                  const isLargeUnit = ratio > 1 && a.purchase_unit;
+                  const displayBal = isLargeUnit ? Number(a.current_balance) / ratio : a.current_balance;
+                  const displayThresh = isLargeUnit ? threshold / ratio : threshold;
+                  const displayUnit = isLargeUnit ? a.purchase_unit : a.smallest_unit;
                   
                   return (
                     <tr key={a.id}>
@@ -121,12 +128,12 @@ export default function AlertsPage() {
                       <td className="muted">{a.category_name}</td>
                       <td className="right">
                         <span style={{ color: '#dc2626', fontWeight: 700 }}>
-                          {formatQty(a.current_balance, a.smallest_unit)}
+                          {formatQty(displayBal, displayUnit || '')}
                         </span>
-                        <span className="muted" style={{ marginLeft: 4 }}>{a.smallest_unit}</span>
+                        <span className="muted" style={{ marginLeft: 4 }}>{displayUnit}</span>
                       </td>
                       <td className="right font-bold">
-                        {formatQty(a.threshold_at_alert || a.minimum_threshold || 0, a.smallest_unit)} <span className="muted">{a.smallest_unit}</span>
+                        {formatQty(displayThresh, displayUnit || '')} <span className="muted">{displayUnit}</span>
                       </td>
                       <td className="center">
                         <Badge variant={stockPct <= 0 ? 'red' : 'amber'}>

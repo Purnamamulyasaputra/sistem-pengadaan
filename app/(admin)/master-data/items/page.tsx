@@ -156,7 +156,7 @@ export default function ItemsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -194,7 +194,9 @@ export default function ItemsPage() {
       name: item.name, barcode: item.barcode || '', category_id: String(item.category_id ?? ''), 
       purchase_unit: normalizeUnitAlias(item.purchase_unit), package_inner_size: '',
       smallest_unit: normalizeUnitAlias(item.smallest_unit), conversion_ratio: String(Number(item.conversion_ratio)),
-      minimum_threshold: String(Number(item.minimum_threshold)), target_stock: String(Number(item.target_stock ?? 0)), threshold_type: item.threshold_type,
+      minimum_threshold: String(Number(item.minimum_threshold) / (hasConv ? Number(item.conversion_ratio || 1) : 1)), 
+      target_stock: String(Number(item.target_stock ?? 0) / (hasConv ? Number(item.conversion_ratio || 1) : 1)), 
+      threshold_type: item.threshold_type,
       is_perishable: item.is_perishable, is_active: item.is_active,
       purchase_price: String(Number(item.current_average_price ?? 0) * Number(item.conversion_ratio || 1)),
       has_conversion: hasConv,
@@ -227,8 +229,8 @@ export default function ItemsPage() {
         category_id: Number(form.category_id),
         smallest_unit: finalSmallestUnit,
         conversion_ratio: finalRatio,
-        minimum_threshold: Number(form.minimum_threshold),
-        target_stock: Number(form.target_stock),
+        minimum_threshold: Number(form.minimum_threshold) * finalRatio,
+        target_stock: Number(form.target_stock) * finalRatio,
         current_average_price: finalAvgPrice,
         ingredient_id: form.ingredient_id ? Number(form.ingredient_id) : null,
         is_split_allowed: Boolean(form.is_split_allowed),
@@ -279,8 +281,8 @@ export default function ItemsPage() {
     return true;
   });
 
-  const paginatedItems = filteredItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = filteredItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
 
   const matchingExistingItems = items
     .filter(i => i.name.toLowerCase().includes(form.name.trim().toLowerCase()))
@@ -429,13 +431,29 @@ export default function ItemsPage() {
                   </tbody>
                 </Table>
               </div>
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={filteredItems.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                onPageChange={setCurrentPage}
-              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="muted" style={{ fontSize: 13 }}>Tampilkan</span>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onChange={(val: any) => { setItemsPerPage(Number(val)); setCurrentPage(1); }}
+                    options={[
+                      { value: '20', label: '20 baris' },
+                      { value: '50', label: '50 baris' },
+                      { value: '100', label: '100 baris' }
+                    ]}
+                    style={{ width: 110 }}
+                    inputStyle={{ height: 32, fontSize: 13 }}
+                  />
+                </div>
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredItems.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
             </>
           )}
         </div>
@@ -615,7 +633,7 @@ export default function ItemsPage() {
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ marginBottom: 0 }}>Batas Min. {form.smallest_unit ? `(${form.smallest_unit})` : ''}</label>
+                    <label style={{ marginBottom: 0 }}>Batas Min. {form.has_conversion ? (form.purchase_unit ? `(${form.purchase_unit})` : '') : (form.smallest_unit ? `(${form.smallest_unit})` : '')}</label>
                     <InfoTooltip align="left" width={230} text="Stok kritis terendah di outlet. Jika stok mencapai angka ini, sistem memberi peringatan merah (Reorder Point)." />
                   </div>
                   <input 
@@ -630,7 +648,7 @@ export default function ItemsPage() {
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ marginBottom: 0 }}>Target Stok. {form.smallest_unit ? `(${form.smallest_unit})` : ''}</label>
+                    <label style={{ marginBottom: 0 }}>Target Stok. {form.has_conversion ? (form.purchase_unit ? `(${form.purchase_unit})` : '') : (form.smallest_unit ? `(${form.smallest_unit})` : '')}</label>
                     <InfoTooltip align="left" width={230} text="Stok ideal/maksimal di outlet. Sistem menghitung saran pembelian berdasarkan selisih Target Stok dikurangi Stok Saat Ini." />
                   </div>
                   <input 

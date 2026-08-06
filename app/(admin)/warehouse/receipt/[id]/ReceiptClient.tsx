@@ -102,11 +102,15 @@ export default function ReceiptClient({ poId }: { poId: number }) {
       if (!d.success) throw new Error(d.message);
       
       setToast({ isOpen: true, message: 'Penerimaan barang berhasil!', type: 'success' });
+      setShowConfirm(false);
+      setSaving(false);
+      
+      router.refresh();
       setTimeout(() => {
         router.push('/warehouse');
       }, 1000);
     } catch (err: unknown) {
-      setError((err instanceof Error ? err.message : 'Unknown error'));
+      setToast({ isOpen: true, message: err instanceof Error ? err.message : 'Unknown error', type: 'error' });
       setSaving(false);
     }
   }
@@ -149,7 +153,7 @@ export default function ReceiptClient({ poId }: { poId: number }) {
     }
     
     if (totalReceived === 0) {
-      setError('Belum ada barang yang diterima. Isi kuantitas minimal 1.');
+      setToast({ isOpen: true, message: 'Belum ada barang yang diterima. Isi kuantitas minimal 1.', type: 'error' });
       return;
     }
 
@@ -180,7 +184,13 @@ export default function ReceiptClient({ poId }: { poId: number }) {
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Memuat data PO...</div>;
-  if (error && !po) return <div style={{ padding: 40, color: 'red' }}>Error: {error}</div>;
+  if (error && !po) return (
+    <div className="empty-state" style={{ marginTop: 40 }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <h4 style={{ color: '#dc2626' }}>Terjadi Kesalahan</h4>
+      <p>{error}</p>
+    </div>
+  );
   if (!po) return null;
 
   return (
@@ -209,8 +219,6 @@ export default function ReceiptClient({ poId }: { poId: number }) {
         </div>
         
         <div className="card-body flush" style={{ padding: 24 }}>
-          {error && <div className="alert-banner alert-danger" style={{ marginBottom: 24 }}>{error}</div>}
-          
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 24, marginBottom: 32 }}>
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Vendor</label>

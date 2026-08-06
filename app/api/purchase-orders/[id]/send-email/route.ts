@@ -14,18 +14,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
     }
 
-    // Configure nodemailer with explicit host and port to avoid port 465 timeout issues
+    // Configure nodemailer with explicit host and port 465 (SSL) to avoid ISP blocking port 587
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // upgrade later with STARTTLS
+      port: 465,
+      secure: true, // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_APP_PASSWORD,
       },
       tls: {
         rejectUnauthorized: false
-      }
+      },
+      connectionTimeout: 10000, // Timeout 10 detik agar tidak menggantung terlalu lama
+      greetingTimeout: 10000,
+      socketTimeout: 10000
     });
 
     // Check if env vars are set
@@ -53,7 +56,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     transporter.sendMail(mailOptions)
       .then(info => console.log('Email sent: ' + info.response))
-      .catch(error => console.error('Error sending email:', error));
+      .catch(error => {
+        if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKET') {
+          console.error('❌ Gagal mengirim email: Koneksi terputus (Timeout).');
+          console.error('Info: Jika Anda menjalankan aplikasi ini secara lokal di Indonesia, provider internet (seperti Indihome/Telkomsel/Biznet) biasanya MEMBLOKIR port pengiriman email (Port 465/587) untuk mencegah spam.');
+          console.error('Solusi: Jangan khawatir, fitur ini AKAN BERJALAN LANCAR saat aplikasi dideploy ke server production (Vercel/VPS). Untuk testing lokal, Anda bisa mengabaikan error ini atau menggunakan VPN.');
+        } else {
+          console.error('Error sending email:', error);
+        }
+      });
 
     return NextResponse.json({ success: true, message: 'Email sedang diproses dan akan segera terkirim ke ' + to });
   } catch (error: unknown) {
