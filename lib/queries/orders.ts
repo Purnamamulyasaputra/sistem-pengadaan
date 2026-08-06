@@ -302,6 +302,80 @@ export async function autoFulfillPendingRequests(client: PoolClient, itemId: num
   }
 }
 
+export async function recalculateOrderStatusBulk(orderIds: number[], client: PoolClient) {
+  if (!orderIds.length) return;
+  const itemsRes = await client.query(
+    `SELECT order_id, item_status FROM order_items WHERE order_id = ANY($1::int[])`, 
+    [orderIds]
+  );
+  const orderStatuses = new Map<number, string[]>();
+  for (const row of itemsRes.rows) {
+    if (!orderStatuses.has(row.order_id)) orderStatuses.set(row.order_id, []);
+    orderStatuses.get(row.order_id)!.push(row.item_status);
+  }
+  
+  for (const orderId of orderIds) {
+    const statuses = orderStatuses.get(orderId) || [];
+    if (!statuses.length) continue;
+    let newStatus = 'PENDING';
+    if (statuses.every(s => s === 'SELESAI')) newStatus = 'COMPLETED';
+    else if (statuses.every(s => s === 'DIKIRIM' || s === 'SELESAI')) newStatus = 'SHIPPED';
+    else if (statuses.some(s => ['PROSES_BELANJA', 'READY_DI_GUDANG', 'DIKIRIM', 'SELESAI'].includes(s))) newStatus = 'PROCESSING';
+    
+    await client.query(
+      `UPDATE orders SET status = $1, updated_at = now() WHERE id = $2`,
+      [newStatus, orderId]
+    );
+  }
+}
+
+export async function autoFulfillPendingRequestsBulk(client: PoolClient, triggerActions: {itemId: number, newStock: number}[]) {
+  if (triggerActions.length === 0) return;
+  const itemIds = triggerActions.map(t => t.itemId);
+  
+  const pendingRes = await client.query(`
+    SELECT oi.id, oi.order_id, oi.item_id, COALESCE(oi.approved_smallest_qty, oi.smallest_unit_qty) as needed_qty
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id
+    WHERE oi.item_id = ANY($1::int[]) 
+      AND oi.item_status IN ('PROSES_BELANJA', 'PENDING')
+      AND oi.fulfillment_status != 'SANGGUP'
+      AND o.status NOT IN ('COMPLETED', 'CANCELLED', 'DIBATALKAN')
+    ORDER BY oi.created_at ASC
+  `, [itemIds]);
+
+  const stockMap = new Map<number, number>();
+  for (const t of triggerActions) {
+    stockMap.set(t.itemId, t.newStock);
+  }
+
+  const updatedOrderItemIds: number[] = [];
+  const updatedOrderIds = new Set<number>();
+
+  for (const row of pendingRes.rows) {
+    const neededQty = parseFloat(row.needed_qty || '0');
+    let availableStock = stockMap.get(row.item_id) || 0;
+    if (!isNaN(neededQty) && neededQty > 0 && availableStock >= neededQty) {
+      updatedOrderItemIds.push(row.id);
+      availableStock -= neededQty;
+      stockMap.set(row.item_id, availableStock);
+      updatedOrderIds.add(row.order_id);
+    }
+  }
+
+  if (updatedOrderItemIds.length > 0) {
+    await client.query(`
+      UPDATE order_items 
+      SET fulfillment_status = 'SANGGUP', item_status = 'READY_DI_GUDANG', updated_at = now() 
+      WHERE id = ANY($1::int[])
+    `, [updatedOrderItemIds]);
+  }
+
+  if (updatedOrderIds.size > 0) {
+    await recalculateOrderStatusBulk(Array.from(updatedOrderIds), client);
+  }
+}
+
 export async function getAggregatedRequestsByProduct(opts?: { status?: string; startDate?: string; endDate?: string }) {
   const conditions: string[] = ["oi.item_status IN ('PENDING', 'PROSES_BELANJA')"];
   const params: unknown[] = [];

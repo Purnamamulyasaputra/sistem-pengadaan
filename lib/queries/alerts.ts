@@ -54,6 +54,88 @@ export async function checkAndCreateAlert(
   );
 }
 
+export async function checkAndCreateAlertBulk(triggerActions: {itemId: number, newStock: number}[], client?: PoolClient) {
+  if (triggerActions.length === 0) return;
+  const doQuery = client ? client.query.bind(client) : query;
+  
+  const itemIds = triggerActions.map(t => t.itemId);
+
+  const itemRes = await doQuery(`
+    SELECT id, minimum_threshold, threshold_type, computed_threshold_cache 
+    FROM items 
+    WHERE id = ANY($1::int[])
+  `, [itemIds]);
+
+  const itemsMap = new Map(itemRes.rows.map((r: any) => [r.id, r]));
+
+  // Also get existing unresolved alerts
+  const existingRes = await doQuery(`
+    SELECT id, item_id FROM stock_alerts WHERE item_id = ANY($1::int[]) AND is_resolved = FALSE
+  `, [itemIds]);
+  const existingAlertsMap = new Map(existingRes.rows.map((r: any) => [r.item_id, r.id]));
+
+  const alertsToResolve: number[] = [];
+  const alertsToInsert: {itemId: number, balance: number, threshold: number}[] = [];
+
+  // We need avg monthly for PERSENTASE type items that don't have cache. Let's do it in bulk.
+  const itemsNeedsAvg = itemRes.rows.filter((r: any) => r.threshold_type === 'PERSENTASE' && !r.computed_threshold_cache).map((r: any) => r.id);
+  const avgMap = new Map<number, number>();
+  if (itemsNeedsAvg.length > 0) {
+    const avgRes = await doQuery(`
+      SELECT item_id, COALESCE(SUM(ABS(qty_change)) / 3.0, 0) AS avg_monthly
+      FROM inventory_logs
+      WHERE item_id = ANY($1::int[]) AND movement_type = 'OUT' AND reference_type = 'ORDER'
+        AND created_at >= now() - INTERVAL '3 months'
+      GROUP BY item_id
+    `, [itemsNeedsAvg]);
+    for (const row of avgRes.rows) {
+      avgMap.set(row.item_id, parseFloat(row.avg_monthly));
+    }
+  }
+
+  for (const t of triggerActions) {
+    const item = itemsMap.get(t.itemId);
+    if (!item) continue;
+    
+    let threshold = parseFloat(item.minimum_threshold ?? '0');
+    if (item.threshold_type === 'PERSENTASE') {
+      if (item.computed_threshold_cache) {
+        threshold = parseFloat(item.computed_threshold_cache);
+      } else {
+        const avgMonthly = avgMap.get(t.itemId) || 0;
+        threshold = (parseFloat(item.minimum_threshold) / 100) * avgMonthly;
+      }
+    }
+
+    if (t.newStock > threshold) {
+      // should resolve
+      if (existingAlertsMap.has(t.itemId)) {
+        alertsToResolve.push(t.itemId);
+      }
+    } else {
+      // should alert
+      if (!existingAlertsMap.has(t.itemId)) {
+        alertsToInsert.push({ itemId: t.itemId, balance: t.newStock, threshold });
+      }
+    }
+  }
+
+  if (alertsToResolve.length > 0) {
+    await doQuery(`UPDATE stock_alerts SET is_resolved = TRUE WHERE item_id = ANY($1::int[]) AND is_resolved = FALSE`, [alertsToResolve]);
+  }
+
+  if (alertsToInsert.length > 0) {
+    const insItemIds = alertsToInsert.map(a => a.itemId);
+    const insBalances = alertsToInsert.map(a => a.balance);
+    const insThresholds = alertsToInsert.map(a => a.threshold);
+    
+    await doQuery(`
+      INSERT INTO stock_alerts (item_id, balance_at_alert, threshold_at_alert)
+      SELECT * FROM UNNEST($1::int[], $2::numeric[], $3::numeric[])
+    `, [insItemIds, insBalances, insThresholds]);
+  }
+}
+
 export async function getAlerts(opts?: { resolved?: boolean }) {
   const where = opts?.resolved !== undefined ? `WHERE sa.is_resolved = $1` : `WHERE sa.is_resolved = FALSE`;
   const params = opts?.resolved !== undefined ? [opts.resolved] : [];

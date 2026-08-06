@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { Toast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { FullScreenLoader } from '@/components/ui/FullScreenLoader';
 
 interface POItem {
   id: number;
@@ -201,7 +200,7 @@ export default function ReceiptClient({ poId }: { poId: number }) {
         type={toast.type} 
         onClose={() => setToast({ ...toast, isOpen: false })} 
       />
-      <FullScreenLoader open={saving} label="Menyimpan penerimaan..." />
+
       <div className="card">
         <div className="card-head" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

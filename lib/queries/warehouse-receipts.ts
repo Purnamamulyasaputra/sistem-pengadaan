@@ -1,6 +1,6 @@
 import { query, withTransaction } from '@/lib/db';
-import { autoFulfillPendingRequests } from './orders';
-import { checkAndCreateAlert } from './alerts';
+import { autoFulfillPendingRequestsBulk } from './orders';
+import { checkAndCreateAlertBulk } from './alerts';
 
 export interface GoodsReceipt {
   id: number;
@@ -24,7 +24,8 @@ export interface GoodsReceiptItem {
 // BUG-08 Fix: Gunakan bounded retry (max 10 percobaan) bukan infinite while loop.
 // Probability collision 1/9000 per try → P(10 collisions berturut) = (1/9000)^10 ≈ 0.
 // Jika semua gagal, throw error daripada hang pool dengan koneksi tak terbatas.
-export async function generateReceiptNumber() {
+export async function generateReceiptNumber(client?: import('pg').PoolClient) {
+  const doQuery = client ? client.query.bind(client) : query;
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -33,7 +34,7 @@ export async function generateReceiptNumber() {
     const random4 = Math.floor(1000 + Math.random() * 9000);
     const receiptNumber = `WH/IN/${year}/${month}/${random4}`;
 
-    const res = await query(`SELECT id FROM goods_receipts WHERE receipt_number = $1`, [receiptNumber]);
+    const res = await doQuery(`SELECT id FROM goods_receipts WHERE receipt_number = $1`, [receiptNumber]);
     if (res.rows.length === 0) return receiptNumber;
   }
 
@@ -53,7 +54,7 @@ export async function createGoodsReceipt(data: {
   }[];
 }) {
   return withTransaction(async (client) => {
-    const receiptNumber = await generateReceiptNumber();
+    const receiptNumber = await generateReceiptNumber(client);
     
     const receiptRes = await client.query(
       `INSERT INTO goods_receipts (purchase_order_id, receipt_number, vendor_delivery_note, received_by, received_date, status)
@@ -206,15 +207,14 @@ export async function createGoodsReceipt(data: {
         [ph_itemIds, ph_vendorIds, ph_qtyReceived, ph_unitPrices, ph_newAvgPrices, ph_poItemIds]
       );
 
-      // WARN-02 Fix: Jalankan autoFulfillPendingRequests dan checkAndCreateAlert
-      // secara berurutan (sequential) pada client transaksi yang sama. 
-      // DILARANG menggunakan Promise.all pada single client pg karena akan membuat
-      // query bertabrakan di antrian driver pg dan menyebabkan proses sangat lambat/hang.
-      for (const t of triggerActions) {
-        await autoFulfillPendingRequests(client, t.itemId, t.newStock);
-      }
-      for (const t of triggerActions) {
-        await checkAndCreateAlert(t.itemId, t.newStock, client);
+      // WARN-02 Fix: Jalankan autoFulfillPendingRequestsBulk dan checkAndCreateAlertBulk
+      // secara bulk pada client transaksi yang sama.
+      if (triggerActions.length > 0) {
+        const uniqueTriggers = Array.from(
+          new Map(triggerActions.map(t => [t.itemId, t])).values()
+        );
+        await autoFulfillPendingRequestsBulk(client, uniqueTriggers);
+        await checkAndCreateAlertBulk(uniqueTriggers, client);
       }
     }
     
