@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { Toast } from '@/components/ui/Toast';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { RefreshCcw, Search, Info, Calendar, DollarSign, Package, Download, Zap } from 'lucide-react';
+import { RefreshCcw, Search, Info, Calendar, DollarSign, Package, Download, Zap, Loader2 } from 'lucide-react';
 import { CombinedStockView } from './CombinedStockView';
 
 interface Outlet {
@@ -369,8 +369,10 @@ export default function StockMonitoringPage() {
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#016e3f', color: '#ffffff', fontWeight: 600 }}
                   title="Otomatis proses & terima seluruh pengiriman ke semua outlet"
                 >
-                  <Zap size={13} />
-                  Trigger Semua Outlet
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {transferring ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+                    {transferring ? 'Memproses...' : 'Trigger Semua Outlet'}
+                  </div>
                 </Button>
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>

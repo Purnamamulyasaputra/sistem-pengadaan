@@ -1,5 +1,5 @@
 import { query, withTransaction } from '@/lib/db';
-import { checkAndCreateAlert } from './alerts';
+import { checkAndCreateAlert, checkAndCreateAlertBulk } from './alerts';
 
 export async function getPendingDeliveryNoteIssuesCount(since?: string | null): Promise<number> {
   let sql = `SELECT count(*)::int AS cnt FROM delivery_note_issues WHERE status = 'PENDING'`;
@@ -630,11 +630,13 @@ export async function confirmReceipt(deliveryNoteId: number, recipientName: stri
           [deliveryNoteId, centralLog_itemIds, centralLog_qtyChanges, centralLog_newBalances]
         );
 
-        const { checkAndCreateAlert } = await import('./alerts');
-        if (checkAndCreateAlert) {
-          for (let idx = 0; idx < centralLog_itemIds.length; idx++) {
-            await checkAndCreateAlert(centralLog_itemIds[idx], centralLog_newBalances[idx], client);
-          }
+        const { checkAndCreateAlertBulk } = await import('./alerts');
+        if (checkAndCreateAlertBulk) {
+          const triggerActions = centralLog_itemIds.map((itemId, idx) => ({
+            itemId,
+            newStock: centralLog_newBalances[idx]
+          }));
+          await checkAndCreateAlertBulk(triggerActions, client);
         }
       }
 
@@ -1105,10 +1107,12 @@ export async function approveAndTransferDeliveryNote(deliveryNoteId: number, adm
          FROM UNNEST($2::int[], $3::numeric[], $4::numeric[]) AS u(item_id, qty, bal)`,
         [deliveryNoteId, central_itemIds, central_qtyChanges, central_newBalances]
       );
-      // Run alerts secara berurutan agar tidak terjadi query concurrent di satu koneksi (mencegah deadlock / deprecation warning)
-      for (let idx = 0; idx < central_itemIds.length; idx++) {
-        await checkAndCreateAlert(central_itemIds[idx], central_newBalances[idx], client);
-      }
+      // Run alerts secara bulk agar jauh lebih cepat dan tidak membebani database
+      const triggerActions = central_itemIds.map((itemId, idx) => ({
+        itemId,
+        newStock: central_newBalances[idx]
+      }));
+      await checkAndCreateAlertBulk(triggerActions, client);
     }
 
     // STEP 2 (BULK): Update outlet stocks
