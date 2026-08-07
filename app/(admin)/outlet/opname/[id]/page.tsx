@@ -231,29 +231,20 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
 
                 const ratio = Number(item.conversion_ratio) || 1;
                 const smallUnit = formatUnit(item.smallest_unit);
-                const largeUnit = formatUnit(item.purchase_unit || item.smallest_unit);
-                const hasLargeUnit = ratio > 1 && largeUnit && largeUnit !== smallUnit;
 
                 return (
                   <tr key={item.item_id}>
                     <td className="font-bold">
                       {item.item_name}
-                      {hasLargeUnit && (
-                        <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
-                          {smallUnit} — {largeUnit} (Rasio 1:{ratio.toLocaleString('id-ID')})
-                        </div>
-                      )}
+                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
+                        Satuan: {smallUnit}
+                      </div>
                     </td>
                     <td className="muted">{item.category_name}</td>
                     <td className="right num">
                       <div className="font-bold">
                         {sysBal.toLocaleString('id-ID', { maximumFractionDigits: 0 })} {smallUnit}
                       </div>
-                      {hasLargeUnit && (
-                        <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
-                          {(sysBal / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} {largeUnit}
-                        </div>
-                      )}
                     </td>
                     <td className="right">
                       <input
@@ -265,15 +256,6 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                         placeholder="0"
                         style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: String(actual ?? '') === '' ? '#fca5a5' : 'var(--border)' }}
                       />
-                      {hasLargeUnit && (
-                        <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2, textAlign: 'right', color: '#64748b' }}>
-                          {actual !== '' && actual !== undefined ? (
-                            `= ${(Number(actual) / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} ${largeUnit}`
-                          ) : (
-                            `= 0 ${largeUnit}`
-                          )}
-                        </div>
-                      )}
                     </td>
                     <td className="right num">
                       {variance !== 0 ? (
@@ -281,11 +263,6 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
                           <span style={{ color: variance > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
                             {variance > 0 ? '+' : ''}{variance.toLocaleString('id-ID', { maximumFractionDigits: 0 })} {smallUnit}
                           </span>
-                          {hasLargeUnit && (
-                            <div className="muted font-normal" style={{ fontSize: 10, marginTop: 1 }}>
-                              {variance > 0 ? '+' : ''}{(variance / ratio).toLocaleString('id-ID', { maximumFractionDigits: 2 })} {largeUnit}
-                            </div>
-                          )}
                         </div>
                       ) : '-'}
                     </td>
