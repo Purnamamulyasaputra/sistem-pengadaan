@@ -418,7 +418,7 @@ export default function PurchaseOrdersPage() {
       setSendingEmail(false);
     }
   }
-  const handleSendWA = () => {
+  const handleSendWA = async () => {
     if (!draftPO) return;
     const selectedVendor = vendors.find(v => String(v.id) === String(draftPO.vendor_id));
     if (!selectedVendor?.phone) {
@@ -431,23 +431,33 @@ export default function PurchaseOrdersPage() {
       phone = '62' + phone.substring(1);
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
-    const systemPhone = process.env.NEXT_PUBLIC_SYSTEM_PHONE || '';
     const text = `Halo ${selectedVendor.name}, berikut adalah dokumen Purchase Order (PO: ${draftPO.po_number}) dari Sunrise Daily. Terima kasih.`;
-
     const encodedText = encodeURIComponent(text);
 
     if (draftPO.status === 'RFQ') {
       handleUpdateStatus(draftPO.id, 'RFQ_TERKIRIM');
     }
 
-    // Otomatis download PDF
-    handleDownloadPDF();
+    // Buka WhatsApp Web/App di tab baru langsung agar tidak diblokir popup blocker
+    window.open(`https://wa.me/${phone}?text=${encodedText}`, '_blank');
 
-    // Buka WhatsApp Web/App di tab baru dengan jeda sedikit agar download terpicu
-    setTimeout(() => {
-      window.open(`https://wa.me/${phone}?text=${encodedText}`, '_blank');
-    }, 300);
+    // Otomatis download PDF tanpa membuka tab baru (menggunakan fetch & Blob)
+    try {
+      const res = await fetch(`/api/purchase-orders/${draftPO.id}/pdf`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `PO-${draftPO.po_number.replace(/\//g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('Gagal download PDF', err);
+    }
   };
 
 
@@ -682,7 +692,7 @@ export default function PurchaseOrdersPage() {
                 {(!draftPO || draftPO.status === 'RFQ') && (
                   <>
                     <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={openEmailModal} disabled={saving}>Kirim via Email</button>
-                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={handleSendWA} disabled={saving}>Kirim via WA</button>
+                    {/* <button className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff', border: 'none', fontWeight: 600 }} onClick={handleSendWA} disabled={saving}>Kirim via WA</button> */}
                     <button className="btn btn-sm btn-outline" style={{ background: '#fff', color: 'var(--primary)', border: '1px solid var(--primary)', fontWeight: 600 }} onClick={() => handleSave()} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan Draft'}</button>
                   </>
                 )}
