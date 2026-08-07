@@ -76,12 +76,13 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
 
   const getDetail = (itemId: number) => details.find(d => d.item_id === itemId);
 
-  const handleQtyChange = (itemId: number, systemBalance: number, ratio: number, actualQtyLarge: string) => {
+  // Outlet opname: input langsung dalam smallest_unit (gr, ml, Pcs)
+  // karena staf outlet menghitung sisa bahan dalam satuan terkecil (misal: sisa 250 gr gula)
+  const handleQtyChange = (itemId: number, systemBalance: number, actualQtySmall: string) => {
     if (isLocked) return;
-    const qtyLarge = parseFloat(actualQtyLarge);
-    if (isNaN(qtyLarge)) return;
+    const qtySmall = parseFloat(actualQtySmall);
+    if (isNaN(qtySmall)) return;
 
-    const qtySmall = qtyLarge * (ratio || 1);
     const existing = details.find(d => d.item_id === itemId);
     const variance = qtySmall - systemBalance;
 
@@ -239,54 +240,60 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
             <tbody style={{ fontSize: 12 }}>
               {paginatedItems.map((item: any) => {
                 const detail = getDetail(item.item_id);
-                const ratio = item.conversion_ratio || 1;
-                const largeUnit = formatUnit(item.purchase_unit || item.smallest_unit);
+                // Outlet: tidak pakai konversi — input & tampil langsung dalam smallest_unit
                 const smallUnit = formatUnit(item.smallest_unit);
-                const priceLarge = Number(item.current_average_price) * ratio;
 
+                // actual_physical_qty di DB tersimpan dalam smallest_unit
                 const actualSmall = detail?.actual_physical_qty;
-                const actualLarge = actualSmall !== undefined && actualSmall !== null && actualSmall !== '' ? Math.round(Number(actualSmall) / Number(ratio)) : '';
+                const displayVal = actualSmall !== undefined && actualSmall !== null && actualSmall !== '' 
+                  ? Number(actualSmall) 
+                  : '';
 
                 const varianceSmall = Number(detail?.variance ?? 0);
-                const varianceLarge = Math.round(varianceSmall / Number(ratio));
                 const varianceValue = Math.round(Math.abs(Number(varianceSmall)) * Number(item.current_average_price));
 
-                const sysBalLarge = Math.round(Number(item.system_balance) / Number(ratio));
+                // Stok sistem dalam smallest_unit
+                const sysBalSmall = Number(item.system_balance);
 
                 return (
                   <tr key={item.item_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td className="font-bold" style={{ padding: '8px 16px', fontSize: 13 }}>
-                      {item.item_name}
+                      {item.item_name as string}
                       <div className="muted font-normal" style={{ fontSize: 11, marginTop: 2 }}>
-                        Satuan Kecil: {smallUnit} (Rasio: {ratio})
+                        Satuan: {smallUnit}
                       </div>
                     </td>
                     <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
-                      Rp {Math.round(priceLarge).toLocaleString('id-ID')}
+                      Rp {Math.round(Number(item.current_average_price)).toLocaleString('id-ID')}
                       <div className="muted font-normal" style={{ fontSize: 11, marginTop: 2 }}>
-                        / {largeUnit}
+                        / {smallUnit}
                       </div>
                     </td>
                     <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
-                      {sysBalLarge.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{largeUnit}</span>
+                      {sysBalSmall.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 11 }}>{smallUnit}</span>
                     </td>
                     <td className="right" style={{ padding: '8px 16px' }}>
-                      <input
-                        type="number"
-                        className="input right"
-                        value={actualLarge}
-                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, ratio, e.target.value)}
-                        onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                        disabled={isLocked}
-                        placeholder="0"
-                        step="any"
-                        style={{ height: 32, width: '100%', fontSize: 13, padding: '4px 8px', borderColor: actualLarge === '' ? '#fca5a5' : 'var(--border)' }}
-                      />
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          className="input right"
+                          value={displayVal}
+                          onChange={(e) => handleQtyChange(item.item_id as number, item.system_balance as number, e.target.value)}
+                          onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                          disabled={isLocked}
+                          placeholder="0"
+                          step="any"
+                          style={{ height: 32, width: '100%', fontSize: 13, padding: '4px 8px', paddingRight: 40, borderColor: displayVal === '' ? '#fca5a5' : 'var(--border)' }}
+                        />
+                        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#64748b', pointerEvents: 'none', fontWeight: 600 }}>
+                          {smallUnit}
+                        </span>
+                      </div>
                     </td>
                     <td className="right num" style={{ padding: '8px 16px', fontSize: 13 }}>
-                      {varianceLarge !== 0 ? (
-                        <span style={{ color: varianceLarge > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
-                          {varianceLarge > 0 ? '+' : ''}{varianceLarge.toLocaleString('id-ID')}
+                      {varianceSmall !== 0 ? (
+                        <span style={{ color: varianceSmall > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
+                          {varianceSmall > 0 ? '+' : ''}{Number(varianceSmall).toLocaleString('id-ID')}
                         </span>
                       ) : '-'}
                     </td>

@@ -264,10 +264,21 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                 return (
                   <tr key={item.item_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td className="font-bold" style={{ padding: '8px 16px', fontSize: 11 }}>
-                      {item.item_name}
-                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
-                        Satuan Kecil: {smallUnit} (Rasio: {ratio})
-                      </div>
+                      {item.item_name as string}
+                      {ratio > 1 ? (
+                        <div style={{ fontSize: 10, marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
+                            Input: {largeUnit}
+                          </span>
+                          <span className="muted">
+                            1 {largeUnit} = {Number(ratio).toLocaleString('id-ID')} {smallUnit}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
+                          Satuan: {smallUnit}
+                        </div>
+                      )}
                     </td>
                     <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
                       Rp {Math.round(priceLarge).toLocaleString('id-ID')}
@@ -279,17 +290,22 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                       {sysBalLarge.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 10 }}>{largeUnit}</span>
                     </td>
                     <td className="right" style={{ padding: '8px 16px' }}>
-                      <input
-                        type="number"
-                        className="input right"
-                        value={actualLarge}
-                        onChange={(e) => handleQtyChange(item.item_id, item.system_balance, ratio, e.target.value)}
-                        onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                        disabled={isLocked}
-                        placeholder="0"
-                        step="any"
-                        style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', borderColor: actualLarge === '' ? '#fca5a5' : 'var(--border)' }}
-                      />
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          className="input right"
+                          value={actualLarge}
+                          onChange={(e) => handleQtyChange(item.item_id as number, item.system_balance as number, ratio, e.target.value)}
+                          onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                          disabled={isLocked}
+                          placeholder="0"
+                          step="any"
+                          style={{ height: 28, width: '100%', fontSize: 11, padding: '4px 8px', paddingRight: 36, borderColor: actualLarge === '' ? '#fca5a5' : 'var(--border)' }}
+                        />
+                        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: '#64748b', pointerEvents: 'none', fontWeight: 600 }}>
+                          {largeUnit}
+                        </span>
+                      </div>
                     </td>
                     <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
                       {varianceLarge !== 0 ? (

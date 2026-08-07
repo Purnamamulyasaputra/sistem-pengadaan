@@ -12,6 +12,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { Toast } from '@/components/ui/Toast';
 import { Select } from '@/components/ui/Select';
 import { HelpCircle, Info, Tag, Package, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, RotateCcw } from 'lucide-react';
+import { PURCHASE_UNITS, SMALLEST_UNITS, normalizeUnit } from '@/lib/constants/units';
 
 interface Item {
   id: number; name: string; category_id: number; category_name: string; barcode?: string;
@@ -30,25 +31,22 @@ interface Ingredient { id: number; name: string; unit?: string; }
 
 const fmtCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
-const UNIT_ALIASES: Record<string, string> = {
-  'g': 'gr',
-  'l': 'liter',
-  'pc': 'pcs'
-};
-
+/** @deprecated Gunakan normalizeUnit dari lib/constants/units.ts */
 export function normalizeUnitAlias(u: string | null | undefined): string {
-  if (!u) return '';
-  const lower = u.toLowerCase();
-  return UNIT_ALIASES[lower] || u;
+  return normalizeUnit(u);
 }
 
-function getUniqueUnits(defaultUnits: string[], dynamicUnits: (string | null | undefined)[]) {
-  const allUnits = [...defaultUnits, ...dynamicUnits].filter(Boolean) as string[];
+/**
+ * Gabung satuan baku + satuan dinamis dari DB, deduplikasi berdasarkan canonical form.
+ * Satuan baku selalu muncul di urutan atas.
+ */
+function getUniqueUnits(defaultUnits: readonly string[], dynamicUnits: (string | null | undefined)[]) {
   const seen = new Set<string>();
   const result: string[] = [];
-  
-  for (const u of allUnits) {
-    const canonical = normalizeUnitAlias(u);
+
+  for (const u of [...defaultUnits, ...dynamicUnits]) {
+    if (!u) continue;
+    const canonical = normalizeUnit(u);
     const lower = canonical.toLowerCase();
     if (!seen.has(lower)) {
       seen.add(lower);
@@ -192,8 +190,8 @@ export default function ItemsPage() {
     const hasConv = item.purchase_unit !== item.smallest_unit || Number(item.conversion_ratio) > 1;
     setForm({
       name: item.name, barcode: item.barcode || '', category_id: String(item.category_id ?? ''), 
-      purchase_unit: normalizeUnitAlias(item.purchase_unit), package_inner_size: '',
-      smallest_unit: normalizeUnitAlias(item.smallest_unit), conversion_ratio: String(Number(item.conversion_ratio)),
+      purchase_unit: normalizeUnit(item.purchase_unit), package_inner_size: '',
+      smallest_unit: normalizeUnit(item.smallest_unit), conversion_ratio: String(Number(item.conversion_ratio)),
       minimum_threshold: String(Number(item.minimum_threshold) / (hasConv ? Number(item.conversion_ratio || 1) : 1)), 
       target_stock: String(Number(item.target_stock ?? 0) / (hasConv ? Number(item.conversion_ratio || 1) : 1)), 
       threshold_type: item.threshold_type,
@@ -568,7 +566,7 @@ export default function ItemsPage() {
                     placeholder="Pilih atau cari..."
                     options={[
                       { value: '', label: 'Pilih...' },
-                      ...getUniqueUnits(['Kg', 'gr', 'Liter', 'ml', 'Dus', 'Karton', 'Box', 'Pack', 'Bal', 'Galon', 'Jerigen', 'Roll', 'Pcs'], items.map(i => i.purchase_unit))
+                      ...getUniqueUnits(PURCHASE_UNITS, items.map(i => i.purchase_unit))
                     ]}
                   />
                 </div>
@@ -584,7 +582,7 @@ export default function ItemsPage() {
                     placeholder="Pilih atau cari..."
                     options={[
                       { value: '', label: 'Pilih...' },
-                      ...getUniqueUnits(['gr', 'ml', 'Pcs', 'Shoot', 'Slice', 'Lembar', 'Kotak', 'Botol', 'Kaleng', 'Bks', 'Roll', 'Kg', 'Liter', 'Pack'], items.map(i => i.smallest_unit))
+                      ...getUniqueUnits(SMALLEST_UNITS, items.map(i => i.smallest_unit))
                     ]}
                   />
                 </div>

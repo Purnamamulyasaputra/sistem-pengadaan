@@ -145,11 +145,56 @@ export async function updateItem(id: number, data: Partial<{
   if (!fields.length) return null;
   const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
   const values = fields.map(f => (data as Record<string, unknown>)[f]);
-  const result = await query<Item>(
-    `UPDATE items SET ${sets}, updated_at = now() WHERE id = $1 RETURNING *`,
-    [id, ...values]
-  );
-  return result.rows[0] ?? null;
+
+  return withTransaction(async (client) => {
+    // 1. Ambil nilai smallest_unit lama sebelum diupdate
+    const oldItemRes = await client.query(
+      `SELECT smallest_unit, ingredient_id FROM items WHERE id = $1`,
+      [id]
+    );
+    const oldItem = oldItemRes.rows[0];
+    const oldSmallestUnit = oldItem?.smallest_unit ?? null;
+    const newSmallestUnit = data.smallest_unit ?? null;
+
+    // 2. Update item utama
+    const result = await client.query<Item>(
+      `UPDATE items SET ${sets}, updated_at = now() WHERE id = $1 RETURNING *`,
+      [id, ...values]
+    );
+    const updatedItem = result.rows[0] ?? null;
+
+    // 3. Sinkronisasi recipe_ingredients.unit jika smallest_unit berubah
+    // Ini memastikan unit di resep HPP selalu mengikuti perubahan satuan terkecil barang.
+    if (
+      newSmallestUnit &&
+      oldSmallestUnit &&
+      newSmallestUnit !== oldSmallestUnit
+    ) {
+      // Cari ingredient yang terhubung ke item ini (via ingredient_id di items, atau via item_id di ingredients)
+      await client.query(
+        `UPDATE recipe_ingredients ri
+         SET unit = $1
+         FROM ingredients ing
+         WHERE ri.ingredient_id = ing.id
+           AND (
+             ing.item_id = $2
+             OR ing.id = (SELECT ingredient_id FROM items WHERE id = $2)
+           )
+           AND ri.unit = $3`,
+        [newSmallestUnit, id, oldSmallestUnit]
+      );
+
+      // Juga update default_unit di tabel ingredients jika ada link
+      await client.query(
+        `UPDATE ingredients SET default_unit = $1
+         WHERE item_id = $2
+           AND (default_unit = $3 OR default_unit IS NULL)`,
+        [newSmallestUnit, id, oldSmallestUnit]
+      );
+    }
+
+    return updatedItem;
+  });
 }
 
 export async function deleteItem(id: number): Promise<boolean> {
