@@ -222,13 +222,28 @@ export default function ItemsPage() {
       const finalSmallestUnit = has_conversion ? form.smallest_unit : form.purchase_unit;
       const finalAvgPrice = has_conversion ? Number(purchase_price) / finalRatio : Number(purchase_price);
 
+      const minThresholdSmall = Number(form.minimum_threshold) * finalRatio;
+      const targetStockSmall = Number(form.target_stock) * finalRatio;
+
+      // Validasi: cegah numeric overflow di kolom DB (kolom NUMERIC di PostgreSQL maks ~99 juta)
+      const MAX_SAFE_VALUE = 99_999_999;
+      if (minThresholdSmall > MAX_SAFE_VALUE || targetStockSmall > MAX_SAFE_VALUE) {
+        const bigVal = Math.max(minThresholdSmall, targetStockSmall);
+        setToastInfo({ 
+          show: true, 
+          msg: `Nilai terlalu besar setelah konversi ke ${finalSmallestUnit}: ${bigVal.toLocaleString('id-ID')} ${finalSmallestUnit}. Kurangi Batas Min atau Target Stok.`, 
+          type: 'error' 
+        });
+        return;
+      }
+
       const payload = {
         ...cleanForm,
         category_id: Number(form.category_id),
         smallest_unit: finalSmallestUnit,
         conversion_ratio: finalRatio,
-        minimum_threshold: Number(form.minimum_threshold) * finalRatio,
-        target_stock: Number(form.target_stock) * finalRatio,
+        minimum_threshold: minThresholdSmall,
+        target_stock: targetStockSmall,
         current_average_price: finalAvgPrice,
         ingredient_id: form.ingredient_id ? Number(form.ingredient_id) : null,
         is_split_allowed: Boolean(form.is_split_allowed),
@@ -248,6 +263,7 @@ export default function ItemsPage() {
       fetchItems();
     } finally { setSaving(false); }
   }
+
 
   async function handleDelete() {
     if (!confirmDelete) return;

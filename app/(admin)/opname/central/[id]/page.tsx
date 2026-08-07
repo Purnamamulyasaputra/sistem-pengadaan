@@ -75,8 +75,9 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
 
   const handleQtyChange = (itemId: number, systemBalance: number, ratio: number, actualQtyLarge: string) => {
     if (isLocked) return;
-    const qtyLarge = parseFloat(actualQtyLarge);
-    if (isNaN(qtyLarge)) return;
+    
+    const numericVal = actualQtyLarge.replace(/[^0-9.]/g, '');
+    const qtyLarge = numericVal === '' ? (systemBalance / (ratio || 1)) : parseFloat(numericVal);
 
     const qtySmall = qtyLarge * (ratio || 1);
     const existing = details.find(d => d.item_id === itemId);
@@ -91,9 +92,22 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
     }
 
     if (existing) {
-      setDetails(details.map(d => d.item_id === itemId ? { ...d, actual_physical_qty: qtySmall, variance, reason_category, reason_notes } : d));
+      setDetails(details.map(d => d.item_id === itemId ? { 
+        ...d, 
+        actual_physical_qty: numericVal === '' ? '' : qtySmall, 
+        input_value: numericVal, // preserve exact string input
+        variance, 
+        reason_category, 
+        reason_notes 
+      } : d));
     } else {
-      setDetails([...details, { item_id: itemId, system_balance: systemBalance, actual_physical_qty: qtySmall, variance }]);
+      setDetails([...details, { 
+        item_id: itemId, 
+        system_balance: systemBalance, 
+        actual_physical_qty: numericVal === '' ? '' : qtySmall, 
+        input_value: numericVal, 
+        variance 
+      }]);
     }
   };
 
@@ -122,10 +136,14 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
       // Upsert all details
       for (const detail of details) {
         if (detail.actual_physical_qty !== undefined) {
+          const payload = {
+            ...detail,
+            actual_physical_qty: detail.actual_physical_qty === '' ? detail.system_balance : parseFloat(String(detail.actual_physical_qty))
+          };
           await fetch(`/api/opname/${id}/detail`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(detail)
+            body: JSON.stringify(payload)
           });
         }
       }
@@ -253,13 +271,19 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                 const priceLarge = Number(item.current_average_price) * ratio;
 
                 const actualSmall = detail?.actual_physical_qty;
-                const actualLarge = actualSmall !== undefined && actualSmall !== null && actualSmall !== '' ? Math.round(Number(actualSmall) / Number(ratio)) : '';
+                
+                let actualLarge = detail?.input_value as string | undefined;
+                if (actualLarge === undefined) {
+                  actualLarge = actualSmall !== undefined && actualSmall !== null && actualSmall !== '' 
+                    ? parseFloat((Number(actualSmall) / Number(ratio)).toFixed(4)).toString() 
+                    : '';
+                }
 
                 const varianceSmall = Number(detail?.variance ?? 0);
-                const varianceLarge = Math.round(varianceSmall / Number(ratio));
+                const varianceLarge = varianceSmall / Number(ratio);
                 const varianceValue = Math.round(Math.abs(Number(varianceSmall)) * Number(item.current_average_price));
 
-                const sysBalLarge = Math.round(Number(item.system_balance) / Number(ratio));
+                const sysBalLarge = Number(item.system_balance) / Number(ratio);
 
                 return (
                   <tr key={item.item_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -287,7 +311,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                       </div>
                     </td>
                     <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
-                      {sysBalLarge.toLocaleString('id-ID')} <span className="muted" style={{ fontSize: 10 }}>{largeUnit}</span>
+                      {sysBalLarge.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted" style={{ fontSize: 10 }}>{largeUnit}</span>
                     </td>
                     <td className="right" style={{ padding: '8px 16px' }}>
                       <div style={{ position: 'relative' }}>
@@ -310,7 +334,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                     <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
                       {varianceLarge !== 0 ? (
                         <span style={{ color: varianceLarge > 0 ? 'var(--primary)' : '#dc2626', fontWeight: 600 }}>
-                          {varianceLarge > 0 ? '+' : ''}{varianceLarge.toLocaleString('id-ID')}
+                          {varianceLarge > 0 ? '+' : ''}{varianceLarge.toLocaleString('id-ID', { maximumFractionDigits: 2 })}
                         </span>
                       ) : '-'}
                     </td>

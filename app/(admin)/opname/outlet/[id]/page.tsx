@@ -80,8 +80,8 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   // karena staf outlet menghitung sisa bahan dalam satuan terkecil (misal: sisa 250 gr gula)
   const handleQtyChange = (itemId: number, systemBalance: number, actualQtySmall: string) => {
     if (isLocked) return;
-    const qtySmall = parseFloat(actualQtySmall);
-    if (isNaN(qtySmall)) return;
+    const numericVal = actualQtySmall.replace(/[^0-9.]/g, '');
+    const qtySmall = numericVal === '' ? systemBalance : parseFloat(numericVal);
 
     const existing = details.find(d => d.item_id === itemId);
     const variance = qtySmall - systemBalance;
@@ -95,9 +95,22 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
     }
 
     if (existing) {
-      setDetails(details.map(d => d.item_id === itemId ? { ...d, actual_physical_qty: qtySmall, variance, reason_category, reason_notes } : d));
+      setDetails(details.map(d => d.item_id === itemId ? { 
+        ...d, 
+        actual_physical_qty: numericVal === '' ? '' : qtySmall, 
+        input_value: numericVal, // preserve exact string input
+        variance, 
+        reason_category, 
+        reason_notes 
+      } : d));
     } else {
-      setDetails([...details, { item_id: itemId, system_balance: systemBalance, actual_physical_qty: qtySmall, variance }]);
+      setDetails([...details, { 
+        item_id: itemId, 
+        system_balance: systemBalance, 
+        actual_physical_qty: numericVal === '' ? '' : qtySmall, 
+        input_value: numericVal, 
+        variance 
+      }]);
     }
   };
 
@@ -126,10 +139,14 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
       // Upsert all details
       for (const detail of details) {
         if (detail.actual_physical_qty !== undefined) {
+          const payload = {
+            ...detail,
+            actual_physical_qty: detail.actual_physical_qty === '' ? detail.system_balance : parseFloat(String(detail.actual_physical_qty))
+          };
           await fetch(`/api/opname/${id}/detail`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(detail)
+            body: JSON.stringify(payload)
           });
         }
       }
@@ -245,9 +262,13 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
 
                 // actual_physical_qty di DB tersimpan dalam smallest_unit
                 const actualSmall = detail?.actual_physical_qty;
-                const displayVal = actualSmall !== undefined && actualSmall !== null && actualSmall !== '' 
-                  ? Number(actualSmall) 
-                  : '';
+                
+                let displayVal = detail?.input_value as string | undefined;
+                if (displayVal === undefined) {
+                  displayVal = actualSmall !== undefined && actualSmall !== null && actualSmall !== '' 
+                    ? actualSmall.toString() 
+                    : '';
+                }
 
                 const varianceSmall = Number(detail?.variance ?? 0);
                 const varianceValue = Math.round(Math.abs(Number(varianceSmall)) * Number(item.current_average_price));
