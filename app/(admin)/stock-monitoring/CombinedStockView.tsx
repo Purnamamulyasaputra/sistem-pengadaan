@@ -1,9 +1,9 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Pagination } from '@/components/ui/Pagination';
-import { Search } from 'lucide-react';
-
+import { Search, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Select } from '@/components/ui/Select';
 
 interface CombinedStock {
@@ -18,23 +18,25 @@ interface CombinedStock {
   central_stock: string;
   outlet_stock: string;
   current_average_price: string;
+  outlet_stocks_map: Record<string, string>;
 }
 
 export function CombinedStockView({ categories = [] }: { categories?: { id: number, name: string }[] }) {
   const [data, setData] = useState<CombinedStock[]>([]);
+  const [outlets, setOutlets] = useState<{ id: number, name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [itemsPerPage, setItemsPerPage] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
-
-  const ITEMS_PER_PAGE = 20;
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
     const res = await fetch(`/api/reports/combined-stock`);
     const json = await res.json();
     setData(json.data ?? []);
+    setOutlets(json.outlets ?? []);
     setLoading(false);
   }, []);
 
@@ -80,8 +82,48 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
     return true;
   });
 
-  const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
-  const paginatedData = filteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const handleExport = () => {
+    const exportData = filteredData.map(item => {
+      const central = Number(item.central_stock);
+      const ratio = Number(item.conversion_ratio) || 1;
+      const valPusat = (Math.max(0, central) / ratio) * Math.round(Number(item.current_average_price) * ratio);
+      
+      const row: Record<string, any> = {
+        'Bahan / Produk': item.item_name,
+        'Pusat': valPusat
+      };
+
+      let valOutlet = 0;
+      for (const o of outlets) {
+        const oStock = Number(item.outlet_stocks_map?.[o.id] || 0);
+        const oVal = (Math.max(0, oStock) / ratio) * Math.round(Number(item.current_average_price) * ratio);
+        const simpleName = o.name.replace(/coffeelab|coffee lab|coffelab/i, '').replace(/,/g, '').replace(/\s+/g, ' ').trim();
+        row[simpleName] = oVal;
+        valOutlet += oVal;
+      }
+
+      row['Total Outlet'] = valOutlet;
+      row['Grand Total'] = valPusat + valOutlet;
+      return row;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan_Aset");
+    
+    worksheet['!cols'] = [
+      { wch: 30 }, // Bahan / Produk
+      { wch: 18 }, // Pusat
+      ...outlets.map(() => ({ wch: 18 })), // Each Outlet
+      { wch: 22 }, // Total Outlet
+      { wch: 22 }  // Grand Total
+    ];
+
+    XLSX.writeFile(workbook, `Rekap_Aset_Gudang_dan_Outlet_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <>
@@ -93,7 +135,7 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
               <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
                 Rp {data.reduce((sum, item) => {
                   const r = Number(item.conversion_ratio) || 1;
-                  return sum + (Number(item.central_stock) / r) * Math.round(Number(item.current_average_price) * r);
+                  return sum + (Math.max(0, Number(item.central_stock)) / r) * Math.round(Number(item.current_average_price) * r);
                 }, 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
               </div>
             </div>
@@ -102,7 +144,11 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
               <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
                 Rp {data.reduce((sum, item) => {
                   const r = Number(item.conversion_ratio) || 1;
-                  return sum + (Number(item.outlet_stock) / r) * Math.round(Number(item.current_average_price) * r);
+                  let val = 0;
+                  for (const o of outlets) {
+                    val += (Math.max(0, Number(item.outlet_stocks_map?.[o.id] || 0)) / r) * Math.round(Number(item.current_average_price) * r);
+                  }
+                  return sum + val;
                 }, 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
               </div>
             </div>
@@ -111,7 +157,12 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
               <div style={{ fontSize: 15, fontWeight: 700 }}>
                 Rp {data.reduce((sum, item) => {
                   const r = Number(item.conversion_ratio) || 1;
-                  return sum + ((Number(item.central_stock) + Number(item.outlet_stock)) / r) * Math.round(Number(item.current_average_price) * r);
+                  let valOut = 0;
+                  for (const o of outlets) {
+                    valOut += (Math.max(0, Number(item.outlet_stocks_map?.[o.id] || 0)) / r) * Math.round(Number(item.current_average_price) * r);
+                  }
+                  const valPus = (Math.max(0, Number(item.central_stock)) / r) * Math.round(Number(item.current_average_price) * r);
+                  return sum + valPus + valOut;
                 }, 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
               </div>
             </div>
@@ -119,7 +170,16 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
         )}
 
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div className="text-gray-500 font-medium" style={{ fontSize: 12 }}>Detail Stok Barang</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div className="text-gray-500 font-medium" style={{ fontSize: 12 }}>Detail Stok Barang</div>
+            <button 
+              onClick={handleExport} 
+              className="btn btn-outline" 
+              style={{ padding: '4px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Download size={14} /> Export Excel
+            </button>
+          </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
@@ -151,6 +211,19 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
               ]}
               style={{ width: 160 }}
             />
+            <Select
+              value={itemsPerPage.toString()}
+              onChange={(val) => {
+                setItemsPerPage(Number(val));
+                setCurrentPage(1);
+              }}
+              options={[
+                { value: '10', label: '10' },
+                { value: '20', label: '20' },
+                { value: '50', label: '50' }
+              ]}
+              style={{ width: 120 }}
+            />
           </div>
         </div>
 
@@ -169,14 +242,27 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                 <Table>
                   <thead>
                     <tr>
-                      <th style={{ minWidth: 150, maxWidth: 200 }}>Bahan / Produk</th>
-                      <th style={{ whiteSpace: 'nowrap' }}>Kategori</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Stok Pusat</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Nilai Pusat (Rp)</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Total Stok Outlet</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Nilai Outlet (Rp)</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Total Stok Keseluruhan</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Total Nilai (Rp)</th>
+                      <th rowSpan={2} style={{ width: 250, minWidth: 250, maxWidth: 250, position: 'sticky', left: 0, zIndex: 20, background: '#fff', verticalAlign: 'middle', borderRight: '1px solid #e2e8f0' }}>Bahan / Produk</th>
+                      <th colSpan={2} className="center" style={{ position: 'sticky', left: 250, zIndex: 20, background: '#fff', whiteSpace: 'nowrap', textAlign: 'center', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>Pusat</th>
+                      {outlets.map(o => (
+                        <th key={o.id} colSpan={2} className="center" style={{ whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>{o.name}</th>
+                      ))}
+                      <th colSpan={2} className="center" style={{ whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>Total Outlet</th>
+                      <th colSpan={2} className="center" style={{ whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>Total Keseluruhan</th>
+                    </tr>
+                    <tr>
+                      <th className="right" style={{ width: 100, minWidth: 100, position: 'sticky', left: 250, zIndex: 20, background: '#fff', whiteSpace: 'nowrap' }}>Stok</th>
+                      <th className="right" style={{ width: 120, minWidth: 120, position: 'sticky', left: 350, zIndex: 20, background: '#fff', whiteSpace: 'nowrap', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>Nilai (Rp)</th>
+                      {outlets.map(o => (
+                        <Fragment key={o.id}>
+                          <th className="right" style={{ whiteSpace: 'nowrap', minWidth: 100, borderLeft: '1px solid #e2e8f0' }}>Stok</th>
+                          <th className="right" style={{ whiteSpace: 'nowrap', minWidth: 100 }}>Nilai (Rp)</th>
+                        </Fragment>
+                      ))}
+                      <th className="right" style={{ whiteSpace: 'nowrap', borderLeft: '1px solid #e2e8f0' }}>Stok</th>
+                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Nilai (Rp)</th>
+                      <th className="right" style={{ whiteSpace: 'nowrap', borderLeft: '1px solid #e2e8f0' }}>Stok</th>
+                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Nilai (Rp)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -186,17 +272,21 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                       const total = central + outlet;
                       const ratio = Number(item.conversion_ratio) || 1;
 
-                      const valPusat = (central / ratio) * Math.round(Number(item.current_average_price) * ratio);
-                      const valOutlet = (outlet / ratio) * Math.round(Number(item.current_average_price) * ratio);
+                      let valOutlet = 0;
+                      for (const o of outlets) {
+                        const oStock = Number(item.outlet_stocks_map?.[o.id] || 0);
+                        valOutlet += (Math.max(0, oStock) / ratio) * Math.round(Number(item.current_average_price) * ratio);
+                      }
+                      const valPusat = (Math.max(0, central) / ratio) * Math.round(Number(item.current_average_price) * ratio);
                       const valTotal = valPusat + valOutlet;
 
                       const fmt = (val: number) => {
                         const largeVal = val / ratio;
                         return (
                           <div style={{ whiteSpace: 'nowrap' }}>
-                            <div className="font-bold">{largeVal.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted font-normal" style={{ fontSize: 11 }}>{item.purchase_unit}</span></div>
+                            <div className="font-bold text-sm">{largeVal.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted font-normal" style={{ fontSize: 11 }}>{item.purchase_unit}</span></div>
                             {ratio > 1 && (
-                              <div className="muted font-mono" style={{ fontSize: 11 }}>
+                              <div className="muted" style={{ fontSize: 11 }}>
                                 ({val.toLocaleString('id-ID')} {item.smallest_unit})
                               </div>
                             )}
@@ -205,7 +295,7 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                       };
 
                       const fmtRupiah = (val: number) => {
-                        return <div className="font-mono text-sm" style={{ whiteSpace: 'nowrap' }}>{val.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</div>;
+                        return <div className="text-sm" style={{ whiteSpace: 'nowrap' }}>{val.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</div>;
                       };
 
                       let totalColor = 'var(--primary)'; // Default hijau
@@ -219,13 +309,28 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
 
                       return (
                         <tr key={item.id}>
-                          <td className="font-bold" style={{ whiteSpace: 'normal', wordWrap: 'break-word', maxWidth: 200 }}>{item.item_name}</td>
-                          <td className="muted" style={{ whiteSpace: 'nowrap' }}>{item.category_name}</td>
-                          <td className="right">{fmt(central)}</td>
-                          <td className="right">{fmtRupiah(valPusat)}</td>
-                          <td className="right">{fmt(outlet)}</td>
+                          <td className="font-bold text-sm" style={{ whiteSpace: 'normal', wordWrap: 'break-word', width: 250, minWidth: 250, maxWidth: 250, position: 'sticky', left: 0, zIndex: 10, background: '#fff', borderRight: '1px solid #e2e8f0' }}>{item.item_name}</td>
+                          <td className="right" style={{ position: 'sticky', left: 250, zIndex: 10, background: '#fff' }}>{fmt(central)}</td>
+                          <td className="right" style={{ position: 'sticky', left: 350, zIndex: 10, background: '#fff', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>{fmtRupiah(valPusat)}</td>
+                          
+                          {outlets.map(o => {
+                            const oStock = Number(item.outlet_stocks_map?.[o.id] || 0);
+                            const oVal = (Math.max(0, oStock) / ratio) * Math.round(Number(item.current_average_price) * ratio);
+                            return (
+                              <Fragment key={o.id}>
+                                <td className="right" style={{ background: '#f8fafc', borderLeft: '1px solid #e2e8f0' }}>
+                                  {fmt(oStock)}
+                                </td>
+                                <td className="right" style={{ background: '#f8fafc' }}>
+                                  {fmtRupiah(oVal)}
+                                </td>
+                              </Fragment>
+                            );
+                          })}
+
+                          <td className="right" style={{ borderLeft: '1px solid #e2e8f0' }}>{fmt(outlet)}</td>
                           <td className="right">{fmtRupiah(valOutlet)}</td>
-                          <td className="right">
+                          <td className="right" style={{ borderLeft: '1px solid #e2e8f0' }}>
                             <div style={{ color: totalColor }}>
                               {fmt(total)}
                             </div>
@@ -246,7 +351,7 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                   currentPage={currentPage}
                   totalPages={totalPages}
                   totalItems={data.length}
-                  itemsPerPage={ITEMS_PER_PAGE}
+                  itemsPerPage={itemsPerPage}
                   onPageChange={setCurrentPage}
                 />
               </div>

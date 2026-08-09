@@ -29,6 +29,8 @@ export interface Item {
   is_hpp?: boolean;
   ingredient_id?: number;
   ingredient_name?: string;
+  parent_id?: number | null;
+  has_children?: boolean;
 }
 
 export async function getItems(opts?: { categoryId?: string; search?: string; activeOnly?: boolean }) {
@@ -53,12 +55,13 @@ export async function getItems(opts?: { categoryId?: string; search?: string; ac
     `SELECT i.*, c.name AS category_name,
             COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock,
             (i.ingredient_id IS NOT NULL OR ing.id IS NOT NULL) AS is_hpp,
-            ing.name AS ingredient_name
+            ing.name AS ingredient_name,
+            EXISTS(SELECT 1 FROM items child WHERE child.parent_id = i.id) AS has_children
      FROM items i
      LEFT JOIN categories c ON c.id = i.category_id
      LEFT JOIN ingredients ing ON (ing.id = i.ingredient_id OR ing.item_id = i.id)
      ${where}
-     ORDER BY i.name`,
+     ORDER BY COALESCE(i.parent_id, i.id), i.parent_id IS NOT NULL, i.name`,
     params
   );
   return result.rows;
@@ -69,7 +72,8 @@ export async function getItemById(id: number) {
     `SELECT i.*, c.name AS category_name,
             COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock,
             (i.ingredient_id IS NOT NULL OR ing.id IS NOT NULL) AS is_hpp,
-            ing.name AS ingredient_name
+            ing.name AS ingredient_name,
+            EXISTS(SELECT 1 FROM items child WHERE child.parent_id = i.id) AS has_children
      FROM items i
      LEFT JOIN categories c ON c.id = i.category_id
      LEFT JOIN ingredients ing ON (ing.id = i.ingredient_id OR ing.item_id = i.id)
@@ -96,10 +100,11 @@ export async function createItem(data: {
   is_split_allowed?: boolean;
   min_order_qty?: number;
   order_multiple?: number;
+  parent_id?: number | null;
 }) {
   const result = await query<Item>(
-    `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+    `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
      RETURNING *`,
     [
       data.name, data.category_id, data.purchase_unit, data.smallest_unit, data.conversion_ratio,
@@ -108,10 +113,55 @@ export async function createItem(data: {
       data.ingredient_id ?? null,
       data.is_split_allowed ?? false,
       data.min_order_qty ?? 1,
-      data.order_multiple ?? 1
+      data.order_multiple ?? 1,
+      data.parent_id ?? null
     ]
   );
   return result.rows[0];
+}
+
+export async function createItemWithBrands(
+  parentData: Parameters<typeof createItem>[0],
+  brands: Array<{ name: string; barcode: string; purchase_price: number; conversion_ratio: number }>
+) {
+  return withTransaction(async (client) => {
+    // 1. Create Parent
+    const parentRes = await client.query(
+      `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       RETURNING id`,
+      [
+        parentData.name, parentData.category_id, parentData.purchase_unit, parentData.smallest_unit, parentData.conversion_ratio,
+        parentData.minimum_threshold, parentData.target_stock ?? 0, parentData.threshold_type, parentData.is_perishable,
+        parentData.barcode ?? null, parentData.current_average_price ?? 0, parentData.last_purchase_price ?? parentData.current_average_price ?? 0,
+        parentData.ingredient_id ?? null,
+        parentData.is_split_allowed ?? false,
+        parentData.min_order_qty ?? 1,
+        parentData.order_multiple ?? 1,
+        null
+      ]
+    );
+    const parentId = parentRes.rows[0].id;
+
+    // 2. Create Brands
+    for (const brand of brands) {
+      await client.query(
+        `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+        [
+          brand.name, parentData.category_id, parentData.purchase_unit, parentData.smallest_unit, brand.conversion_ratio,
+          parentData.minimum_threshold, parentData.target_stock ?? 0, parentData.threshold_type, parentData.is_perishable,
+          brand.barcode, brand.purchase_price, brand.purchase_price,
+          parentData.ingredient_id ?? null,
+          parentData.is_split_allowed ?? false,
+          parentData.min_order_qty ?? 1,
+          parentData.order_multiple ?? 1,
+          parentId
+        ]
+      );
+    }
+    return { id: parentId };
+  });
 }
 
 export async function updateItem(id: number, data: Partial<{
@@ -133,6 +183,13 @@ export async function updateItem(id: number, data: Partial<{
   is_split_allowed: boolean;
   min_order_qty: number;
   order_multiple: number;
+  brands?: Array<{
+    id?: string;
+    name: string;
+    barcode: string;
+    purchase_price: number;
+    conversion_ratio: number;
+  }>;
 }>) {
   const ALLOWED_COLUMNS = [
     'name', 'category_id', 'purchase_unit', 'smallest_unit', 'conversion_ratio',
@@ -191,6 +248,33 @@ export async function updateItem(id: number, data: Partial<{
            AND (default_unit = $3 OR default_unit IS NULL)`,
         [newSmallestUnit, id, oldSmallestUnit]
       );
+    }
+
+    // 4. Update or Insert Brands
+    if (data.brands && data.brands.length > 0 && updatedItem) {
+      for (const brand of data.brands) {
+        if (brand.id) {
+          await client.query(
+            `UPDATE items SET name=$1, barcode=$2, current_average_price=$3, last_purchase_price=$3, conversion_ratio=$4, updated_at=now() WHERE id=$5`,
+            [brand.name, brand.barcode || null, brand.purchase_price, brand.conversion_ratio, Number(brand.id)]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+            [
+              brand.name, updatedItem.category_id, updatedItem.purchase_unit, updatedItem.smallest_unit, brand.conversion_ratio,
+              updatedItem.minimum_threshold, updatedItem.target_stock, updatedItem.threshold_type, updatedItem.is_perishable,
+              brand.barcode || null, brand.purchase_price, brand.purchase_price,
+              updatedItem.ingredient_id,
+              updatedItem.is_split_allowed,
+              updatedItem.min_order_qty,
+              updatedItem.order_multiple,
+              id
+            ]
+          );
+        }
+      }
     }
 
     return updatedItem;

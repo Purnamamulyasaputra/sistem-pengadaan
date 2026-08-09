@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
+import { ItemSelectWithBrand } from '@/components/shared/ItemSelectWithBrand';
 import { ChevronLeft } from 'lucide-react';
 
 interface Item {
@@ -370,25 +371,12 @@ export default function CreateRequestPage() {
                 <tr key={c.id}>
                   <td className={c.item_id ? "font-bold" : ""}>
                     {!c.item_id ? (
-                      <Select
+                      <ItemSelectWithBrand
                         value={c.item_id || ''}
                         onChange={val => updateCartItemSelect(c.id, String(val))}
-                        options={[
-                          ...items.map(i => {
-                            const isActive = activeItemIds.includes(i.id);
-                            const inCart = cart.some(cartItem => String(cartItem.item_id) === String(i.id));
-                            return {
-                              value: i.id,
-                              label: `${i.name}${isActive ? ' (Sedang dipesan)' : ''}`,
-                              disabled: inCart || isActive
-                            };
-                          })
-                        ]}
-                        searchable
+                        items={items as any}
                         placeholder="Pilih Barang..."
                         style={{ width: '100%', maxWidth: 300 }}
-                        inputStyle={{ height: 32, fontSize: 13 }}
-                        optionStyle={{ fontSize: 13 }}
                       />
                     ) : c.name}
                   </td>

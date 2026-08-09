@@ -1,6 +1,7 @@
 import { query, withTransaction } from '@/lib/db';
 import { autoFulfillPendingRequestsBulk } from './orders';
 import { checkAndCreateAlertBulk } from './alerts';
+import { syncMenuHppByItems } from './hpp';
 
 export interface GoodsReceipt {
   id: number;
@@ -215,6 +216,10 @@ export async function createGoodsReceipt(data: {
         );
         await autoFulfillPendingRequestsBulk(client, uniqueTriggers);
         await checkAndCreateAlertBulk(uniqueTriggers, client);
+      }
+
+      if (upd_itemIds.length > 0) {
+        await syncMenuHppByItems(client, upd_itemIds);
       }
     }
     

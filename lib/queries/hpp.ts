@@ -563,11 +563,13 @@ export async function createRecipe(data: {
       await client.query(`
         UPDATE menus
         SET 
+          category_id = COALESCE($3, menus.category_id),
+          sale_price = COALESCE($4, menus.sale_price),
           hpp = r.total_cost / NULLIF(r.yield, 0),
-          hpp_ratio = (r.total_cost / NULLIF(r.yield, 0)) / NULLIF(menus.sale_price, 0)
+          hpp_ratio = (r.total_cost / NULLIF(r.yield, 0)) / NULLIF(COALESCE($4, menus.sale_price), 0)
         FROM recipes r
         WHERE r.id = $1 AND menus.id = $2
-      `, [recipeId, menuId]);
+      `, [recipeId, menuId, data.category_id || null, data.sale_price ?? null]);
     }
 
     return recipeId;
@@ -625,6 +627,15 @@ export async function updateRecipe(id: number, data: {
       WHERE id = $1
     `, [id, data.name]);
 
+    await client.query(`
+      UPDATE menus
+      SET 
+        hpp = r.total_cost / NULLIF(r.yield, 0),
+        hpp_ratio = (r.total_cost / NULLIF(r.yield, 0)) / NULLIF(menus.sale_price, 0)
+      FROM recipes r
+      WHERE r.id = $1 AND menus.id = r.menu_id
+    `, [id]);
+
     if (data.sale_price) {
       await client.query(`
         UPDATE menus 
@@ -681,4 +692,61 @@ export async function updateIngredient(id: number, data: {
 export async function deleteIngredient(id: number) {
   const res = await query(`DELETE FROM ingredients WHERE id = $1`, [id]);
   return (res.rowCount ?? 0) > 0;
+}
+
+// ─────────────────────────────────────────────
+// REAL-TIME SYNC
+// ─────────────────────────────────────────────
+
+export async function syncMenuHppByItems(client: PoolClient, itemIds: number[]) {
+  if (!itemIds || itemIds.length === 0) return;
+
+  // 1. Update recipe_ingredients for the affected items
+  await client.query(`
+    UPDATE recipe_ingredients ri
+    SET cost_per_unit = COALESCE(it.current_average_price, i.standard_cost_per_unit),
+        extension = ri.quantity * COALESCE(it.current_average_price, i.standard_cost_per_unit)
+    FROM ingredients i
+    JOIN items it ON it.id = i.item_id
+    WHERE ri.ingredient_id = i.id
+      AND i.item_id = ANY($1::int[])
+  `, [itemIds]);
+
+  // 2. Recalculate recipes total
+  await client.query(`
+    WITH updated_recipes AS (
+      SELECT r.id AS recipe_id,
+             SUM(ri.extension) AS new_subtotal,
+             r.x_factor_pct
+      FROM recipes r
+      JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+      WHERE r.id IN (
+        SELECT DISTINCT ri2.recipe_id
+        FROM recipe_ingredients ri2
+        JOIN ingredients i2 ON i2.id = ri2.ingredient_id
+        WHERE i2.item_id = ANY($1::int[])
+      )
+      GROUP BY r.id, r.x_factor_pct
+    )
+    UPDATE recipes r
+    SET subtotal = ur.new_subtotal,
+        total_cost = ur.new_subtotal + (ur.new_subtotal * ur.x_factor_pct)
+    FROM updated_recipes ur
+    WHERE r.id = ur.recipe_id
+  `, [itemIds]);
+
+  // 3. Update menus HPP
+  await client.query(`
+    UPDATE menus m
+    SET hpp = r.total_cost / NULLIF(r.yield, 0),
+        hpp_ratio = (r.total_cost / NULLIF(r.yield, 0)) / NULLIF(m.sale_price, 0)
+    FROM recipes r
+    WHERE m.id = r.menu_id
+      AND r.id IN (
+        SELECT DISTINCT ri2.recipe_id
+        FROM recipe_ingredients ri2
+        JOIN ingredients i2 ON i2.id = ri2.ingredient_id
+        WHERE i2.item_id = ANY($1::int[])
+      )
+  `, [itemIds]);
 }

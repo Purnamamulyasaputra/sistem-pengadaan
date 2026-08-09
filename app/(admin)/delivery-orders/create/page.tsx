@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Toast } from '@/components/ui/Toast';
 import { BarcodeScannerModal } from '@/components/ui/BarcodeScannerModal';
 import { Select } from '@/components/ui/Select';
+import { ItemSelectWithBrand } from '@/components/shared/ItemSelectWithBrand';
 
 interface RawOrderItem {
   order_item_id: number;
@@ -40,6 +41,7 @@ export default function CreateDeliveryOrderPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [targetOutletId, setTargetOutletId] = useState<string>('');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [isAutoFilled, setIsAutoFilled] = useState(false);
 
   const [form, setForm] = useState({
     delivery_date: new Date().toISOString().split('T')[0],
@@ -154,17 +156,56 @@ export default function CreateDeliveryOrderPage() {
       const urlParams = new URLSearchParams(window.location.search);
       const qId = urlParams.get('order_id');
       const qOutlet = urlParams.get('outlet_id');
+      const qItems = urlParams.get('items');
 
       if (qId === 'DIRECT') {
-        handleSelectOrder('DIRECT');
-        if (qOutlet) {
-          setTargetOutletId(String(qOutlet));
+        if (qItems && allItems.length > 0) {
+           const itemIds = qItems.split(',').map(id => String(id));
+           const matchedItems = allItems.filter(i => itemIds.includes(String(i.id)));
+           
+           if (matchedItems.length > 0) {
+             const prefilled = matchedItems.map((itemData, index) => {
+                const currentStock = parseFloat(String(itemData.current_stock)) || 0;
+                const ratio = parseFloat(String(itemData.conversion_ratio)) || 1;
+                const hasStockForOneUnit = currentStock >= ratio;
+                
+                return {
+                  order_item_id: -(Date.now()) - index,
+                  item_id: itemData.id,
+                  item_name: itemData.name,
+                  item_status: 'READY_DI_GUDANG',
+                  purchase_unit: itemData.purchase_unit,
+                  smallest_unit: itemData.smallest_unit,
+                  conversion_ratio: itemData.conversion_ratio,
+                  qty_request: 0,
+                  current_average_price: itemData.current_average_price,
+                  barcode: itemData.barcode,
+                  qty_shipped: hasStockForOneUnit ? 1 : 0,
+                  selected: hasStockForOneUnit,
+                  keterangan: hasStockForOneUnit ? '' : 'Stok Pusat Kosong',
+                  current_stock: currentStock,
+                  is_additional: true
+                };
+             });
+             setSelectedOrderId('DIRECT');
+             setOrderItems(prefilled);
+             if (qOutlet) setTargetOutletId(String(qOutlet));
+             setIsAutoFilled(true);
+             return;
+           }
+        }
+        
+        if (!qItems) {
+          handleSelectOrder('DIRECT');
+          if (qOutlet) {
+            setTargetOutletId(String(qOutlet));
+          }
         }
       } else if (qId && orders.length > 0 && orders.some(o => String(o.order_id) === qId)) {
         handleSelectOrder(qId);
       }
     }
-  }, [orders, selectedOrderId]);
+  }, [orders, selectedOrderId, allItems]);
 
   const handleToggleItem = (orderItemId: number | string) => {
     setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? { ...i, selected: !i.selected } : i));
@@ -351,7 +392,13 @@ export default function CreateDeliveryOrderPage() {
           <div className="form-grid" style={{ marginBottom: 32 }}>
             <div className="form-group">
               <label className="req">Sumber Permintaan</label>
-              <select className="input" value={selectedOrderId} onChange={e => handleSelectOrder(e.target.value)}>
+              <select 
+                className="input" 
+                value={selectedOrderId} 
+                onChange={e => handleSelectOrder(e.target.value)}
+                disabled={isAutoFilled}
+                style={{ fontWeight: 600, background: isAutoFilled ? '#f1f5f9' : '#fff' }}
+              >
                 <option value="">Pilih Permintaan</option>
                 <option value="DIRECT">Pengiriman Langsung</option>
                 {orders.map(o => (
@@ -367,8 +414,8 @@ export default function CreateDeliveryOrderPage() {
                 className="input"
                 value={targetOutletId}
                 onChange={(e) => setTargetOutletId(e.target.value)}
-                disabled={!selectedOrderId || (selectedOrderId !== 'DIRECT' && !!selectedOrderId)}
-                style={{ fontWeight: 600, background: (!selectedOrderId || selectedOrderId !== 'DIRECT') ? '#f1f5f9' : '#fff' }}
+                disabled={!selectedOrderId || (selectedOrderId !== 'DIRECT' && !!selectedOrderId) || isAutoFilled}
+                style={{ fontWeight: 600, background: (!selectedOrderId || (selectedOrderId !== 'DIRECT' && !!selectedOrderId) || isAutoFilled) ? '#f1f5f9' : '#fff' }}
               >
                 <option value="">Pilih Tujuan</option>
                 {outlets.map(o => (
@@ -466,12 +513,11 @@ export default function CreateDeliveryOrderPage() {
                         <td className="font-bold">
                           {item.item_id === 0 ? (
                             <div style={{ position: 'relative', width: 200, zIndex: 10 }}>
-                              <Select
+                              <ItemSelectWithBrand
                                 value={item.item_id === 0 ? '' : item.item_id}
                                 onChange={(val) => handleSelectAdditionalItem(item.order_item_id, String(val))}
-                                options={allItems.map(i => ({ value: i.id, label: i.name }))}
+                                items={allItems as any}
                                 placeholder="Cari barang..."
-                                searchable
                               />
                             </div>
                           ) : (

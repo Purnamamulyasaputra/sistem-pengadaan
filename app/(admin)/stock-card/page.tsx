@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
@@ -76,6 +76,9 @@ export default function StockCardPage() {
   const lastOut = logs.find(l => l.movement_type === 'OUT')?.created_at;
 
   const filteredItems = items.filter((i: any) => {
+    // Sembunyikan Induk (parent) yang tidak punya stok sendiri
+    if (i.has_children) return false;
+
     if (search && !i.name.toLowerCase().includes(search.toLowerCase()) && !String(i.id).includes(search)) return false;
     if (catFilter && String(i.category_id) !== catFilter) return false;
 
@@ -180,27 +183,47 @@ export default function StockCardPage() {
 
                       const isLow = currentStockSmallest < minStockSmallest;
                       const isOut = currentStockSmallest <= 0;
+                      const isChild = !!item.parent_id;
+                      const parentItem = isChild ? (items as any[]).find(p => String(p.id) === String(item.parent_id)) : null;
+
+                      // Cek apakah ini brand pertama dari parent ini
+                      const siblings = (paginatedItems as any[]).filter(s => String(s.parent_id) === String(item.parent_id));
+                      const isFirstChild = isChild && siblings[0]?.id === item.id;
 
                       return (
-                        <tr key={item.id} onClick={() => setSelectedItemId(String(item.id))} className="cursor-pointer" title="Lihat Kartu Stok">
-                          <td className="font-mono text-muted">ERC{String(item.id).padStart(5, '0')}</td>
-                          <td className="font-bold">{item.name}</td>
-                          <td className="right">
-                            <div className="num font-bold">{centralMin.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>{centralMin.unit}</span></div>
-                            {centralMin.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({minStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
-                          </td>
-                          <td className="right">
-                            <div className="num font-bold" style={{ color: isOut ? '#dc2626' : isLow ? '#d97706' : '#059669', fontSize: 14 }}>
-                              {centralStock.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{centralStock.unit}</span>
-                            </div>
-                            {centralStock.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({currentStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
-                          </td>
-                          <td className="center">
-                            <Badge variant={isOut ? 'red' : isLow ? 'amber' : 'green'}>
-                              {isOut ? 'Habis' : isLow ? 'Stok Rendah' : 'Aman'}
-                            </Badge>
-                          </td>
-                        </tr>
+                        <React.Fragment key={item.id}>
+                          {/* Group header untuk brand pertama */}
+                          {isFirstChild && parentItem && (
+                            <tr key={`parent-${parentItem.id}`} style={{ background: '#f8fafc', pointerEvents: 'none' }}>
+                              <td colSpan={5} className="font-bold" style={{ padding: '8px 16px', color: '#475569' }}>
+                                {parentItem.name}
+                              </td>
+                            </tr>
+                          )}
+                          <tr key={item.id} onClick={() => setSelectedItemId(String(item.id))} className="cursor-pointer" title="Lihat Kartu Stok"
+                            style={{ paddingLeft: isChild ? 24 : 0 }}>
+                            <td className="font-mono text-muted" style={{ paddingLeft: isChild ? 32 : 16 }}>
+                              {isChild && <span style={{ color: '#cbd5e1', marginRight: 4 }}>↳</span>}
+                              {item.barcode || `ERC${String(item.id).padStart(5, '0')}`}
+                            </td>
+                            <td className="font-bold" style={{ paddingLeft: isChild ? 32 : 16 }}>{item.name}</td>
+                            <td className="right">
+                              <div className="num font-bold">{centralMin.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>{centralMin.unit}</span></div>
+                              {centralMin.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({minStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
+                            </td>
+                            <td className="right">
+                              <div className="num font-bold" style={{ color: isOut ? '#dc2626' : isLow ? '#d97706' : '#059669', fontSize: 14 }}>
+                                {centralStock.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{centralStock.unit}</span>
+                              </div>
+                              {centralStock.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({currentStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
+                            </td>
+                            <td className="center">
+                              <Badge variant={isOut ? 'red' : isLow ? 'amber' : 'green'}>
+                                {isOut ? 'Habis' : isLow ? 'Stok Rendah' : 'Aman'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        </React.Fragment>
                       );
                     })}
                   </tbody>

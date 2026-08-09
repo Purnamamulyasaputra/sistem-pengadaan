@@ -41,8 +41,8 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200"
-      style={{ background: "rgba(12,20,16,0.55)", backdropFilter: "blur(3px)", opacity: show ? 1 : 0 }}
+      className="fixed inset-0 flex items-center justify-center p-4 transition-opacity duration-200"
+      style={{ background: "rgba(12,20,16,0.55)", backdropFilter: "blur(3px)", opacity: show ? 1 : 0, zIndex: 99999 }}
       onClick={() => !loading && onCancel()}
     >
       <div

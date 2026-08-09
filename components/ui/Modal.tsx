@@ -8,13 +8,14 @@ interface ModalProps {
   children: React.ReactNode;
   maxWidth?: string | number;
   footer?: React.ReactNode;
+  closeOnOutsideClick?: boolean;
 }
 
-export function Modal({ isOpen, onClose, title, children, maxWidth = 600, footer }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, maxWidth = 600, footer, closeOnOutsideClick = true }: ModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay open" onClick={e => { if (closeOnOutsideClick && e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ maxWidth }}>
         <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: title ? undefined : '16px 20px 0 20px', borderBottom: title ? undefined : 'none' }}>
           {title ? (

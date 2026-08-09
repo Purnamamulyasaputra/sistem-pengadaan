@@ -99,7 +99,7 @@ export default function RecipeBuilderPage({ params: paramsPromise }: { params: P
         id: Math.random().toString(36).substring(7),
         ingredient_id: String(ing.ingredient_id),
         ingredient_name: ing.ingredient_name || '',
-        quantity: String(ing.quantity),
+        quantity: String(Number(ing.quantity)),
         unit: ing.default_unit || ing.unit || '',
         cost_per_unit: Number(ing.standard_cost_per_unit ?? ing.cost_per_unit),
         extension: Number(ing.quantity) * Number(ing.standard_cost_per_unit ?? ing.cost_per_unit),

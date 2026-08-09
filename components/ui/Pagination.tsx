@@ -2,22 +2,22 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+import { Select } from './Select';
+
 interface PaginationProps {
   currentPage: number;
   totalPages: number;
   totalItems: number;
   itemsPerPage: number;
   onPageChange: (page: number) => void;
+  onLimitChange?: (limit: number) => void;
 }
 
-export function Pagination({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange }: PaginationProps) {
-  if (totalPages <= 1) return null;
+export function Pagination({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onLimitChange }: PaginationProps) {
+  if (totalPages <= 1 && !onLimitChange) return null;
 
   return (
-    <div className="pagination">
-      <span className="info">
-        Menampilkan {(currentPage - 1) * itemsPerPage + 1} sampai {Math.min(currentPage * itemsPerPage, totalItems)} dari total {totalItems} data
-      </span>
+    <div className="pagination" style={{ justifyContent: 'flex-end' }}>
       <div className="page-btns">
         <button className="page-btn" disabled={currentPage <= 1} onClick={() => onPageChange(currentPage - 1)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ChevronLeft size={18} />

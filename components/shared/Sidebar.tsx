@@ -48,7 +48,7 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/alerts', label: 'Peringatan Stok', icon: <Icon name="bell" />, badge: 0 },
 
   { section: 'INVENTORI & BARANG' },
-  { href: '/master-data/items', label: 'Master Barang', icon: <Icon name="db" /> },
+  { href: '/master-data/items', label: 'Master Data', icon: <Icon name="db" /> },
   { href: '/hpp', label: 'Master Menu & HPP', icon: <Icon name="hpp" /> },
   { href: '/stock-card', label: 'Stok Pusat', icon: <Icon name="clipboard" /> },
   { href: '/stock-monitoring', label: 'Monitoring Stok Terpadu', icon: <LayoutGrid size={15} /> },
@@ -57,6 +57,7 @@ const CENTRAL_MENU: NavItem[] = [
   { section: 'DISTRIBUSI KE OUTLET' },
   { href: '/requests', label: 'Permintaan Outlet', icon: <Icon name="list" /> },
   { href: '/delivery-orders', label: 'Pengiriman (Surat Jalan)', icon: <Icon name="truck" /> },
+  { href: '/outlet-purchases', label: 'Belanja Outlet', icon: <Icon name="list" /> },
   { href: '/returns', label: 'Tiket Masalah / Retur', icon: <AlertOctagon size={15} /> },
 
   { section: 'PEMBELIAN (PURCHASING)' },
@@ -82,6 +83,7 @@ const OUTLET_MENU: NavItem[] = [
   { section: 'PENGADAAN BARANG' },
   { href: '/outlet/requests', label: 'Order ke Pusat', icon: <Icon name="cart" /> },
   { href: '/outlet/receive-goods', label: 'Penerimaan Barang', icon: <Icon name="truck" /> },
+  { href: '/outlet/local-purchases', label: 'Belanja Outlet', icon: <Icon name="box" /> },
 
   { section: 'MANAJEMEN STOK & PENJUALAN' },
   { href: '/outlet/inventory/stock', label: 'Stok Outlet (Live)', icon: <Icon name="db" /> },
@@ -100,6 +102,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
   const [liveAlertCount, setLiveAlertCount] = useState(alertCount ?? 0);
   const [liveRequestCount, setLiveRequestCount] = useState(0);
   const [liveReturnsCount, setLiveReturnsCount] = useState(0);
+  const [liveLocalPurchaseCount, setLiveLocalPurchaseCount] = useState(0);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const menu = role === 'ADMIN_PUSAT' ? CENTRAL_MENU : OUTLET_MENU;
@@ -131,6 +134,9 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
       // Reset badge segera saat halaman /returns dikunjungi
       setLiveReturnsCount(0);
     }
+    if (pathname === '/outlet-purchases' && role === 'ADMIN_PUSAT') {
+      setLiveLocalPurchaseCount(0);
+    }
     if (pathname === '/outlet/receive-goods' && role === 'ADMIN_OUTLET') {
       localStorage.setItem('lastSeenReceiveGoods', Date.now().toString());
       setLiveRequestCount(0);
@@ -141,11 +147,9 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
     const fetchBadges = async () => {
       try {
         if (role === 'ADMIN_PUSAT') {
-          const [alertsRes, reqRes, returnsRes] = await Promise.all([
+          const [alertsRes, reqRes] = await Promise.all([
             fetch('/api/alerts/count', { cache: 'no-store' }),
-            fetch('/api/orders/pending-count', { cache: 'no-store' }),
-            // Selalu ambil total PENDING — badge hilang otomatis saat halaman /returns dibuka
-            fetch('/api/returns/pending-count', { cache: 'no-store' })
+            fetch('/api/orders/pending-count', { cache: 'no-store' })
           ]);
           if (alertsRes.ok) {
             const data = await alertsRes.json();
@@ -156,10 +160,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
             setLiveRequestCount(data.count ?? 0);
           }
           // Jangan update badge saat sedang di halaman /returns (sudah di-reset di atas)
-          if (returnsRes.ok && pathname !== '/returns') {
-            const data = await returnsRes.json();
-            setLiveReturnsCount(data.count ?? 0);
-          }
+          // (Returns and Local Purchases are handled by the 10s fast poll below)
         } else if (role === 'ADMIN_OUTLET') {
           const lastSeenReceiveGoods = localStorage.getItem('lastSeenReceiveGoods') || '';
           const receiveUrl = lastSeenReceiveGoods ? `/api/delivery-notes/shipped-count?since=${lastSeenReceiveGoods}` : '/api/delivery-notes/shipped-count';
@@ -201,18 +202,31 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
   useEffect(() => {
     if (role !== 'ADMIN_PUSAT') return;
 
-    const fetchReturnsBadge = async () => {
-      if (pathname === '/returns') return; // sudah di-reset saat masuk halaman
+    const fetchFastBadges = async () => {
       try {
-        const res = await fetch('/api/returns/pending-count', { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
+        const promises = [];
+        if (pathname !== '/returns') promises.push(fetch('/api/returns/pending-count', { cache: 'no-store' }));
+        else promises.push(Promise.resolve(null));
+        
+        if (pathname !== '/outlet-purchases') promises.push(fetch('/api/outlets/local-purchases/unread', { cache: 'no-store' }));
+        else promises.push(Promise.resolve(null));
+
+        const [returnsRes, lpRes] = await Promise.all(promises);
+
+        if (returnsRes && returnsRes.ok) {
+          const data = await returnsRes.json();
           setLiveReturnsCount(data.count ?? 0);
+        }
+        if (lpRes && lpRes.ok) {
+          const data = await lpRes.json();
+          setLiveLocalPurchaseCount(data.count ?? 0);
         }
       } catch { /* abaikan */ }
     };
 
-    const interval = setInterval(fetchReturnsBadge, 10000);
+    const interval = setInterval(fetchFastBadges, 10000);
+    // Jalankan sekali saat pertama mount
+    fetchFastBadges();
     return () => clearInterval(interval);
   }, [role, pathname]);
 
@@ -226,6 +240,7 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
     if (item.href === '/alerts' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveAlertCount) };
     if (item.href === '/requests' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) };
     if (item.href === '/returns' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveReturnsCount) };
+    if (item.href === '/outlet-purchases' && role === 'ADMIN_PUSAT') return { ...item, badge: getEffectiveBadge(item.href, liveLocalPurchaseCount) };
     if (item.href === '/outlet/inventory/stock' && role === 'ADMIN_OUTLET') return { ...item, badge: getEffectiveBadge(item.href, liveAlertCount) };
     if (item.href === '/outlet/receive-goods' && role === 'ADMIN_OUTLET') return { ...item, badge: getEffectiveBadge(item.href, liveRequestCount) };
     return item;
@@ -302,7 +317,9 @@ export default function Sidebar({ role, alertCount = 0 }: SidebarProps) {
                 {item.icon}
                 <span className="nav-item-text">{item.label}</span>
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="nav-badge">{item.badge > 99 ? '99+' : item.badge}</span>
+                  <span className="nav-badge">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
                 )}
               </Link>
             );

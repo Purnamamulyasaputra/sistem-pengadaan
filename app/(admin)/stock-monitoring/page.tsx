@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+
 import { useState, useEffect, Fragment } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Table } from '@/components/ui/Table';
@@ -8,8 +10,9 @@ import { Select } from '@/components/ui/Select';
 import { Toast } from '@/components/ui/Toast';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { RefreshCcw, Search, Info, Calendar, DollarSign, Package, Download, Zap, Loader2 } from 'lucide-react';
+import { RefreshCcw, Search, Info, Calendar, DollarSign, Package, Download, Zap, Loader2, Bell, Store, AlertCircle, X, ExternalLink } from 'lucide-react';
 import { CombinedStockView } from './CombinedStockView';
+import { DistributionHistoryView } from './DistributionHistoryView';
 
 interface Outlet {
   id: number;
@@ -47,6 +50,7 @@ interface OutletConsumptionSummary {
 }
 
 export default function StockMonitoringPage() {
+  const router = useRouter();
   const [data, setData] = useState<{
     outlets: Outlet[];
     items: Item[];
@@ -55,7 +59,7 @@ export default function StockMonitoringPage() {
     consumptionMap?: Record<number, OutletConsumptionSummary>;
   } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'PER_OUTLET' | 'GABUNGAN'>('PER_OUTLET');
+  const [activeTab, setActiveTab] = useState<'PER_OUTLET' | 'GABUNGAN' | 'HISTORY'>('PER_OUTLET');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ open: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -91,6 +95,58 @@ export default function StockMonitoringPage() {
   const [syncing, setSyncing] = useState(false);
 
   const [transferring, setTransferring] = useState(false);
+  const [showLowStockModal, setShowLowStockModal] = useState(false);
+  const [modalFilterOutlet, setModalFilterOutlet] = useState('ALL');
+  const [modalSearchTerm, setModalSearchTerm] = useState('');
+
+  const getCriticalItems = () => {
+    if (!data) return { criticalItems: [], totalLowStocks: 0 };
+    const criticalItemIds = new Set<number>();
+    let totalLowStocks = 0;
+    
+    data.outlets.forEach(outlet => {
+      data.items.forEach(item => {
+        const minStock = Number(item.minimum_threshold) || 0;
+        if (minStock > 0) {
+          const matrixData = data.stockMatrix[item.id]?.[outlet.id];
+          const qty = typeof matrixData === 'object' && matrixData !== null ? matrixData.stock_smallest : (typeof matrixData === 'number' ? matrixData : 0);
+          
+          if (qty <= minStock * 1.5) {
+            criticalItemIds.add(item.id);
+            totalLowStocks++;
+          }
+        }
+      });
+    });
+    
+    const criticalItems = data.items.filter(item => criticalItemIds.has(item.id));
+    return { criticalItems, totalLowStocks };
+  };
+
+  const handleCreateDO = (outletId: number) => {
+    if (!data) return;
+    const itemsToShip: number[] = [];
+    
+    data.items.forEach(item => {
+      const minStock = Number(item.minimum_threshold) || 0;
+      if (minStock > 0) {
+        const matrixData = data.stockMatrix[item.id]?.[outletId];
+        const qty = typeof matrixData === 'object' && matrixData !== null ? matrixData.stock_smallest : (typeof matrixData === 'number' ? matrixData : 0);
+        if (qty <= minStock * 1.5) {
+          itemsToShip.push(item.id);
+        }
+      }
+    });
+
+    if (itemsToShip.length === 0) {
+      setToast({ open: true, message: 'Tidak ada barang yang menipis untuk outlet ini.', type: 'info' });
+      return;
+    }
+
+    router.push(`/delivery-orders/create?order_id=DIRECT&outlet_id=${outletId}&items=${itemsToShip.join(',')}`);
+  };
+
+  const { criticalItems, totalLowStocks } = getCriticalItems();
 
   const handleSyncMoka = async () => {
     if (!syncFromDate || !syncToDate) {
@@ -183,6 +239,16 @@ export default function StockMonitoringPage() {
 
   useEffect(() => {
     fetchData();
+
+    // Auto-refresh when the window gains focus
+    const handleFocus = () => {
+      fetchData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   const formatUnit = (unit: string) => {
@@ -264,11 +330,13 @@ export default function StockMonitoringPage() {
         <div className="card-head" style={{ padding: '16px 20px', borderBottom: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h3 className="text-gray-900" style={{ fontSize: '15px', margin: 0 }}>
-              {activeTab === 'GABUNGAN' ? 'Laporan Stok Gabungan' : 'Pemantauan Stok'}
+              {activeTab === 'GABUNGAN' ? 'Laporan Stok Gabungan' : activeTab === 'HISTORY' ? 'Histori Distribusi Aset' : 'Pemantauan Stok'}
             </h3>
             <p className="text-gray-500 mt-1" style={{ fontSize: '12px', margin: '4px 0 0 0' }}>
               {activeTab === 'GABUNGAN'
                 ? 'Rekapitulasi stok keseluruhan di seluruh lokasi.'
+                : activeTab === 'HISTORY'
+                ? 'Pantau total nilai aset barang yang telah didistribusikan ke masing-masing outlet.'
                 : 'Pantau ketersediaan stok fisik secara live di seluruh cabang dan pusat.'}
             </p>
           </div>
@@ -295,9 +363,17 @@ export default function StockMonitoringPage() {
           >
             Total Gabungan
           </button>
+          <button
+            onClick={() => setActiveTab('HISTORY')}
+            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'HISTORY' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 13, fontWeight: activeTab === 'HISTORY' ? 600 : 500, color: activeTab === 'HISTORY' ? 'var(--primary)' : 'var(--muted)' }}
+          >
+            Histori Distribusi
+          </button>
         </div>
 
-        {activeTab === 'GABUNGAN' ? (
+        {activeTab === 'HISTORY' ? (
+          <DistributionHistoryView />
+        ) : activeTab === 'GABUNGAN' ? (
           <CombinedStockView categories={data?.categories || []} />
         ) : (
           <div className="card-body p-0">
@@ -374,6 +450,25 @@ export default function StockMonitoringPage() {
                     {transferring ? 'Memproses...' : 'Trigger Semua Outlet'}
                   </div>
                 </Button>
+                {totalLowStocks > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowLowStockModal(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, borderColor: '#ef4444', color: '#ef4444', backgroundColor: '#fef2f2' }}
+                    title="Lihat Peringatan Stok"
+                  >
+                    <Bell size={13} />
+                    <span style={{ fontWeight: 600 }}>Peringatan Stok</span>
+                    <span style={{
+                      background: '#ef4444', color: '#fff', fontSize: 10,
+                      fontWeight: 'bold', padding: '2px 6px', borderRadius: 10,
+                      marginLeft: 2
+                    }}>
+                      {totalLowStocks}
+                    </span>
+                  </Button>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative' }}>
@@ -783,6 +878,110 @@ export default function StockMonitoringPage() {
           </div>
         </Modal>
 
+        <Modal 
+          isOpen={showLowStockModal} 
+          onClose={() => setShowLowStockModal(false)} 
+          title={`Peringatan Stok Menipis (${totalLowStocks} peringatan)`} 
+          maxWidth={1000}
+        >
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+              <div style={{ position: 'relative', width: '350px' }}>
+                <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Cari nama barang..."
+                  value={modalSearchTerm}
+                  onChange={e => setModalSearchTerm(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px 8px 32px', fontSize: 13 }}
+                />
+              </div>
+            </div>
+            
+            <div style={{ maxHeight: '55vh', overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+              <Table responsive={false} style={{ minWidth: 'max-content' }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 20 }}>
+                  <tr>
+                    <th style={{ padding: '8px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', borderBottom: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', background: '#f8fafc', left: 0, zIndex: 21, position: 'sticky', whiteSpace: 'nowrap' }}>Bahan / Produk</th>
+                    {data?.outlets.map(outlet => (
+                      <th key={outlet.id} style={{ padding: '8px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', borderBottom: '1px solid #e2e8f0', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                          {outlet.name}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleCreateDO(outlet.id)}
+                            style={{ padding: '4px', height: 26, width: 26, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title={`Buat DO Langsung ke ${outlet.name}`}
+                          >
+                            <ExternalLink size={14} />
+                          </Button>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {criticalItems
+                    .filter(item => !modalSearchTerm || item.name.toLowerCase().includes(modalSearchTerm.toLowerCase()))
+                    .map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '8px 12px', fontSize: 12, fontWeight: 500, color: '#0f172a', borderRight: '1px solid #e2e8f0', background: '#fff', left: 0, zIndex: 10, position: 'sticky', whiteSpace: 'nowrap' }}>
+                        {item.name}
+                      </td>
+                      {data?.outlets.map(outlet => {
+                        const minStock = Number(item.minimum_threshold) || 0;
+                        const matrixData = data?.stockMatrix[item.id]?.[outlet.id];
+                        const qty = typeof matrixData === 'object' && matrixData !== null ? matrixData.stock_smallest : (typeof matrixData === 'number' ? matrixData : 0);
+                        
+                        let isKritis = false;
+                        let isMenipis = false;
+                        if (minStock > 0) {
+                          if (qty <= minStock) isKritis = true;
+                          else if (qty <= minStock * 1.5) isMenipis = true;
+                        }
+                        const isLow = isKritis || isMenipis;
+                        
+                        return (
+                          <td key={outlet.id} style={{ 
+                            padding: '8px 12px', 
+                            fontSize: 12, 
+                            textAlign: 'right',
+                            background: '#fff',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {isLow ? (
+                              <span style={{ 
+                                fontWeight: 600, 
+                                color: isKritis ? '#ef4444' : '#f59e0b'
+                              }}>
+                                {formatQty(qty, 1)} {formatUnit(item.smallest_unit)}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#cbd5e1' }}>-</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  {criticalItems.filter(item => !modalSearchTerm || item.name.toLowerCase().includes(modalSearchTerm.toLowerCase())).length === 0 && (
+                    <tr>
+                      <td colSpan={(data?.outlets.length || 0) + 1} style={{ textAlign: 'center', padding: '40px 16px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 48, height: 48, borderRadius: '50%', background: '#f8fafc', color: '#94a3b8', marginBottom: 12 }}>
+                          <Package size={24} />
+                        </div>
+                        <p style={{ color: '#0f172a', fontSize: 14, fontWeight: 500, margin: '0 0 4px 0' }}>Tidak ada data ditemukan</p>
+                        <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Coba ubah kata kunci pencarian Anda.</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </Table>
+            </div>
+          </div>
+        </Modal>
 
         <ConfirmDialog
           open={confirmDialog.open}

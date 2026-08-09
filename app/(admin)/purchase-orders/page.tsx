@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Toast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
+import { ItemSelectWithBrand } from '@/components/shared/ItemSelectWithBrand';
 import { FullScreenLoader } from '@/components/ui/FullScreenLoader';
 interface PO {
   id: number; po_number: string; vendor_name: string; vendor_id?: number | string; order_date: string;
@@ -912,30 +913,22 @@ export default function PurchaseOrdersPage() {
                               return (
                                 <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                   <td style={{ padding: '6px 16px', position: 'relative' }}>
-                                    <input
-                                      className="po-table-input ingredient-input"
-                                      value={line.description}
-                                      onFocus={(e) => { setActiveDropdown(idx); e.target.select(); }}
-                                      onBlur={() => setTimeout(() => setActiveDropdown(null), 200)}
-                                      onChange={e => handleItemTextChange(idx, e.target.value)}
-                                      placeholder="Nama bahan/produk..."
+                                    <ItemSelectWithBrand
+                                      value={line.item_id || line.description}
+                                      onChange={(val) => {
+                                        // If it's an ID, find the item and update. If it's a new string, just update description
+                                        const found = items.find(i => String(i.id) === String(val));
+                                        if (found) {
+                                          handleItemTextChange(idx, found.name);
+                                        } else {
+                                          updateLine(idx, 'description', String(val));
+                                          updateLine(idx, 'item_id', '');
+                                        }
+                                      }}
+                                      items={items}
+                                      placeholder="Pilih Bahan/Produk..."
+                                      style={{ width: '100%', minWidth: 200 }}
                                     />
-                                    {activeDropdown === idx && (
-                                      <div style={{ position: 'absolute', top: '100%', left: 16, right: 16, background: '#fff', border: '1px solid var(--primary)', borderRadius: 4, maxHeight: 200, overflowY: 'auto', zIndex: 999, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 2 }}>
-                                        {items.filter(i => i.name.toLowerCase().includes((line.item_id ? '' : line.description).toLowerCase())).map(i => (
-                                          <div key={i.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#1e293b', borderBottom: '1px solid #f8fafc' }} onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            handleItemTextChange(idx, i.name);
-                                            setActiveDropdown(null);
-                                          }} onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                            {i.name}
-                                          </div>
-                                        ))}
-                                        {items.filter(i => i.name.toLowerCase().includes((line.item_id ? '' : line.description).toLowerCase())).length === 0 && (
-                                          <div style={{ padding: '8px 12px', color: '#64748b', fontStyle: 'italic', fontSize: 13 }}>Tidak ada kecocokan</div>
-                                        )}
-                                      </div>
-                                    )}
                                   </td>
                                   <td style={{ padding: '6px 16px' }}>
                                     <input type="text" className="po-table-input transparent-input right" value={line.qty === '0' ? '' : (line.qty ? Number(line.qty).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'qty', raw); }} onFocus={e => e.target.select()} placeholder="0" />

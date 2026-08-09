@@ -3,10 +3,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Select } from '@/components/ui/Select';
+import { ItemSelectWithBrand } from '@/components/shared/ItemSelectWithBrand';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function PriceHistoryPage() {
-  const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [vendors, setVendors] = useState<{ id: number; name: string }[]>([]);
 
   const [selectedItemId, setSelectedItemId] = useState<string>('');
@@ -16,7 +16,6 @@ export default function PriceHistoryPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/items').then(r => r.json()).then(d => setItems(d.data ?? []));
     fetch('/api/vendors').then(r => r.json()).then(d => setVendors(d.data ?? []));
   }, []);
 
@@ -57,13 +56,10 @@ export default function PriceHistoryPage() {
         </div>
 
         <div style={{ padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16 }}>
-          <Select
+          <ItemSelectWithBrand
             value={selectedItemId}
             onChange={val => setSelectedItemId(String(val))}
-            options={[
-              { value: '', label: 'Semua Barang' },
-              ...items.map((i: any) => ({ value: String(i.id), label: String(i.name || '') }))
-            ]}
+            placeholder="Semua Barang"
             style={{ minWidth: 250 }}
           />
           <Select

@@ -79,8 +79,8 @@ function MenusTab({ categories }: { categories: Category[] }) {
   const [catId, setCatId] = useState('');
   const [marginFlag, setMarginFlag] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [toastInfo, setToastInfo] = useState<{ show: boolean; msg: string; type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
-  const limit = 20;
 
   const [detailModal, setDetailModal] = useState<number | null>(null);
   const [detailData, setDetailData] = useState<any>(null);
@@ -100,7 +100,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
       .then(r => r.json())
       .then(d => { setData(d.data ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
-  }, [search, catId, marginFlag, page]);
+  }, [search, catId, marginFlag, page, limit]);
 
   const openDetail = async (menuId: number) => {
     setDetailModal(menuId);
@@ -198,12 +198,23 @@ function MenusTab({ categories }: { categories: Category[] }) {
           inputStyle={{ height: 32 }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-          <a href="/hpp/recipe-builder/new" className="btn btn-sm btn-primary" style={{ textDecoration: 'none' }}>
-            + Buat Data Produk
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="muted" style={{ fontSize: 13 }}>Tampilkan:</span>
+            <div style={{ width: 70 }}>
+              <Select 
+                value={limit} 
+                onChange={val => { setLimit(Number(val)); setPage(1); }}
+                options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
+                inputStyle={{ height: 32, fontSize: 13 }}
+              />
+            </div>
+          </div>
           <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>
             {total} Menu ditemukan
           </span>
+          <a href="/hpp/recipe-builder/new" className="btn btn-sm btn-primary" style={{ textDecoration: 'none' }}>
+            + Buat Data Produk
+          </a>
           <div
             className="group"
             style={{ position: 'relative', cursor: 'help', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}
@@ -408,7 +419,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const [deleting, setDeleting] = useState(false);
-  const limit = 20;
+  const [limit, setLimit] = useState(20);
 
   const [viewRecipeModal, setViewRecipeModal] = useState<number | null>(null);
   const [viewRecipeData, setViewRecipeData] = useState<any>(null);
@@ -424,7 +435,7 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
       .then(r => r.json())
       .then(d => { setData(d.data ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
-  }, [search, venueId, page]);
+  }, [search, venueId, page, limit]);
 
   const openViewRecipe = async (id: number) => {
     setViewRecipeModal(id);
@@ -473,8 +484,21 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           style={{ width: 150 }}
           inputStyle={{ height: 32 }}
         />
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} resep</span>
-        <a href="/hpp/recipe-builder/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>+ Tambah Resep</a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="muted" style={{ fontSize: 13 }}>Tampilkan:</span>
+            <div style={{ width: 70 }}>
+              <Select 
+                value={limit} 
+                onChange={val => { setLimit(Number(val)); setPage(1); }}
+                options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
+                inputStyle={{ height: 32, fontSize: 13 }}
+              />
+            </div>
+          </div>
+          <span className="muted" style={{ fontSize: 13 }}>{total} resep</span>
+          <a href="/hpp/recipe-builder/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>+ Tambah Resep</a>
+        </div>
       </div>
 
       <div className="card-body flush">
@@ -601,7 +625,7 @@ function IngredientsTab() {
   const [page, setPage] = useState(1);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const limit = 20;
+  const [limit, setLimit] = useState(20);
 
   const [toastInfo, setToastInfo] = useState<{ show: boolean; msg: string; type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
   const [modalOpen, setModalOpen] = useState(false);
@@ -616,6 +640,8 @@ function IngredientsTab() {
     conversion_ratio: number;
     current_average_price: number;
     last_purchase_price?: number;
+    parent_id?: number | null;
+    has_children?: boolean;
   }[]>([]);
 
   useEffect(() => {
@@ -641,7 +667,7 @@ function IngredientsTab() {
       .then(r => r.json())
       .then(d => { setData(d.data ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
-  }, [search, page]);
+  }, [search, page, limit]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -720,8 +746,21 @@ function IngredientsTab() {
       <div style={{ display: 'flex', gap: 12, padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
         <input className="input" placeholder="Cari nama bahan baku..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 260 }} />
-        <span className="muted" style={{ fontSize: 13, marginLeft: 'auto' }}>{total} bahan baku</span>
-        <button className="btn btn-primary" onClick={handleOpenAdd}>+ Tambah Bahan Baku</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="muted" style={{ fontSize: 13 }}>Tampilkan:</span>
+            <div style={{ width: 70 }}>
+              <Select 
+                value={limit} 
+                onChange={val => { setLimit(Number(val)); setPage(1); }}
+                options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
+                inputStyle={{ height: 32, fontSize: 13 }}
+              />
+            </div>
+          </div>
+          <span className="muted" style={{ fontSize: 13 }}>{total} bahan baku</span>
+          <button className="btn btn-primary" onClick={handleOpenAdd}>+ Tambah Bahan Baku</button>
+        </div>
       </div>
 
       <div className="card-body flush">
@@ -832,11 +871,23 @@ function IngredientsTab() {
                   }}>
                     {matchingMasterItems.map(item => {
                       const cost = getCostPerSmallestUnit(item);
+                      const isParent = !item.parent_id && item.has_children;
+                      const isChild = !!item.parent_id;
+
+                      if (isParent) {
+                        return (
+                          <div key={item.id} style={{ padding: '8px 14px', fontSize: '11px', fontWeight: 700, color: '#94a3b8', background: '#f8fafc', textTransform: 'uppercase' }}>
+                            📦 {item.name}
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
                           key={item.id}
                           style={{
                             padding: '10px 14px',
+                            paddingLeft: isChild ? 24 : 14,
                             cursor: 'pointer',
                             fontSize: '13px',
                             color: 'var(--text)',
@@ -857,6 +908,7 @@ function IngredientsTab() {
                             setShowNameSuggestions(false);
                           }}
                         >
+                          {isChild && <span style={{ color: '#cbd5e1', marginRight: 6 }}>↳</span>}
                           {item.name}
                         </div>
                       );

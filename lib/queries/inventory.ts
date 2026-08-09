@@ -350,6 +350,7 @@ export async function getCombinedStockReport(search: string | null) {
       i.smallest_unit, i.purchase_unit, i.conversion_ratio, i.minimum_threshold,
       COALESCE((SELECT ending_balance FROM inventory_logs il WHERE il.item_id = i.id ORDER BY il.created_at DESC, id DESC LIMIT 1), 0)::numeric AS central_stock,
       COALESCE((SELECT SUM(current_balance) FROM outlet_stocks os WHERE os.item_id = i.id), 0)::numeric AS outlet_stock,
+      COALESCE((SELECT jsonb_object_agg(os.outlet_id::text, os.current_balance) FROM outlet_stocks os WHERE os.item_id = i.id), '{}'::jsonb) AS outlet_stocks_map,
       i.current_average_price
     FROM items i
     LEFT JOIN categories c ON c.id = i.category_id

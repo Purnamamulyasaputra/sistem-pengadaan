@@ -164,14 +164,14 @@ export function Select({ value, onChange, options, style, className = '', placeh
                     padding: '8px 12px',
                     cursor: opt.disabled ? 'not-allowed' : 'pointer',
                     fontSize: 13,
-                    background: String(opt.value) === String(value) ? '#f1f5f9' : '#fff',
+                    background: String(opt.value) === String(value) ? '#f3f4f6' : '#fff',
                     color: opt.disabled ? '#94a3b8' : '#334155',
                     transition: 'background 0.1s',
                     ...optionStyle
                   }}
                   onMouseEnter={(e) => {
                     if (!opt.disabled && String(opt.value) !== String(value)) {
-                      e.currentTarget.style.background = '#f8fafc';
+                      e.currentTarget.style.background = '#f9fafb';
                     }
                   }}
                   onMouseLeave={(e) => {

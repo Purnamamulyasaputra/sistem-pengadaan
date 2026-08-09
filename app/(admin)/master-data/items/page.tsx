@@ -11,7 +11,7 @@ import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
 import { Toggle } from '@/components/ui/Toggle';
 import { Toast } from '@/components/ui/Toast';
 import { Select } from '@/components/ui/Select';
-import { HelpCircle, Info, Tag, Package, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, RotateCcw } from 'lucide-react';
+import { HelpCircle, Info, Tag, Package, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react';
 import { PURCHASE_UNITS, SMALLEST_UNITS, normalizeUnit } from '@/lib/constants/units';
 
 interface Item {
@@ -25,7 +25,10 @@ interface Item {
   is_split_allowed?: boolean;
   min_order_qty?: number;
   order_multiple?: number;
+  parent_id?: number | null;
+  has_children?: boolean;
 }
+interface BrandForm { id?: string; name: string; barcode: string; purchase_price: string; conversion_ratio: string; }
 interface Category { id: number; name: string; }
 interface Ingredient { id: number; name: string; unit?: string; }
 
@@ -143,7 +146,8 @@ export default function ItemsPage() {
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1' });
+  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1', has_brands: false });
+  const [brands, setBrands] = useState<BrandForm[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toastInfo, setToastInfo] = useState<{ show: boolean, msg: string, type: 'success' | 'error' | 'info' }>({ show: false, msg: '', type: 'info' });
@@ -180,7 +184,8 @@ export default function ItemsPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1' });
+    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1', has_brands: false });
+    setBrands([]);
     setError('');
     setShowModal(true);
   }
@@ -189,11 +194,11 @@ export default function ItemsPage() {
     setEditing(item);
     const hasConv = item.purchase_unit !== item.smallest_unit || Number(item.conversion_ratio) > 1;
     setForm({
-      name: item.name, barcode: item.barcode || '', category_id: String(item.category_id ?? ''), 
+      name: item.name, barcode: item.barcode || `ERC${String(item.id).padStart(5, '0')}`, category_id: String(item.category_id ?? ''),
       purchase_unit: normalizeUnit(item.purchase_unit), package_inner_size: '',
       smallest_unit: normalizeUnit(item.smallest_unit), conversion_ratio: String(Number(item.conversion_ratio)),
-      minimum_threshold: String(Number(item.minimum_threshold) / (hasConv ? Number(item.conversion_ratio || 1) : 1)), 
-      target_stock: String(Number(item.target_stock ?? 0) / (hasConv ? Number(item.conversion_ratio || 1) : 1)), 
+      minimum_threshold: String(Number(item.minimum_threshold) / (hasConv ? Number(item.conversion_ratio || 1) : 1)),
+      target_stock: String(Number(item.target_stock ?? 0) / (hasConv ? Number(item.conversion_ratio || 1) : 1)),
       threshold_type: item.threshold_type,
       is_perishable: item.is_perishable, is_active: item.is_active,
       purchase_price: String(Number(item.current_average_price ?? 0) * Number(item.conversion_ratio || 1)),
@@ -201,10 +206,35 @@ export default function ItemsPage() {
       ingredient_id: item.ingredient_id ? String(item.ingredient_id) : '',
       is_split_allowed: item.is_split_allowed ?? false,
       min_order_qty: String(Number(item.min_order_qty ?? 1)),
-      order_multiple: String(Number(item.order_multiple ?? 1))
+      order_multiple: String(Number(item.order_multiple ?? 1)),
+      has_brands: false
     });
+    const childBrands = items.filter(i => i.parent_id === item.id).map(child => ({
+      id: String(child.id),
+      name: child.name,
+      barcode: child.barcode || `ERC${String(child.id).padStart(5, '0')}`,
+      purchase_price: String(child.current_average_price ?? 0),
+      conversion_ratio: String(child.conversion_ratio)
+    }));
+    setBrands(childBrands);
+    setForm(f => ({ ...f, has_brands: childBrands.length > 0 }));
+
     setError('');
     setShowModal(true);
+  }
+
+  // Generate SKU Function
+  function autoGenerateSKU(itemName: string, parentName: string, index: number) {
+    if (!itemName && !parentName) return '';
+    const sourceName = (itemName || parentName).trim().toUpperCase();
+    if (sourceName.length === 0) return '';
+    const firstLetter = sourceName.charAt(0);
+    const lastLetter = sourceName.charAt(sourceName.length - 1);
+
+    // Find max ID logically (we'll just use a randomish/timestamp if we don't know the exact next DB id)
+    // A better approach for UI preview is random or just index based
+    const suffix = (1000 + items.length + index + 1).toString();
+    return `${firstLetter}${lastLetter}-${suffix}`;
   }
 
   async function handleSave() {
@@ -229,10 +259,10 @@ export default function ItemsPage() {
       const MAX_SAFE_VALUE = 99_999_999;
       if (minThresholdSmall > MAX_SAFE_VALUE || targetStockSmall > MAX_SAFE_VALUE) {
         const bigVal = Math.max(minThresholdSmall, targetStockSmall);
-        setToastInfo({ 
-          show: true, 
-          msg: `Nilai terlalu besar setelah konversi ke ${finalSmallestUnit}: ${bigVal.toLocaleString('id-ID')} ${finalSmallestUnit}. Kurangi Batas Min atau Target Stok.`, 
-          type: 'error' 
+        setToastInfo({
+          show: true,
+          msg: `Nilai terlalu besar setelah konversi ke ${finalSmallestUnit}: ${bigVal.toLocaleString('id-ID')} ${finalSmallestUnit}. Kurangi Batas Min atau Target Stok.`,
+          type: 'error'
         });
         return;
       }
@@ -248,7 +278,14 @@ export default function ItemsPage() {
         ingredient_id: form.ingredient_id ? Number(form.ingredient_id) : null,
         is_split_allowed: Boolean(form.is_split_allowed),
         min_order_qty: Number(form.min_order_qty || 1),
-        order_multiple: Number(form.order_multiple || 1)
+        order_multiple: Number(form.order_multiple || 1),
+        brands: brands.filter(b => b.name).map(b => ({
+          id: b.id,
+          name: b.name,
+          barcode: b.barcode,
+          purchase_price: Number(b.purchase_price || 0),
+          conversion_ratio: Number(b.conversion_ratio || 1)
+        }))
       };
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       let data;
@@ -276,6 +313,7 @@ export default function ItemsPage() {
         setToastInfo({ show: true, msg: data.message, type: 'error' });
       } else {
         setToastInfo({ show: true, msg: data.message, type: 'success' });
+        setBrands(prev => prev.filter(b => b.id !== String(item.id)));
       }
     } catch (err) {
       setToastInfo({ show: true, msg: 'Gagal menghubungi server', type: 'error' });
@@ -292,6 +330,8 @@ export default function ItemsPage() {
     if (filterPerishable === 'PERISHABLE' && !item.is_perishable) return false;
     if (filterPerishable === 'DURABLE' && item.is_perishable) return false;
     if (filterStockStatus && getStockStatus(item) !== filterStockStatus) return false;
+    // Sembunyikan varian/brand dari tabel utama agar tidak panjang
+    if (item.parent_id) return false;
     return true;
   });
 
@@ -352,6 +392,17 @@ export default function ItemsPage() {
                 style={{ width: 170 }}
                 inputStyle={{ height: 34 }}
               />
+              <Select
+                value={String(itemsPerPage)}
+                onChange={(val: any) => { setItemsPerPage(Number(val)); setCurrentPage(1); }}
+                options={[
+                  { value: '20', label: '20' },
+                  { value: '50', label: '50' },
+                  { value: '100', label: '100' }
+                ]}
+                style={{ width: 110 }}
+                inputStyle={{ height: 34 }}
+              />
               {(search || catFilter || filterPerishable || filterStockStatus) && (
                 <button
                   type="button"
@@ -406,60 +457,55 @@ export default function ItemsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedItems.map(item => (
-                      <tr key={item.id}>
-                        <td className="font-mono text-muted">ERC{String(item.id).padStart(5, '0')}</td>
-                        <td>
-                          <div className="font-bold" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {item.name}
-                            {item.is_hpp && (
-                              <span style={{ fontSize: 9, background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: 0.5 }}>HPP / RESEP</span>
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                            {!item.is_active && <span style={{ fontSize: 10, background: '#f1f5f9', color: '#64748b', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>NONAKTIF</span>}
-                            {item.is_perishable && <span style={{ fontSize: 10, color: '#d97706', fontWeight: 600 }}>CEPAT BASI</span>}
-                          </div>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span className="font-bold">{item.purchase_unit}</span>
-                            <span className="muted" style={{ fontSize: 12 }}>/ {item.smallest_unit}</span>
-                          </div>
-                        </td>
-                        <td className="center num muted">{Math.round(Number(item.conversion_ratio)).toLocaleString('id-ID')}</td>
-                        <td className="right num">{fmtCurrency(item.current_average_price).replace(',00', '')}</td>
-                        <td className="center">
-                          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', whiteSpace: 'nowrap' }}>
-                            <Button size="sm" onClick={(e) => { e.stopPropagation(); openEdit(item); }} title="Edit Barang" style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                            </Button>
-                            <Button size="sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={(e) => { e.stopPropagation(); setConfirmDelete(item); }} title="Hapus Barang">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                            </Button>
-                          </div>
-                        </td>
-                        <td></td>
-                      </tr>
-                    ))}
+                    {paginatedItems.map(item => {
+                      const isChild = !!item.parent_id;
+                      const isParent = !item.parent_id && item.has_children;
+                      return (
+                        <tr key={item.id} style={{ background: isParent ? '#f8fafc' : '#fff' }}>
+                          <td className="font-mono text-muted">
+                            {isChild && <span style={{ color: '#cbd5e1', marginRight: 4 }}>↳</span>}
+                            {item.barcode || `ERC${String(item.id).padStart(5, '0')}`}
+                          </td>
+                          <td style={{ paddingLeft: isChild ? 24 : 12 }}>
+                            <div className="font-bold" style={{ display: 'flex', alignItems: 'center', gap: 6, color: isParent ? '#475569' : 'inherit' }}>
+                              {item.name}
+                              {item.is_hpp && !isParent && (
+                                <span style={{ fontSize: 9, background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: 0.5 }}>HPP / RESEP</span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                              {!item.is_active && <span style={{ fontSize: 10, background: '#f1f5f9', color: '#64748b', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>NONAKTIF</span>}
+                              {item.is_perishable && <span style={{ fontSize: 10, color: '#d97706', fontWeight: 600 }}>CEPAT BASI</span>}
+                            </div>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span className="font-bold">{item.purchase_unit}</span>
+                              <span className="muted" style={{ fontSize: 12 }}>/ {item.smallest_unit}</span>
+                            </div>
+                          </td>
+                          <td className="center num muted">{Math.round(Number(item.conversion_ratio)).toLocaleString('id-ID')}</td>
+                          <td className="right num">
+                            {fmtCurrency(item.current_average_price || 0).replace(',00', '')}
+                          </td>
+                          <td className="center">
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', whiteSpace: 'nowrap' }}>
+                              <Button size="sm" onClick={(e) => { e.stopPropagation(); openEdit(item); }} title={isParent ? "Edit Induk" : "Edit Barang"} style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                              </Button>
+                              <Button size="sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={(e) => { e.stopPropagation(); setConfirmDelete(item); }} title="Hapus Barang">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                              </Button>
+                            </div>
+                          </td>
+                          <td></td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </Table>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="muted" style={{ fontSize: 13 }}>Tampilkan</span>
-                  <Select
-                    value={String(itemsPerPage)}
-                    onChange={(val: any) => { setItemsPerPage(Number(val)); setCurrentPage(1); }}
-                    options={[
-                      { value: '20', label: '20 baris' },
-                      { value: '50', label: '50 baris' },
-                      { value: '100', label: '100 baris' }
-                    ]}
-                    style={{ width: 110 }}
-                    inputStyle={{ height: 32, fontSize: 13 }}
-                  />
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 16, padding: '0 24px 24px 24px' }}>
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}
@@ -478,6 +524,7 @@ export default function ItemsPage() {
         onClose={() => setShowModal(false)}
         title={editing ? 'Edit Barang' : 'Tambah Barang Baru'}
         maxWidth={1024}
+        closeOnOutsideClick={false}
         footer={
           <>
             <Button variant="outline" onClick={() => setShowModal(false)}>Batal</Button>
@@ -611,26 +658,25 @@ export default function ItemsPage() {
                       width={280}
                       text={
                         form.has_conversion && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0
-                          ? `1 ${form.purchase_unit} = ${form.conversion_ratio} ${form.smallest_unit} • Harga HPP (Moving Avg): ${fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per ${form.smallest_unit}${
-                              editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0
-                                ? ` • Beli Terakhir: ${fmtCurrency(Number(editing.last_purchase_price))} per ${editing.smallest_unit}`
-                                : ''
-                            }`
+                          ? `1 ${form.purchase_unit} = ${form.conversion_ratio} ${form.smallest_unit} • Harga HPP (Moving Avg): ${fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per ${form.smallest_unit}${editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0
+                            ? ` • Beli Terakhir: ${fmtCurrency(Number(editing.last_purchase_price))} per ${editing.smallest_unit}`
+                            : ''
+                          }`
                           : 'Masukkan angka konversi dari satuan beli (contoh: 1 Kg berisi 1000 gr).'
                       }
                     />
                   </div>
                   <div style={{ position: 'relative' }}>
-                    <input 
-                      className="input" 
-                      type="text" 
-                      value={formatNumberInput(form.conversion_ratio)} 
+                    <input
+                      className="input"
+                      type="text"
+                      value={formatNumberInput(form.conversion_ratio)}
                       onChange={e => {
                         const raw = parseNumberInput(e.target.value);
                         if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, conversion_ratio: raw }));
-                      }} 
-                      disabled={!form.has_conversion} 
-                      style={{ paddingRight: 60, cursor: form.has_conversion ? 'text' : 'not-allowed' }} 
+                      }}
+                      disabled={!form.has_conversion}
+                      style={{ paddingRight: 60, cursor: form.has_conversion ? 'text' : 'not-allowed' }}
                     />
                     <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)' }}>{form.smallest_unit}</span>
                   </div>
@@ -650,14 +696,14 @@ export default function ItemsPage() {
                     <label style={{ marginBottom: 0 }}>Batas Min. {form.has_conversion ? (form.purchase_unit ? `(${form.purchase_unit})` : '') : (form.smallest_unit ? `(${form.smallest_unit})` : '')}</label>
                     <InfoTooltip align="left" width={230} text="Stok kritis terendah di outlet. Jika stok mencapai angka ini, sistem memberi peringatan merah (Reorder Point)." />
                   </div>
-                  <input 
-                    className="input" 
-                    type="text" 
-                    value={formatNumberInput(form.minimum_threshold)} 
+                  <input
+                    className="input"
+                    type="text"
+                    value={formatNumberInput(form.minimum_threshold)}
                     onChange={e => {
                       const raw = parseNumberInput(e.target.value);
                       if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, minimum_threshold: raw }));
-                    }} 
+                    }}
                   />
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
@@ -665,14 +711,14 @@ export default function ItemsPage() {
                     <label style={{ marginBottom: 0 }}>Target Stok. {form.has_conversion ? (form.purchase_unit ? `(${form.purchase_unit})` : '') : (form.smallest_unit ? `(${form.smallest_unit})` : '')}</label>
                     <InfoTooltip align="left" width={230} text="Stok ideal/maksimal di outlet. Sistem menghitung saran pembelian berdasarkan selisih Target Stok dikurangi Stok Saat Ini." />
                   </div>
-                  <input 
-                    className="input" 
-                    type="text" 
-                    value={formatNumberInput(form.target_stock)} 
+                  <input
+                    className="input"
+                    type="text"
+                    value={formatNumberInput(form.target_stock)}
                     onChange={e => {
                       const raw = parseNumberInput(e.target.value);
                       if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, target_stock: raw }));
-                    }} 
+                    }}
                   />
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
@@ -773,6 +819,61 @@ export default function ItemsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* BRANDS SECTION */}
+              <div style={{ marginTop: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#000', borderBottom: 'none' }}>Daftar Brand / Varian</h4>
+                  <Button variant="outline" size="sm" onClick={() => setBrands([...brands, { name: '', barcode: '', purchase_price: form.purchase_price, conversion_ratio: '1' }])}>
+                    + Tambah Brand
+                  </Button>
+                </div>
+                {brands.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {brands.map((brand, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                            <div style={{ flex: 1.4 }}>
+                              <Input label={i === 0 ? "Nama Brand *" : "Nama Brand"} placeholder="Misal: Susu Diamond" value={brand.name} onChange={e => {
+                                const newBrands = [...brands];
+                                newBrands[i].name = e.target.value;
+                                if (!newBrands[i].barcode) newBrands[i].barcode = autoGenerateSKU(e.target.value, form.name, i);
+                                setBrands(newBrands);
+                              }} />
+                            </div>
+                            <div style={{ flex: 0.9 }}>
+                              <Input label={i === 0 ? "SKU / Barcode" : "SKU / Barcode"} placeholder="Auto / Scan" value={brand.barcode} onChange={e => {
+                                const newBrands = [...brands];
+                                newBrands[i].barcode = e.target.value;
+                                setBrands(newBrands);
+                              }} />
+                            </div>
+                            <div style={{ flex: 1.8 }}>
+                              <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label className="form-label">{i === 0 ? "Harga Beli" : "Harga Beli"}</label>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                  <input className="input" type="number" value={brand.purchase_price} onChange={e => {
+                                    const newBrands = [...brands];
+                                    newBrands[i].purchase_price = e.target.value;
+                                    setBrands(newBrands);
+                                  }} style={{ flex: 1 }} />
+                                  <Button variant="outline" size="sm" style={{ color: '#dc2626', width: 34, height: 34, padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }} onClick={() => {
+                                    if (brand.id) {
+                                      setConfirmDelete({ id: Number(brand.id), name: brand.name } as Item);
+                                      return;
+                                    }
+                                    setBrands(brands.filter((_, idx) => idx !== i));
+                                  }} title="Hapus Brand">
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                )}
+              </div>
+
             </div>
 
             {/* RIGHT COLUMN: Settings & Toggles */}
