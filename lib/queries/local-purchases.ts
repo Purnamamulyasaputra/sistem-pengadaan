@@ -190,3 +190,13 @@ export async function getLocalPurchases(outletId?: number, date?: string) {
   const res = await query(sql, params);
   return res.rows;
 }
+
+export async function getUnreadLocalPurchaseCount(): Promise<number> {
+  const res = await query(`SELECT COUNT(*) as count FROM outlet_local_purchases WHERE is_read_by_central = false`);
+  return parseInt(res.rows[0].count, 10);
+}
+
+export async function markAllLocalPurchasesRead(): Promise<void> {
+  await query(`UPDATE outlet_local_purchases SET is_read_by_central = true WHERE is_read_by_central = false`);
+}
+

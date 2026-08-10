@@ -28,7 +28,7 @@ interface Item {
   parent_id?: number | null;
   has_children?: boolean;
 }
-interface BrandForm { id?: string; name: string; barcode: string; purchase_price: string; conversion_ratio: string; }
+interface BrandForm { id?: string; name: string; barcode: string; purchase_price: string; conversion_ratio: string; current_average_price?: number; last_purchase_price?: number; }
 interface Category { id: number; name: string; }
 interface Ingredient { id: number; name: string; unit?: string; }
 
@@ -201,7 +201,7 @@ export default function ItemsPage() {
       target_stock: String(Number(item.target_stock ?? 0) / (hasConv ? Number(item.conversion_ratio || 1) : 1)),
       threshold_type: item.threshold_type,
       is_perishable: item.is_perishable, is_active: item.is_active,
-      purchase_price: String(Number(item.current_average_price ?? 0) * Number(item.conversion_ratio || 1)),
+      purchase_price: String(Math.round(Number(item.current_average_price ?? 0) * Number(item.conversion_ratio || 1))),
       has_conversion: hasConv,
       ingredient_id: item.ingredient_id ? String(item.ingredient_id) : '',
       is_split_allowed: item.is_split_allowed ?? false,
@@ -213,8 +213,10 @@ export default function ItemsPage() {
       id: String(child.id),
       name: child.name,
       barcode: child.barcode || `ERC${String(child.id).padStart(5, '0')}`,
-      purchase_price: String(child.current_average_price ?? 0),
-      conversion_ratio: String(child.conversion_ratio)
+      purchase_price: String(Math.round(Number(child.current_average_price ?? 0) * Number(child.conversion_ratio || 1))),
+      conversion_ratio: String(child.conversion_ratio),
+      current_average_price: child.current_average_price,
+      last_purchase_price: child.last_purchase_price
     }));
     setBrands(childBrands);
     setForm(f => ({ ...f, has_brands: childBrands.length > 0 }));
@@ -238,8 +240,8 @@ export default function ItemsPage() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.category_id || !form.purchase_unit || (form.has_conversion && !form.smallest_unit)) {
-      setToastInfo({ show: true, msg: 'Nama, kategori, satuan beli, dan kelengkapan konversi wajib diisi', type: 'error' });
+    if (!form.name || !form.category_id || !form.purchase_unit || !form.smallest_unit) {
+      setToastInfo({ show: true, msg: 'Nama, kategori, satuan beli, dan satuan terkecil wajib diisi', type: 'error' });
       return;
     }
     setSaving(true);
@@ -248,9 +250,9 @@ export default function ItemsPage() {
       const method = editing ? 'PATCH' : 'POST';
       const { package_inner_size, has_conversion, purchase_price, ...cleanForm } = form;
 
-      const finalRatio = has_conversion ? Number(form.conversion_ratio) : 1;
-      const finalSmallestUnit = has_conversion ? form.smallest_unit : form.purchase_unit;
-      const finalAvgPrice = has_conversion ? Number(purchase_price) / finalRatio : Number(purchase_price);
+      const finalRatio = Number(form.conversion_ratio) || 1;
+      const finalSmallestUnit = form.smallest_unit;
+      const finalAvgPrice = Number(purchase_price) / finalRatio;
 
       const minThresholdSmall = Number(form.minimum_threshold) * finalRatio;
       const targetStockSmall = Number(form.target_stock) * finalRatio;
@@ -283,8 +285,8 @@ export default function ItemsPage() {
           id: b.id,
           name: b.name,
           barcode: b.barcode,
-          purchase_price: Number(b.purchase_price || 0),
-          conversion_ratio: Number(b.conversion_ratio || 1)
+          purchase_price: Number(b.purchase_price || 0) / finalRatio,
+          conversion_ratio: finalRatio
         }))
       };
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -452,8 +454,8 @@ export default function ItemsPage() {
                       <th style={{ width: 140 }}>Satuan (Beli / Ecer)</th>
                       <th className="center" style={{ width: 80 }}>Rasio</th>
                       <th className="right" style={{ width: 120 }}>Rata Harga</th>
-                      <th className="center" style={{ width: 100 }}>Aksi</th>
                       <th></th>
+                      <th className="right" style={{ width: 100 }}>Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -469,7 +471,7 @@ export default function ItemsPage() {
                           <td style={{ paddingLeft: isChild ? 24 : 12 }}>
                             <div className="font-bold" style={{ display: 'flex', alignItems: 'center', gap: 6, color: isParent ? '#475569' : 'inherit' }}>
                               {item.name}
-                              {item.is_hpp && !isParent && (
+                              {item.is_hpp && (
                                 <span style={{ fontSize: 9, background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: 0.5 }}>HPP / RESEP</span>
                               )}
                             </div>
@@ -486,10 +488,12 @@ export default function ItemsPage() {
                           </td>
                           <td className="center num muted">{Math.round(Number(item.conversion_ratio)).toLocaleString('id-ID')}</td>
                           <td className="right num">
-                            {fmtCurrency(item.current_average_price || 0).replace(',00', '')}
+                            {fmtCurrency((item.current_average_price || 0) * (Number(item.conversion_ratio) || 1)).replace(',00', '')}
+                            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>per {item.purchase_unit}</div>
                           </td>
-                          <td className="center">
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', whiteSpace: 'nowrap' }}>
+                          <td></td>
+                          <td className="right">
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
                               <Button size="sm" onClick={(e) => { e.stopPropagation(); openEdit(item); }} title={isParent ? "Edit Induk" : "Edit Barang"} style={{ background: 'var(--blue-light)', color: 'var(--blue)', border: '1px solid #bcdcf3' }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                               </Button>
@@ -498,7 +502,6 @@ export default function ItemsPage() {
                               </Button>
                             </div>
                           </td>
-                          <td></td>
                         </tr>
                       )
                     })}
@@ -533,6 +536,20 @@ export default function ItemsPage() {
         }
       >
         <div style={{ padding: '0px' }}>
+          {!form.has_brands && (
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+              {editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0 && (
+                <div style={{ padding: '10px 14px', background: '#dcfce7', border: '1px solid #bbf7d0', color: '#166534', borderRadius: 6, display: 'inline-flex', alignItems: 'center', fontWeight: 600, fontSize: 13 }}>
+                   Beli Terakhir: {fmtCurrency(Number(editing.last_purchase_price))} / {editing.smallest_unit}
+                </div>
+              )}
+              {editing?.current_average_price != null && Number(editing.current_average_price) > 0 && (
+                <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', borderRadius: 6, display: 'inline-flex', alignItems: 'center', fontWeight: 600, fontSize: 13 }}>
+                   HPP Saat Ini: {fmtCurrency(Number(editing.current_average_price))} / {editing.smallest_unit}
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 290px', gap: '24px' }}>
 
             {/* LEFT COLUMN: Main Inputs */}
@@ -599,7 +616,7 @@ export default function ItemsPage() {
                 </div>
                 <div style={{ flex: 0.9 }}>
                   <Input
-                    label="Barcode / SKU"
+                    label="SKU"
                     value={form.barcode || ''}
                     onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
                     placeholder="Opsional"
@@ -634,14 +651,13 @@ export default function ItemsPage() {
                   />
                 </div>
 
-                <div className="form-group" style={{ flex: 1, marginBottom: 0, opacity: form.has_conversion ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <label className="req">Satuan Terkecil (Outlet)</label>
                   <Select
                     searchable
                     creatable
                     value={form.smallest_unit}
                     onChange={val => setForm(f => ({ ...f, smallest_unit: String(val) }))}
-                    disabled={!form.has_conversion}
                     placeholder="Pilih atau cari..."
                     options={[
                       { value: '', label: 'Pilih...' },
@@ -650,14 +666,14 @@ export default function ItemsPage() {
                   />
                 </div>
 
-                <div className="form-group" style={{ flex: 1.5, marginBottom: 0, opacity: form.has_conversion ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+                <div className="form-group" style={{ flex: 1.5, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
                     <label className="req" style={{ marginBottom: 0 }}>Isi per 1 {form.purchase_unit || 'Satuan Beli'}</label>
                     <InfoTooltip
                       align="left"
                       width={280}
                       text={
-                        form.has_conversion && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0
+                        Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0
                           ? `1 ${form.purchase_unit} = ${form.conversion_ratio} ${form.smallest_unit} • Harga HPP (Moving Avg): ${fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per ${form.smallest_unit}${editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0
                             ? ` • Beli Terakhir: ${fmtCurrency(Number(editing.last_purchase_price))} per ${editing.smallest_unit}`
                             : ''
@@ -675,8 +691,7 @@ export default function ItemsPage() {
                         const raw = parseNumberInput(e.target.value);
                         if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, conversion_ratio: raw }));
                       }}
-                      disabled={!form.has_conversion}
-                      style={{ paddingRight: 60, cursor: form.has_conversion ? 'text' : 'not-allowed' }}
+                      style={{ paddingRight: 60 }}
                     />
                     <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)' }}>{form.smallest_unit}</span>
                   </div>
@@ -684,16 +699,18 @@ export default function ItemsPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '12px' }}>
-                <div className="form-group" style={{ flex: 1.2, marginBottom: 0 }}>
-                  <label>Harga Beli per {form.purchase_unit || 'Satuan'} (Rp)</label>
-                  <input className="input" type="text" placeholder="0" value={form.purchase_price === '0' || !form.purchase_price ? '' : Number(form.purchase_price).toLocaleString('id-ID')} onChange={e => {
-                    const raw = e.target.value.replace(/\./g, '');
-                    if (/^\d*$/.test(raw)) setForm(f => ({ ...f, purchase_price: raw }));
-                  }} onFocus={e => e.target.select()} />
-                </div>
+                {!form.has_brands && (
+                  <div className="form-group" style={{ flex: 1.2, marginBottom: 0 }}>
+                    <label>Harga Beli per {form.purchase_unit || 'Satuan'} (Rp)</label>
+                    <input className="input" type="text" placeholder="0" value={form.purchase_price === '0' || !form.purchase_price ? '' : Number(form.purchase_price).toLocaleString('id-ID')} onChange={e => {
+                      const raw = e.target.value.replace(/\./g, '');
+                      if (/^\d*$/.test(raw)) setForm(f => ({ ...f, purchase_price: raw }));
+                    }} onFocus={e => e.target.select()} />
+                  </div>
+                )}
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ marginBottom: 0 }}>Batas Min. {form.has_conversion ? (form.purchase_unit ? `(${form.purchase_unit})` : '') : (form.smallest_unit ? `(${form.smallest_unit})` : '')}</label>
+                    <label style={{ marginBottom: 0 }}>Batas Min. {form.purchase_unit ? `(${form.purchase_unit})` : ''}</label>
                     <InfoTooltip align="left" width={230} text="Stok kritis terendah di outlet. Jika stok mencapai angka ini, sistem memberi peringatan merah (Reorder Point)." />
                   </div>
                   <input
@@ -708,7 +725,7 @@ export default function ItemsPage() {
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ marginBottom: 0 }}>Target Stok. {form.has_conversion ? (form.purchase_unit ? `(${form.purchase_unit})` : '') : (form.smallest_unit ? `(${form.smallest_unit})` : '')}</label>
+                    <label style={{ marginBottom: 0 }}>Target Stok. {form.purchase_unit ? `(${form.purchase_unit})` : ''}</label>
                     <InfoTooltip align="left" width={230} text="Stok ideal/maksimal di outlet. Sistem menghitung saran pembelian berdasarkan selisih Target Stok dikurangi Stok Saat Ini." />
                   </div>
                   <input
@@ -737,7 +754,7 @@ export default function ItemsPage() {
                 </div>
               </div>
 
-              {Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0 && (
+              {!form.has_brands && Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0 && (
                 <div style={{
                   background: '#f0fdf4',
                   border: '1px solid #bbf7d0',
@@ -766,11 +783,6 @@ export default function ItemsPage() {
                       </strong>
                     )}
                   </div>
-                  {editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0 && (
-                    <span style={{ fontSize: '12px', color: '#166534', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
-                      Beli Terakhir: {fmtCurrency(Number(editing.last_purchase_price))} / {editing.smallest_unit}
-                    </span>
-                  )}
                 </div>
               )}
 
@@ -821,19 +833,22 @@ export default function ItemsPage() {
               </div>
 
               {/* BRANDS SECTION */}
-              <div style={{ marginTop: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#000', borderBottom: 'none' }}>Daftar Brand / Varian</h4>
+              {form.has_brands && (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '14px 16px', marginTop: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: brands.length > 0 ? 12 : 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>
+                    Daftar Brand / Varian
+                  </span>
                   <Button variant="outline" size="sm" onClick={() => setBrands([...brands, { name: '', barcode: '', purchase_price: form.purchase_price, conversion_ratio: '1' }])}>
                     + Tambah Brand
                   </Button>
                 </div>
                 {brands.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {brands.map((brand, i) => (
                           <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                             <div style={{ flex: 1.4 }}>
-                              <Input label={i === 0 ? "Nama Brand *" : "Nama Brand"} placeholder="Misal: Susu Diamond" value={brand.name} onChange={e => {
+                              <Input label={i === 0 ? "Nama Brand *" : undefined} placeholder="Misal: Susu Diamond" value={brand.name} onChange={e => {
                                 const newBrands = [...brands];
                                 newBrands[i].name = e.target.value;
                                 if (!newBrands[i].barcode) newBrands[i].barcode = autoGenerateSKU(e.target.value, form.name, i);
@@ -841,7 +856,7 @@ export default function ItemsPage() {
                               }} />
                             </div>
                             <div style={{ flex: 0.9 }}>
-                              <Input label={i === 0 ? "SKU / Barcode" : "SKU / Barcode"} placeholder="Auto / Scan" value={brand.barcode} onChange={e => {
+                              <Input label={i === 0 ? "SKU" : undefined} placeholder="Auto / Scan" value={brand.barcode} onChange={e => {
                                 const newBrands = [...brands];
                                 newBrands[i].barcode = e.target.value;
                                 setBrands(newBrands);
@@ -849,12 +864,15 @@ export default function ItemsPage() {
                             </div>
                             <div style={{ flex: 1.8 }}>
                               <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label className="form-label">{i === 0 ? "Harga Beli" : "Harga Beli"}</label>
+                                {i === 0 && <label className="form-label">Harga Beli {form.purchase_unit || form.smallest_unit ? `per ${form.purchase_unit || form.smallest_unit}` : ''} (Rp)</label>}
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                  <input className="input" type="number" value={brand.purchase_price} onChange={e => {
-                                    const newBrands = [...brands];
-                                    newBrands[i].purchase_price = e.target.value;
-                                    setBrands(newBrands);
+                                  <input className="input" type="text" value={brand.purchase_price ? formatNumberInput(Math.round(Number(brand.purchase_price))) : ''} onChange={e => {
+                                    const raw = parseNumberInput(e.target.value);
+                                    if (/^\d*$/.test(raw)) {
+                                      const newBrands = [...brands];
+                                      newBrands[i].purchase_price = raw;
+                                      setBrands(newBrands);
+                                    }
                                   }} style={{ flex: 1 }} />
                                   <Button variant="outline" size="sm" style={{ color: '#dc2626', width: 34, height: 34, padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }} onClick={() => {
                                     if (brand.id) {
@@ -866,6 +884,20 @@ export default function ItemsPage() {
                                     <Trash2 size={16} />
                                   </Button>
                                 </div>
+                                {brand.id && (
+                                  <div style={{ marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    {brand.last_purchase_price != null && Number(brand.last_purchase_price) > 0 && (
+                                      <span style={{ fontSize: 11, background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: 4, fontWeight: 500 }}>
+                                        Beli Terakhir: {fmtCurrency(Number(brand.last_purchase_price))} / {form.smallest_unit}
+                                      </span>
+                                    )}
+                                    {brand.current_average_price != null && Number(brand.current_average_price) > 0 && (
+                                      <span style={{ fontSize: 11, background: '#eff6ff', color: '#1d4ed8', padding: '2px 6px', borderRadius: 4, fontWeight: 500 }}>
+                                        HPP Saat Ini: {fmtCurrency(Number(brand.current_average_price))} / {form.smallest_unit}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -873,6 +905,7 @@ export default function ItemsPage() {
                       </div>
                 )}
               </div>
+              )}
 
             </div>
 
@@ -884,10 +917,10 @@ export default function ItemsPage() {
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Satuan Eceran / Terkecil</span>
-                  <InfoTooltip text="Aktifkan jika barang memiliki satuan outlet (contoh: Beli Kg, Pakai gram)." />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Punya Brand / Varian?</span>
+                  <InfoTooltip text="Aktifkan jika barang dibeli dengan berbagai merk. Harga akan diisi per merk. Bagian bawah 'Daftar Brand' akan terbuka." />
                 </div>
-                <Toggle checked={form.has_conversion} onChange={c => setForm(f => ({ ...f, has_conversion: c }))} />
+                <Toggle checked={form.has_brands} onChange={c => setForm(f => ({ ...f, has_brands: c }))} />
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', margin: '2px 0' }} />

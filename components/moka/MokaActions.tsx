@@ -242,13 +242,12 @@ export function DisconnectAccountButton({ businessId, accountName }: { businessI
 
 export function SyncSalesButton() {
     const [isSyncing, setIsSyncing] = useState(false);
-    const [showModal, setShowModal] = useState(false);
 
     const today = new Date();
     const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
-    const [startDate, setStartDate] = useState(todayStr);
-    const [endDate, setEndDate] = useState(todayStr);
+    const startDate = todayStr;
+    const endDate = todayStr;
 
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
@@ -268,7 +267,6 @@ export function SyncSalesButton() {
         }
 
         setIsSyncing(true);
-        setShowModal(false);
         try {
             const res = await fetch('/api/moka/sync/sales', {
                 method: 'POST',
@@ -301,71 +299,25 @@ export function SyncSalesButton() {
             />
 
             <button
-                onClick={() => setShowModal(true)}
+                onClick={handleSyncSales}
                 disabled={isSyncing}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:opacity-50"
             >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                 Sync Penjualan
             </button>
-
-            {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-                        <h3 className="text-sm font-bold text-gray-900 mb-3">Pilih Rentang Tanggal</h3>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Mulai</label>
-                                <input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={e => setStartDate(e.target.value)}
-                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Akhir</label>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={e => setEndDate(e.target.value)}
-                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2 mt-6">
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
-                            >
-                                Batal
-                            </button>
-                            <button
-                                onClick={handleSyncSales}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors"
-                            >
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                Tarik Data
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 }
 
 export function SyncTransactionsButton() {
     const [isSyncing, setIsSyncing] = useState(false);
-    const [showModal, setShowModal] = useState(false);
 
     const today = new Date();
     const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
-    const [startDate, setStartDate] = useState(todayStr);
-    const [endDate, setEndDate] = useState(todayStr);
+    const startDate = todayStr;
+    const endDate = todayStr;
 
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
@@ -385,7 +337,6 @@ export function SyncTransactionsButton() {
         }
 
         setIsSyncing(true);
-        setShowModal(false);
         try {
             const res = await fetch('/api/moka/sync/transactions', {
                 method: 'POST',
@@ -418,58 +369,13 @@ export function SyncTransactionsButton() {
             />
 
             <button
-                onClick={() => setShowModal(true)}
+                onClick={handleSync}
                 disabled={isSyncing}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:opacity-50"
             >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                 Sync Transaksi
             </button>
-
-            {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-                        <h3 className="text-sm font-bold text-gray-900 mb-3">Pilih Rentang Tanggal</h3>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Mulai</label>
-                                <input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={e => setStartDate(e.target.value)}
-                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Akhir</label>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={e => setEndDate(e.target.value)}
-                                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#016e3f]/30 focus:border-[#016e3f]"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2 mt-6">
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
-                            >
-                                Batal
-                            </button>
-                            <button
-                                onClick={handleSync}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#016e3f] text-white rounded-md hover:bg-[#015933] transition-colors"
-                            >
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                Tarik Transaksi
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 }

@@ -89,7 +89,7 @@ export default function CreateRequestPage() {
     const fetchAll = async () => {
       try {
         const [itemsRes, activeRes, invRes] = await Promise.all([
-          fetch('/api/items'),
+          fetch('/api/items?parent_only=true'),
           fetch('/api/outlet/active-requests'),
           fetch('/api/outlet/inventory')
         ]);

@@ -85,33 +85,52 @@ export async function fetchMokaAPIWithToken(token: { access_token: string; refre
         headers['Content-Type'] = 'application/json';
     }
 
-    let response = await fetch(url, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined
-    });
+    let response: Response | null = null;
+    const maxRetries = 3;
 
-    // If Unauthorized, try to refresh the token as a fallback
-    if (response.status === 401) {
-        console.log(`Moka Access Token expired (401) for business ${token.business_id}. Attempting fallback refresh...`);
-        const newData = await refreshMokaToken(token);
-        
-        // Retry original request with new token
-        headers['Authorization'] = `Bearer ${newData.access_token}`;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
         response = await fetch(url, {
             method,
             headers,
             body: body ? JSON.stringify(body) : undefined
         });
+
+        // If Unauthorized, try to refresh the token as a fallback
+        if (response.status === 401) {
+            console.log(`Moka Access Token expired (401) for business ${token.business_id}. Attempting fallback refresh...`);
+            const newData = await refreshMokaToken(token);
+            
+            // Retry original request with new token
+            headers['Authorization'] = `Bearer ${newData.access_token}`;
+            response = await fetch(url, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : undefined
+            });
+        }
+
+        if (response.ok) {
+            return response.json();
+        }
+
+        // If 5xx error (e.g. 503 upstream connect error), retry up to maxRetries
+        if (response.status >= 500 && attempt < maxRetries) {
+            console.warn(`Moka API Error (${response.status}) on attempt ${attempt} for business ${token.business_id}. Retrying in 2 seconds...`);
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+        }
+
+        // If we reach here, it means it's a non-retriable error or we exhausted retries
+        break;
     }
 
-    if (!response.ok) {
+    if (response) {
         const errorText = await response.text();
         console.error(`Moka API Error (${response.status}) for business ${token.business_id}:`, errorText);
         throw new Error(`Moka API Error: ${response.status}`);
     }
-
-    return response.json();
+    
+    throw new Error("Failed to fetch Moka API (No response)");
 }
 
 // LAMA: Backward compatibility (menggunakan sembarang 1 token)

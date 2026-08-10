@@ -2,10 +2,6 @@ import { Suspense } from 'react';
 import CustomerTableClient from '@/components/moka/CustomerTableClient';
 import { getOutletsWithBusiness } from '@/lib/queries/master';
 
-export const metadata = {
-    title: 'Data Pelanggan Moka | Sunrise Daily',
-};
-
 export default async function CustomersPage(props: { searchParams: Promise<{ outlet_id?: string }> }) {
     const searchParams = await props.searchParams;
     const outletId = searchParams?.outlet_id || '';

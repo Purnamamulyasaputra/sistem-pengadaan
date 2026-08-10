@@ -29,6 +29,7 @@ export default function StockCardPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const [categories, setCategories] = useState<Record<string, unknown>[]>([]);
   const [catFilter, setCatFilter] = useState('');
@@ -39,7 +40,7 @@ export default function StockCardPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/items').then(r => r.json()),
+      fetch('/api/items?parent_only=true').then(r => r.json()),
       fetch('/api/categories').then(r => r.json())
     ]).then(([itemsRes, catRes]) => {
       setItems(itemsRes.data ?? []);
@@ -76,21 +77,17 @@ export default function StockCardPage() {
   const lastOut = logs.find(l => l.movement_type === 'OUT')?.created_at;
 
   const filteredItems = items.filter((i: any) => {
-    // Sembunyikan Induk (parent) yang tidak punya stok sendiri
-    if (i.has_children) return false;
-
-    if (search && !i.name.toLowerCase().includes(search.toLowerCase()) && !String(i.id).includes(search)) return false;
+    if (search) {
+      if (!i.name.toLowerCase().includes(search.toLowerCase()) && !String(i.id).includes(search)) return false;
+    }
     if (catFilter && String(i.category_id) !== catFilter) return false;
-
     if (statusFilter) {
       const current = Number(i.current_stock ?? 0);
       const min = Number(i.minimum_threshold ?? 0);
-
       if (statusFilter === 'SAFE' && current < min) return false;
       if (statusFilter === 'LOW' && (current >= min || current <= 0)) return false;
       if (statusFilter === 'OUT' && current > 0) return false;
     }
-
     return true;
   });
 
@@ -167,63 +164,46 @@ export default function StockCardPage() {
                 <Table>
                   <thead>
                     <tr>
-                      <th>Kode</th>
+                      <th style={{ width: 180 }}>Kode</th>
                       <th>Nama Barang</th>
-                      <th className="right">Stok Min.</th>
-                      <th className="right">Stok Fisik</th>
-                      <th className="center">Status</th>
+                      <th className="right" style={{ width: 150 }}>Stok Min.</th>
+                      <th className="right" style={{ width: 150 }}>Stok Fisik</th>
+                      <th className="center" style={{ width: 140 }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedItems.map((item: any) => {
-                      const currentStockSmallest = Number(item.current_stock ?? 0);
-                      const minStockSmallest = Number(item.minimum_threshold ?? 0);
-                      const centralStock = toCentralDisplay(currentStockSmallest, item);
-                      const centralMin = toCentralDisplay(minStockSmallest, item);
+                      const stock = Number(item.current_stock || 0);
+                      const min = Number(item.minimum_threshold || 0);
+                      
+                      const centralStock = toCentralDisplay(stock, item);
+                      const centralMin = toCentralDisplay(min, item);
 
-                      const isLow = currentStockSmallest < minStockSmallest;
-                      const isOut = currentStockSmallest <= 0;
-                      const isChild = !!item.parent_id;
-                      const parentItem = isChild ? (items as any[]).find(p => String(p.id) === String(item.parent_id)) : null;
-
-                      // Cek apakah ini brand pertama dari parent ini
-                      const siblings = (paginatedItems as any[]).filter(s => String(s.parent_id) === String(item.parent_id));
-                      const isFirstChild = isChild && siblings[0]?.id === item.id;
+                      const isOut = stock <= 0;
+                      const isLow = stock < min && stock > 0;
 
                       return (
-                        <React.Fragment key={item.id}>
-                          {/* Group header untuk brand pertama */}
-                          {isFirstChild && parentItem && (
-                            <tr key={`parent-${parentItem.id}`} style={{ background: '#f8fafc', pointerEvents: 'none' }}>
-                              <td colSpan={5} className="font-bold" style={{ padding: '8px 16px', color: '#475569' }}>
-                                {parentItem.name}
-                              </td>
-                            </tr>
-                          )}
-                          <tr key={item.id} onClick={() => setSelectedItemId(String(item.id))} className="cursor-pointer" title="Lihat Kartu Stok"
-                            style={{ paddingLeft: isChild ? 24 : 0 }}>
-                            <td className="font-mono text-muted" style={{ paddingLeft: isChild ? 32 : 16 }}>
-                              {isChild && <span style={{ color: '#cbd5e1', marginRight: 4 }}>↳</span>}
-                              {item.barcode || `ERC${String(item.id).padStart(5, '0')}`}
-                            </td>
-                            <td className="font-bold" style={{ paddingLeft: isChild ? 32 : 16 }}>{item.name}</td>
-                            <td className="right">
-                              <div className="num font-bold">{centralMin.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>{centralMin.unit}</span></div>
-                              {centralMin.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({minStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
-                            </td>
-                            <td className="right">
-                              <div className="num font-bold" style={{ color: isOut ? '#dc2626' : isLow ? '#d97706' : '#059669', fontSize: 14 }}>
-                                {centralStock.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{centralStock.unit}</span>
-                              </div>
-                              {centralStock.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({currentStockSmallest.toLocaleString('id-ID')} {item.smallest_unit})</div>}
-                            </td>
-                            <td className="center">
-                              <Badge variant={isOut ? 'red' : isLow ? 'amber' : 'green'}>
-                                {isOut ? 'Habis' : isLow ? 'Stok Rendah' : 'Aman'}
-                              </Badge>
-                            </td>
-                          </tr>
-                        </React.Fragment>
+                        <tr key={item.id} onClick={() => setSelectedItemId(String(item.id))} className="cursor-pointer hover:bg-slate-50 transition-colors" title="Lihat Kartu Stok">
+                          <td className="font-mono text-muted" style={{ paddingLeft: 16 }}>
+                            {item.barcode || `ERC${String(item.id).padStart(5, '0')}`}
+                          </td>
+                          <td className="font-bold">{item.name}</td>
+                          <td className="right">
+                            <div className="num font-bold">{centralMin.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>{centralMin.unit}</span></div>
+                            {centralMin.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({min.toLocaleString('id-ID')} {item.smallest_unit})</div>}
+                          </td>
+                          <td className="right">
+                            <div className="num font-bold" style={{ color: isOut ? '#dc2626' : isLow ? '#d97706' : '#059669', fontSize: 14 }}>
+                              {centralStock.value.toLocaleString('id-ID', { maximumFractionDigits: 0 })} <span style={{ fontSize: 12, fontWeight: 500, color: 'inherit', opacity: 0.8 }}>{centralStock.unit}</span>
+                            </div>
+                            {centralStock.unit !== item.smallest_unit && <div className="muted" style={{ fontSize: 11 }}>({stock.toLocaleString('id-ID')} {item.smallest_unit})</div>}
+                          </td>
+                          <td className="center">
+                            <Badge variant={isOut ? 'red' : isLow ? 'amber' : 'green'}>
+                              {isOut ? 'Habis' : isLow ? 'Stok Rendah' : 'Aman'}
+                            </Badge>
+                          </td>
+                        </tr>
                       );
                     })}
                   </tbody>

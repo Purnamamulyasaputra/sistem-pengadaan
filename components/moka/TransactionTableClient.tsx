@@ -244,9 +244,9 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                                     >
                                         <td style={{ padding: '10px 16px' }}>
                                             <div style={{ fontWeight: 500, color: '#1e293b', fontSize: 12 }}>
-                                                {new Date(trx.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                {new Date(trx.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </div>
-                                            <div style={{ color: '#94a3b8', fontSize: 11 }}>{trx.transaction_time}</div>
+                                            <div style={{ color: '#94a3b8', fontSize: 11 }}>{new Date(trx.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
                                         </td>
                                         <td style={{ padding: '10px 16px', fontFamily: 'monospace', color: '#016e3f', fontWeight: 600, fontSize: 12 }}>{trx.payment_no}</td>
                                         <td style={{ padding: '10px 16px', color: '#475569', fontSize: 12 }}>{trx.outlet_name}</td>
@@ -353,8 +353,8 @@ export default function TransactionTableClient({ outlets }: { outlets: Outlet[] 
                         <div className="p-4 md:p-5 flex flex-col space-y-3 flex-1 min-h-0 overflow-hidden">
                             {/* Transaction Meta Grid */}
                             <div className="bg-gray-50 rounded-lg p-2.5 grid grid-cols-2 gap-y-1.5 text-[11px] shrink-0">
-                                <div><span className="text-gray-500 block text-[10px] mb-0.5">Date</span><span className="font-medium text-gray-900">{new Date(selectedTrx.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>
-                                <div><span className="text-gray-500 block text-[10px] mb-0.5">Time</span><span className="font-medium text-gray-900">{selectedTrx.transaction_time}</span></div>
+                                <div><span className="text-gray-500 block text-[10px] mb-0.5">Date</span><span className="font-medium text-gray-900">{new Date(selectedTrx.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>
+                                <div><span className="text-gray-500 block text-[10px] mb-0.5">Time</span><span className="font-medium text-gray-900">{new Date(selectedTrx.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span></div>
                                 <div><span className="text-gray-500 block text-[10px] mb-0.5">Outlet</span><span className="font-medium text-gray-900 line-clamp-1" title={selectedTrx.outlet_name}>{selectedTrx.outlet_name}</span></div>
                                 <div><span className="text-gray-500 block text-[10px] mb-0.5">Cashier</span><span className="font-medium text-gray-900 line-clamp-1" title={selectedTrx.collected_by}>{selectedTrx.collected_by || '-'}</span></div>
                                 <div><span className="text-gray-500 block text-[10px] mb-0.5">Payment</span><span className="font-medium text-gray-900 capitalize">{selectedTrx.payment_type_label || selectedTrx.payment_type}</span></div>

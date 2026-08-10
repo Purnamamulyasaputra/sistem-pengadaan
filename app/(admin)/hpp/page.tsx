@@ -198,16 +198,13 @@ function MenusTab({ categories }: { categories: Category[] }) {
           inputStyle={{ height: 32 }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span className="muted" style={{ fontSize: 13 }}>Tampilkan:</span>
-            <div style={{ width: 70 }}>
-              <Select 
-                value={limit} 
-                onChange={val => { setLimit(Number(val)); setPage(1); }}
-                options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
-                inputStyle={{ height: 32, fontSize: 13 }}
-              />
-            </div>
+          <div style={{ width: 70 }}>
+            <Select 
+              value={limit} 
+              onChange={val => { setLimit(Number(val)); setPage(1); }}
+              options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
+              inputStyle={{ height: 32, fontSize: 13 }}
+            />
           </div>
           <span className="muted" style={{ fontSize: 13, marginLeft: 8 }}>
             {total} Menu ditemukan
@@ -260,7 +257,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
               <thead>
                 <tr>
                   <th>Kategori</th>
-                  <th>Menu / Varian</th>
+                  <th>Menu</th>
                   <th className="right">Harga Jual</th>
                   <th className="right">HPP</th>
                   <th className="right">Laba Kotor</th>
@@ -275,7 +272,7 @@ function MenusTab({ categories }: { categories: Category[] }) {
                   <tr key={row.id} onClick={() => openDetail(row.id)} style={{ cursor: 'pointer' }}>
                     <td><span style={{ fontSize: 12, color: 'var(--muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{row.category_name}</span></td>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{row.display_name ?? row.name}</div>
+                      <div style={{ fontWeight: 600 }}>{row.name}</div>
                       {row.variant && <div className="muted" style={{ fontSize: 12 }}>{row.variant}</div>}
                     </td>
                     <td className="right " style={{ fontWeight: 600 }}>{rp(row.sale_price)}</td>
@@ -327,9 +324,15 @@ function MenusTab({ categories }: { categories: Category[] }) {
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{detailData.menu.display_name ?? detailData.menu.name}</div>
                 {detailData.menu.variant && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{detailData.menu.variant}</div>}
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Biaya Dasar</div>
-                <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{rp(detailData.menu.hpp)}</div>
+              <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', gap: '24px' }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Harga Jual</div>
+                  <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{rp(detailData.menu.sale_price)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Biaya Dasar (HPP)</div>
+                  <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{rp(detailData.menu.hpp)}</div>
+                </div>
               </div>
             </div>
 
@@ -485,16 +488,13 @@ function RecipesTab({ venues }: { venues: Venue[] }) {
           inputStyle={{ height: 32 }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span className="muted" style={{ fontSize: 13 }}>Tampilkan:</span>
-            <div style={{ width: 70 }}>
-              <Select 
-                value={limit} 
-                onChange={val => { setLimit(Number(val)); setPage(1); }}
-                options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
-                inputStyle={{ height: 32, fontSize: 13 }}
-              />
-            </div>
+          <div style={{ width: 70 }}>
+            <Select 
+              value={limit} 
+              onChange={val => { setLimit(Number(val)); setPage(1); }}
+              options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
+              inputStyle={{ height: 32, fontSize: 13 }}
+            />
           </div>
           <span className="muted" style={{ fontSize: 13 }}>{total} resep</span>
           <a href="/hpp/recipe-builder/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>+ Tambah Resep</a>
@@ -747,16 +747,13 @@ function IngredientsTab() {
         <input className="input" placeholder="Cari nama bahan baku..." value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ width: 260 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span className="muted" style={{ fontSize: 13 }}>Tampilkan:</span>
-            <div style={{ width: 70 }}>
-              <Select 
-                value={limit} 
-                onChange={val => { setLimit(Number(val)); setPage(1); }}
-                options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
-                inputStyle={{ height: 32, fontSize: 13 }}
-              />
-            </div>
+          <div style={{ width: 70 }}>
+            <Select 
+              value={limit} 
+              onChange={val => { setLimit(Number(val)); setPage(1); }}
+              options={[{ value: 20, label: '20' }, { value: 50, label: '50' }, { value: 100, label: '100' }]}
+              inputStyle={{ height: 32, fontSize: 13 }}
+            />
           </div>
           <span className="muted" style={{ fontSize: 13 }}>{total} bahan baku</span>
           <button className="btn btn-primary" onClick={handleOpenAdd}>+ Tambah Bahan Baku</button>
@@ -874,14 +871,6 @@ function IngredientsTab() {
                       const isParent = !item.parent_id && item.has_children;
                       const isChild = !!item.parent_id;
 
-                      if (isParent) {
-                        return (
-                          <div key={item.id} style={{ padding: '8px 14px', fontSize: '11px', fontWeight: 700, color: '#94a3b8', background: '#f8fafc', textTransform: 'uppercase' }}>
-                            📦 {item.name}
-                          </div>
-                        );
-                      }
-
                       return (
                         <div
                           key={item.id}
@@ -908,6 +897,7 @@ function IngredientsTab() {
                             setShowNameSuggestions(false);
                           }}
                         >
+                          {isParent && <span style={{ marginRight: 6 }}>📦</span>}
                           {isChild && <span style={{ color: '#cbd5e1', marginRight: 6 }}>↳</span>}
                           {item.name}
                         </div>

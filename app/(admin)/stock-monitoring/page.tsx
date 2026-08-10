@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, Fragment, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Table } from '@/components/ui/Table';
 import { Pagination } from '@/components/ui/Pagination';
@@ -98,6 +98,25 @@ export default function StockMonitoringPage() {
   const [showLowStockModal, setShowLowStockModal] = useState(false);
   const [modalFilterOutlet, setModalFilterOutlet] = useState('ALL');
   const [modalSearchTerm, setModalSearchTerm] = useState('');
+  
+  const previousLowStocksCount = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (data) {
+      const { totalLowStocks } = getCriticalItems();
+      
+      if (previousLowStocksCount.current !== null && totalLowStocks > previousLowStocksCount.current) {
+        const diff = totalLowStocks - previousLowStocksCount.current;
+        setToast({ 
+          open: true, 
+          message: `Ada penambahan ${diff} barang yang stoknya menjadi kritis di outlet! (Total: ${totalLowStocks})`, 
+          type: 'error' 
+        });
+      }
+      
+      previousLowStocksCount.current = totalLowStocks;
+    }
+  }, [data]);
 
   const getCriticalItems = () => {
     if (!data) return { criticalItems: [], totalLowStocks: 0 };
@@ -451,23 +470,43 @@ export default function StockMonitoringPage() {
                   </div>
                 </Button>
                 {totalLowStocks > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <button
                     onClick={() => setShowLowStockModal(true)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, borderColor: '#ef4444', color: '#ef4444', backgroundColor: '#fef2f2' }}
                     title="Lihat Peringatan Stok"
+                    style={{
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 32,
+                      height: 32,
+                      borderRadius: 6,
+                      background: '#fef2f2',
+                      color: '#ef4444',
+                      border: '1px solid #fecaca',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#fef2f2'}
                   >
-                    <Bell size={13} />
-                    <span style={{ fontWeight: 600 }}>Peringatan Stok</span>
+                    <Bell size={16} />
                     <span style={{
-                      background: '#ef4444', color: '#fff', fontSize: 10,
-                      fontWeight: 'bold', padding: '2px 6px', borderRadius: 10,
-                      marginLeft: 2
+                      position: 'absolute',
+                      top: -8,
+                      right: -12,
+                      background: '#ef4444',
+                      color: '#fff',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '2px 5px',
+                      borderRadius: 10,
+                      border: '2px solid #fff',
+                      lineHeight: 1
                     }}>
                       {totalLowStocks}
                     </span>
-                  </Button>
+                  </button>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>

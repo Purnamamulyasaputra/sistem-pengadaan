@@ -55,6 +55,7 @@ export default function CreateDeliveryOrderPage() {
   const [requireBarcode, setRequireBarcode] = useState(true);
 
   const [allItems, setAllItems] = useState<any[]>([]);
+  const [bulkQty, setBulkQty] = useState('1');
 
   useEffect(() => {
     // Fetch orders that are PROCESSING or READY
@@ -445,6 +446,53 @@ export default function CreateDeliveryOrderPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h4 style={{ fontWeight: 600, margin: 0 }}>Daftar Barang yang Dikirim</h4>
                 <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0, height: '32px', fontWeight: 600, background: '#fff', color: '#ef4444', border: '1px solid #ef4444', borderRight: 'none', padding: '0 16px' }}
+                      onClick={() => {
+                        const val = Number(bulkQty) || 0;
+                        if (val === 0) return;
+                        setOrderItems(items => items.map(line => {
+                          if (line.selected) {
+                            const currentQty = parseLocalNumber(line.qty_shipped);
+                            return { ...line, qty_shipped: String(Math.max(0, currentQty - val)) };
+                          }
+                          return line;
+                        }));
+                      }}
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      className="input num"
+                      style={{ width: '50px', padding: '4px 8px', borderRadius: 0, borderRight: 'none', fontSize: 13, height: '32px', textAlign: 'center' }}
+                      value={bulkQty}
+                      onChange={(e) => setBulkQty(e.target.value)}
+                      placeholder="Qty"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, height: '32px', fontWeight: 600, background: 'var(--primary)', color: '#fff', border: '1px solid var(--primary)', padding: '0 16px' }}
+                      onClick={() => {
+                        const val = Number(bulkQty) || 0;
+                        if (val === 0) return;
+                        setOrderItems(items => items.map(line => {
+                          if (line.selected) {
+                            const currentQty = parseLocalNumber(line.qty_shipped);
+                            return { ...line, qty_shipped: String(currentQty + val) };
+                          }
+                          return line;
+                        }));
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div style={{ width: '1px', background: 'var(--border)', margin: '0 4px' }}></div>
                   <Button variant="outline" size="sm" onClick={handleAddEmptyRow}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }}>
                       <line x1="12" y1="5" x2="12" y2="19"></line>

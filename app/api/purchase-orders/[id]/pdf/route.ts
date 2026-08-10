@@ -3,6 +3,8 @@ import { getSession } from '@/lib/auth';
 import { getPurchaseOrderById } from '@/lib/queries/purchase-orders';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import fs from 'fs';
+import path from 'path';
 
 const fmtCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
@@ -15,16 +17,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!po) return new NextResponse('Not found', { status: 404 });
 
   const doc = new jsPDF();
+  
+  try {
+    const fontPath = path.join(process.cwd(), 'public/fonts/AlbertSans-Regular.ttf');
+    const fontPathBold = path.join(process.cwd(), 'public/fonts/AlbertSans-Bold.ttf');
+    doc.addFileToVFS('AlbertSans-Regular.ttf', fs.readFileSync(fontPath).toString('base64'));
+    doc.addFont('AlbertSans-Regular.ttf', 'Albert Sans', 'normal');
+    doc.addFileToVFS('AlbertSans-Bold.ttf', fs.readFileSync(fontPathBold).toString('base64'));
+    doc.addFont('AlbertSans-Bold.ttf', 'Albert Sans', 'bold');
+    doc.setFont('Albert Sans', 'normal');
+  } catch (e) {
+    console.error('Failed to load custom font', e);
+  }
+
   const poNum = po.po_number || 'DRAFT';
 
   // Header
   doc.setFontSize(20);
-  doc.text('PURCHASE ORDER', 14, 22);
+  doc.text('PESANAN PEMBELIAN', 14, 22);
   doc.setFontSize(10);
-  doc.text(`PO Number: ${poNum}`, 14, 30);
-  doc.text(`Order Date: ${new Date(po.order_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 35);
+  doc.text(`No. PO: ${poNum}`, 14, 30);
+  doc.text(`Tanggal Order: ${new Date(po.order_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 35);
   doc.text(`Vendor: ${po.vendor_name || ''}`, 14, 40);
-  doc.text(`Deliver To: ${po.destination_outlet_name || ''}`, 14, 45);
+  doc.text(`Kirim Ke: ${po.destination_outlet_name || ''}`, 14, 45);
 
   let computedSubtotal = 0;
   let computedTax = 0;
@@ -62,7 +77,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   autoTable(doc, {
     startY: 55,
-    head: [['#', 'Description', 'Qty', 'Unit', 'Unit Price', 'Amount']],
+    styles: { font: 'Albert Sans' },
+    headStyles: { font: 'Albert Sans', fontStyle: 'bold' },
+    head: [['No', 'Deskripsi', 'Jml', 'Satuan', 'Harga Satuan', 'Jumlah']],
     body: tableData as any,
   });
 
@@ -71,8 +88,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Totals
   const finalY = (doc as any).lastAutoTable.finalY || 55;
   doc.text(`Subtotal: ${fmtCurrency(computedSubtotal).replace(',00', '')}`, 140, finalY + 10);
-  doc.text(`Taxes: ${fmtCurrency(computedTax).replace(',00', '')}`, 140, finalY + 16);
-  doc.setFont('helvetica', 'bold');
+  doc.text(`Pajak: ${fmtCurrency(computedTax).replace(',00', '')}`, 140, finalY + 16);
+  doc.setFont('Albert Sans', 'bold');
   doc.text(`Total: ${fmtCurrency(computedTotal).replace(',00', '')}`, 140, finalY + 24);
 
   const pdfBuffer = Buffer.from(doc.output('arraybuffer'));

@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Toast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
+import { Pagination } from '@/components/ui/Pagination';
 import { ItemSelectWithBrand } from '@/components/shared/ItemSelectWithBrand';
 import { FullScreenLoader } from '@/components/ui/FullScreenLoader';
 interface PO {
@@ -15,7 +16,7 @@ interface PO {
 }
 
 interface Vendor { id: number; name: string; is_active?: boolean; email?: string; phone?: string; }
-interface Item { id: number; name: string; purchase_unit: string; smallest_unit?: string; conversion_ratio: number; current_average_price: number; }
+interface Item { id: number; name: string; purchase_unit: string; smallest_unit?: string; conversion_ratio: number; current_average_price: number; parent_id?: number | null; has_children?: boolean; }
 interface Outlet { id: number; name: string; is_active?: boolean; }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
@@ -49,7 +50,7 @@ export default function PurchaseOrdersPage() {
     if (message) setToast({ isOpen: true, message, type: 'error' });
   };
   const [form, setForm] = useState({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
-  const [lines, setLines] = useState<{ type: string; item_id: string | number; description: string; qty: string | number; unit_price: string | number; tax_percent: string | number; disc_percent: string | number }[]>([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
+  const [lines, setLines] = useState<{ type: string; parent_id?: string | number; item_id: string | number; description: string; qty: string | number; unit_price: string | number; tax_percent: string | number; disc_percent: string | number }[]>([{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
   const [draftPO, setDraftPO] = useState<PO | null>(null);
   const [activeTab, setActiveTab] = useState('Bahan / Produk');
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
@@ -112,7 +113,7 @@ export default function PurchaseOrdersPage() {
   }, []);
 
   function addLine() {
-    setLines(l => [{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }, ...l]);
+    setLines(l => [{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }, ...l]);
   }
 
   function addNote() {
@@ -151,13 +152,16 @@ export default function PurchaseOrdersPage() {
             const conversion = Number(item && item.conversion_ratio > 0 ? item.conversion_ratio : 1) || 1;
             const deficit = a.minimum_threshold - Number(a.current_balance);
             const suggestedPurchaseQty = deficit > 0 ? Math.ceil(deficit / conversion) : 1;
+            const hasBrands = !!item?.has_children;
 
             return {
               type: 'product',
-              item_id: String(a.item_id),
+              parent_id: String(a.item_id), // always assign as parent
+              item_id: hasBrands ? '' : String(a.item_id), // force select brand if it has children
               description: a.item_name,
               qty: String(suggestedPurchaseQty),
               unit_price: (() => {
+                if (hasBrands) return ''; // user must select brand to get price
                 if (!item) return '0';
                 return String(Math.round((item.current_average_price || 0) * conversion));
               })(),
@@ -209,6 +213,12 @@ export default function PurchaseOrdersPage() {
     if (!form.vendor_id) { setError('Kolom Vendor tidak boleh kosong.'); return; }
     if (!form.deliver_to.trim()) { setError('Kolom Deliver To tidak boleh kosong.'); return; }
     if (!form.order_deadline) { setError('Kolom Order Deadline tidak boleh kosong.'); return; }
+
+    const hasIncompleteBrand = lines.some(l => l.type === 'product' && l.parent_id && !l.item_id);
+    if (hasIncompleteBrand) {
+      setError('Ada Bahan Utama yang belum dipilih Brand-nya. Mohon lengkapi pilihan Brand (Wajib) atau hapus baris tersebut.');
+      return;
+    }
 
     const validLines = lines.filter(l => (l.type === 'product' ? (l.item_id && l.qty && l.unit_price) : l.description));
     if (!validLines.length) { setError('Minimal 1 item/bahan harus diisi dengan lengkap.'); return; }
@@ -283,8 +293,9 @@ export default function PurchaseOrdersPage() {
       internal_notes: fetchedPO.internal_notes || ''
     } as any);
 
-    const fetchedLines = (fetchedPO.items || []).map((i: { line_type?: string; item_id?: number; item_name?: string; description?: string; qty?: number; unit_price?: number; tax_percent?: number; discount_percent?: number; purchase_unit?: string; package_qty?: number; package_inner_size?: number; conversion_ratio?: number; }) => ({
+    const fetchedLines = (fetchedPO.items || []).map((i: { line_type?: string; item_id?: number; item_name?: string; description?: string; qty?: number; unit_price?: number; tax_percent?: number; discount_percent?: number; purchase_unit?: string; package_qty?: number; package_inner_size?: number; conversion_ratio?: number; parent_id?: number | null; }) => ({
       type: i.line_type === 'CATATAN' ? 'note' : 'product',
+      parent_id: i.parent_id ? String(i.parent_id) : (i.item_id ? String(i.item_id) : ''),
       item_id: i.item_id ? String(i.item_id) : '',
       description: i.description || '',
       qty: String(i.qty || ''),
@@ -297,7 +308,7 @@ export default function PurchaseOrdersPage() {
       conversion_ratio: i.conversion_ratio ? String(i.conversion_ratio) : ''
     }));
 
-    setLines(fetchedLines.length ? fetchedLines : [{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
+    setLines(fetchedLines.length ? fetchedLines : [{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
     setActiveTab('Bahan / Produk');
     setShowModal(true);
   }
@@ -631,13 +642,13 @@ export default function PurchaseOrdersPage() {
                     <div className="muted" style={{ fontSize: 13 }}>
                       Menampilkan {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, pos.length)} dari {pos.length}
                     </div>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Seb</button>
-                      <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', fontSize: 13, fontWeight: 600 }}>
-                        Halaman {currentPage} dari {Math.ceil(pos.length / ITEMS_PER_PAGE)}
-                      </div>
-                      <button className="btn" onClick={() => setCurrentPage(p => Math.min(Math.ceil(pos.length / ITEMS_PER_PAGE), p + 1))} disabled={currentPage === Math.ceil(pos.length / ITEMS_PER_PAGE)}>Lanjut</button>
-                    </div>
+                    <Pagination 
+                      currentPage={currentPage} 
+                      totalPages={Math.ceil(pos.length / ITEMS_PER_PAGE)} 
+                      totalItems={pos.length} 
+                      itemsPerPage={ITEMS_PER_PAGE} 
+                      onPageChange={setCurrentPage} 
+                    />
                   </div>
                 )}
               </>
@@ -754,6 +765,7 @@ export default function PurchaseOrdersPage() {
                           { value: '', label: 'Pilih vendor...' },
                           ...vendors.map(v => ({ value: String(v.id), label: v.name }))
                         ]}
+                        disabled={draftPO ? draftPO.status !== 'RFQ' : false}
                       />
                     </div>
                     <div className="form-group">
@@ -883,7 +895,7 @@ export default function PurchaseOrdersPage() {
                         <table style={{ margin: 0, width: '100%' }}>
                           <thead>
                             <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                              <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200 }}>Bahan / Produk</th>
+                              <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200, maxWidth: 280 }}>Bahan / Produk</th>
                               <th className="right" style={{ minWidth: 80 }}>Kuantitas</th>
                               <th className="center" style={{ minWidth: 220 }}>Satuan</th>
                               <th className="right" style={{ minWidth: 130 }}>Harga Satuan</th>
@@ -913,22 +925,59 @@ export default function PurchaseOrdersPage() {
                               return (
                                 <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                   <td style={{ padding: '6px 16px', position: 'relative' }}>
-                                    <ItemSelectWithBrand
-                                      value={line.item_id || line.description}
-                                      onChange={(val) => {
-                                        // If it's an ID, find the item and update. If it's a new string, just update description
-                                        const found = items.find(i => String(i.id) === String(val));
-                                        if (found) {
-                                          handleItemTextChange(idx, found.name);
-                                        } else {
-                                          updateLine(idx, 'description', String(val));
-                                          updateLine(idx, 'item_id', '');
-                                        }
-                                      }}
-                                      items={items}
-                                      placeholder="Pilih Bahan/Produk..."
-                                      style={{ width: '100%', minWidth: 200 }}
-                                    />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                      <Select
+                                        value={String(line.parent_id || line.item_id || '')}
+                                        onChange={(val) => {
+                                          const found = items.find(i => String(i.id) === String(val));
+                                          if (!found) return;
+                                          if (found.has_children) {
+                                            updateLine(idx, 'parent_id', String(found.id));
+                                            updateLine(idx, 'item_id', '');
+                                            updateLine(idx, 'description', found.name);
+                                            updateLine(idx, 'unit_price', '');
+                                          } else {
+                                            updateLine(idx, 'parent_id', String(found.id));
+                                            updateLine(idx, 'item_id', String(found.id));
+                                            updateLine(idx, 'description', found.name);
+                                            const price = Math.round((found.current_average_price || 0) * (found.conversion_ratio || 1));
+                                            updateLine(idx, 'unit_price', String(price));
+                                            updateLine(idx, 'purchase_unit', found.purchase_unit || '');
+                                          }
+                                        }}
+                                        options={[
+                                          { value: '', label: 'Pilih Bahan Utama...' },
+                                          ...items.filter(i => !i.parent_id).map(i => ({ value: String(i.id), label: i.name }))
+                                        ]}
+                                        searchable
+                                        disabled={draftPO ? draftPO.status !== 'RFQ' : false}
+                                      />
+                                      {line.parent_id && items.find(i => String(i.id) === String(line.parent_id))?.has_children && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 8 }}>
+                                          <span style={{ color: '#94a3b8', fontSize: 16 }}>↳</span>
+                                          <div style={{ flex: 1, border: !line.item_id ? '1px solid #ef4444' : 'none', borderRadius: 6 }}>
+                                            <Select
+                                              value={String(line.item_id || '')}
+                                              onChange={(val) => {
+                                                const foundBrand = items.find(i => String(i.id) === String(val));
+                                                if (!foundBrand) return;
+                                                updateLine(idx, 'item_id', String(foundBrand.id));
+                                                updateLine(idx, 'description', foundBrand.name);
+                                                const price = Math.round((foundBrand.current_average_price || 0) * (foundBrand.conversion_ratio || 1));
+                                                updateLine(idx, 'unit_price', String(price));
+                                                updateLine(idx, 'purchase_unit', foundBrand.purchase_unit || '');
+                                              }}
+                                              options={[
+                                                { value: '', label: 'Pilih Brand (Wajib)...' },
+                                                ...items.filter(i => String(i.parent_id) === String(line.parent_id)).map(i => ({ value: String(i.id), label: i.name }))
+                                              ]}
+                                              searchable
+                                              disabled={draftPO ? draftPO.status !== 'RFQ' : false}
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
                                   </td>
                                   <td style={{ padding: '6px 16px' }}>
                                     <input type="text" className="po-table-input transparent-input right" value={line.qty === '0' ? '' : (line.qty ? Number(line.qty).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'qty', raw); }} onFocus={e => e.target.select()} placeholder="0" />

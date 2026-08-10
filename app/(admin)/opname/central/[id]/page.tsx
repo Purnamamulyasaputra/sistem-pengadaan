@@ -241,13 +241,6 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
 
-        {!isLocked && (
-          <div style={{ padding: '12px 24px', background: '#fffbeb', borderBottom: '1px solid #fde68a', color: '#b45309', fontSize: 11, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-            <strong>Mode Draft:</strong> Stok fisik belum berubah. Klik "Kunci & Submit" untuk menerapkan penyesuaian stok.
-          </div>
-        )}
-
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <Table>
             <thead>
@@ -291,7 +284,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                       {item.item_name as string}
                       {ratio > 1 ? (
                         <div style={{ fontSize: 10, marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          <span style={{ background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
+                          <span style={{ background: '#f1f5f9', color: '#475569', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
                             Input: {largeUnit}
                           </span>
                           <span className="muted">

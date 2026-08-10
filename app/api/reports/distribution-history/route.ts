@@ -54,8 +54,8 @@ export async function GET(request: Request) {
       success: true,
       data: Object.values(groupedData)
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

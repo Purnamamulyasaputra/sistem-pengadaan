@@ -355,6 +355,7 @@ export async function getCombinedStockReport(search: string | null) {
     FROM items i
     LEFT JOIN categories c ON c.id = i.category_id
     WHERE i.is_active = TRUE
+    AND i.parent_id IS NULL  -- Hanya tampilkan Induk; stok Brand sudah tercatat di Induk
   `;
   
   const params: any[] = [];
@@ -368,3 +369,9 @@ export async function getCombinedStockReport(search: string | null) {
   const res = await query(sql, params);
   return res.rows;
 }
+
+export async function getActiveOutlets(): Promise<{ id: number; name: string }[]> {
+  const res = await query(`SELECT id, name FROM outlets ORDER BY name ASC`);
+  return res.rows as { id: number; name: string }[];
+}
+

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCombinedStockReport } from '@/lib/queries/inventory';
-import { query } from '@/lib/db';
+import { getCombinedStockReport, getActiveOutlets } from '@/lib/queries/inventory';
 import { getSession } from '@/lib/auth';
 
 export async function GET(request: Request) {
@@ -13,11 +12,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     
-    const rows = await getCombinedStockReport(search);
-    const outletsRes = await query(`SELECT id, name FROM outlets ORDER BY name ASC`);
+    const [rows, outlets] = await Promise.all([
+      getCombinedStockReport(search),
+      getActiveOutlets()
+    ]);
     
-    return NextResponse.json({ success: true, data: rows, outlets: outletsRes.rows });
-  } catch (error: any) {
+    return NextResponse.json({ success: true, data: rows, outlets });
+  } catch (error: unknown) {
     console.error('Error fetching combined stock:', error);
     return NextResponse.json({ success: false, message: 'Gagal mengambil data report stok gabungan' }, { status: 500 });
   }

@@ -1,12 +1,6 @@
-import Link from "next/link";
 import MokaSyncCatalogButton from "@/components/moka/MokaSyncCatalogButton";
 import MokaCatalogTableClient from "@/components/moka/MokaCatalogTableClient";
 import { getMokaCatalog, getMokaCatalogStats, getOutletsWithBusiness, getRecipesForMapping } from "@/lib/queries/moka_catalog";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-
-export const metadata = {
-    title: 'Moka POS Catalog - Sunrise Daily',
-};
 
 export default async function MokaCatalogPage(props: { searchParams: Promise<{ page?: string, outlet_id?: string, search?: string, status?: string }> }) {
     const searchParams = await props.searchParams;

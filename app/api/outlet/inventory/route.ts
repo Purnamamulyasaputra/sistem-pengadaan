@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getSession();
     if (!session || !session.outletId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const data = await getOutletStocks(session.outletId);
@@ -22,6 +22,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: serializedData });
   } catch (error: unknown) {
     console.error('[GET /api/outlet/inventory] Error:', error);
-    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Unknown error') }, { status: 500 });
   }
 }

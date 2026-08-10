@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    if (!session) return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
     const filterOutlet = searchParams.get('outlet_id');
@@ -19,16 +19,16 @@ export async function GET(request: Request) {
 
     const data = await getLocalPurchases(outletId, filterDate);
     return NextResponse.json({ success: true, data });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    if (!session) return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
 
     const formData = await request.formData();
     const purchase_date = formData.get('purchase_date') as string;
@@ -53,8 +53,8 @@ export async function POST(request: Request) {
     const purchaseId = await createLocalPurchase(outletId, purchase_date, blob.url, total_amount, items);
 
     return NextResponse.json({ success: true, purchaseId });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

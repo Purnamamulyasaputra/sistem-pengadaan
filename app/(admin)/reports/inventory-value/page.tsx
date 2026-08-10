@@ -5,6 +5,7 @@ import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import * as XLSX from 'xlsx';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function InventoryValueTablePage() {
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
@@ -13,6 +14,12 @@ export default function InventoryValueTablePage() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, categoryFilter, month, year]);
 
   useEffect(() => {
     setLoading(true);
@@ -71,6 +78,9 @@ export default function InventoryValueTablePage() {
     grandTotalAdj += Math.abs(Number(r.total_adj_qty)) * ma;
     grandTotalValue += Number(r.current_balance) * ma;
   });
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <section style={{ margin: '-16px -20px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)' }}>
@@ -142,7 +152,7 @@ export default function InventoryValueTablePage() {
                 </tr>
               </thead>
               <tbody style={{ fontSize: 12 }}>
-                {filteredData.map((r: any, i: number) => {
+                {paginatedData.map((r: any, i: number) => {
                   const ma = Number(r.current_average_price || 0);
                   const valIn = Math.round(Number(r.total_in_qty) * ma);
                   const valDist = Math.round(Number(r.total_distribution_qty) * ma);
@@ -165,7 +175,7 @@ export default function InventoryValueTablePage() {
                   );
                 })}
               </tbody>
-              <tfoot>
+              <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 10, boxShadow: '0 -2px 10px rgba(0,0,0,0.05)' }}>
                 <tr style={{ background: '#f1f5f9', fontWeight: 700, borderTop: '2px solid var(--border)', fontSize: 12 }}>
                   <td colSpan={2} className="right" style={{ padding: '12px 24px' }}>TOTAL KESELURUHAN (FILTERED)</td>
                   <td className="right num" style={{ padding: '12px 24px' }}>Rp {grandTotalIn.toLocaleString('id-ID')}</td>
@@ -177,6 +187,68 @@ export default function InventoryValueTablePage() {
             </Table>
           )}
         </div>
+
+        {/* Pagination */}
+        {!loading && totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '12px 24px', gap: 16, borderTop: '1px solid var(--border)' }}>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Menampilkan {filteredData.length} data
+            </span>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <Button 
+                variant="outline" 
+                disabled={currentPage === 1} 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                style={{ height: 28, width: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                title="Sebelumnya"
+              >
+                <ChevronLeft size={16} />
+              </Button>
+              
+              {(() => {
+                const getPageNumbers = (c: number, t: number) => {
+                  if (t <= 5) return Array.from({ length: t }, (_, i) => i + 1);
+                  if (c <= 3) return [1, 2, 3, 4, 5, '...', t];
+                  if (c >= t - 2) return [1, '...', t - 4, t - 3, t - 2, t - 1, t];
+                  return [1, '...', c - 1, c, c + 1, '...', t];
+                };
+                
+                return getPageNumbers(currentPage, totalPages).map((p, i) => (
+                  typeof p === 'number' ? (
+                    <Button
+                      key={i}
+                      variant={p === currentPage ? "primary" : "outline"}
+                      onClick={() => setCurrentPage(p)}
+                      style={{ 
+                        height: 28, 
+                        minWidth: 28, 
+                        padding: '0 8px', 
+                        fontSize: 12,
+                        background: p === currentPage ? '#016e3f' : undefined,
+                        color: p === currentPage ? '#fff' : undefined,
+                        borderColor: p === currentPage ? '#016e3f' : undefined
+                      }}
+                    >
+                      {p}
+                    </Button>
+                  ) : (
+                    <span key={i} className="muted" style={{ padding: '0 4px', fontSize: 12 }}>{p}</span>
+                  )
+                ));
+              })()}
+
+              <Button 
+                variant="outline" 
+                disabled={currentPage === totalPages} 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                style={{ height: 28, width: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                title="Selanjutnya"
+              >
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

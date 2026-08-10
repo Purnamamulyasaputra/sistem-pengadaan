@@ -79,21 +79,46 @@ export async function createGoodsReceipt(data: {
       const poiMap = new Map<number, typeof poiRes.rows[0]>();
       for (const row of poiRes.rows) poiMap.set(Number(row.id), row);
 
+      // Fetch Brand items + parent_id untuk resolusi Induk
       const itemRes = await client.query(
-        `SELECT id, conversion_ratio, current_average_price FROM items WHERE id = ANY($1::int[]) FOR UPDATE`,
+        `SELECT id, conversion_ratio, current_average_price, parent_id FROM items WHERE id = ANY($1::int[]) FOR UPDATE`,
         [itemIds]
       );
       const itemMap = new Map<number, typeof itemRes.rows[0]>();
       for (const row of itemRes.rows) itemMap.set(Number(row.id), row);
 
+      // Kumpulkan & LOCK Induk yang terlibat (brand dengan parent_id)
+      const parentIdsToLock = [...new Set(
+        itemRes.rows
+          .filter((r: any) => r.parent_id != null)
+          .map((r: any) => Number(r.parent_id))
+      )];
+      const parentItemMap = new Map<number, any>();
+      if (parentIdsToLock.length > 0) {
+        const parentRes = await client.query(
+          `SELECT id, conversion_ratio, current_average_price FROM items WHERE id = ANY($1::int[]) FOR UPDATE`,
+          [parentIdsToLock]
+        );
+        for (const row of parentRes.rows) parentItemMap.set(Number(row.id), row);
+      }
+
+      // Effective IDs: jika Brand → pakai parent_id (Induk), jika standalone → pakai dirinya sendiri
+      const effectiveIdMap = new Map<number, number>(); // brandItemId -> effectiveItemId
+      for (const row of itemRes.rows) {
+        const eid = row.parent_id ? Number(row.parent_id) : Number(row.id);
+        effectiveIdMap.set(Number(row.id), eid);
+      }
+      const allEffectiveIds = [...new Set(Array.from(effectiveIdMap.values()))];
+
+      // Ambil stok terakhir berdasarkan Induk (bukan Brand)
       const stockRes = await client.query(
         `SELECT DISTINCT ON (item_id) item_id, ending_balance 
          FROM inventory_logs 
          WHERE item_id = ANY($1::int[]) 
          ORDER BY item_id, created_at DESC`,
-        [itemIds]
+        [allEffectiveIds]
       );
-      const stockMap = new Map<number, typeof stockRes.rows[0]>();
+      const stockMap = new Map<number, any>();
       for (const row of stockRes.rows) stockMap.set(Number(row.item_id), row);
 
       const gri_receiptIds: number[] = [];
@@ -120,32 +145,38 @@ export async function createGoodsReceipt(data: {
       const triggerActions: { itemId: number, newStock: number }[] = [];
 
       for (const item of data.items) {
-        // Gunakan Number() konsisten agar tidak mismatch tipe string/number di Map lookup
         const poiData = poiMap.get(Number(item.purchase_order_item_id));
         const unit_price = poiData ? parseFloat(String(poiData.unit_price || '0')) : 0;
 
         // Ambil rasio dari PO item (snapshot satuan saat PO dibuat).
-        // Jika null (PO lama), fallback ke master barang saat ini.
         const itemData = itemMap.get(Number(item.item_id));
         const masterRatio = itemData ? parseFloat(String(itemData.conversion_ratio || '1')) : 1;
         const poRatioRaw = poiData?.conversion_ratio;
         const ratio = (poRatioRaw !== null && poRatioRaw !== undefined && parseFloat(String(poRatioRaw)) > 0)
           ? parseFloat(String(poRatioRaw))
           : masterRatio;
-        const oldAvg = itemData ? parseFloat(String(itemData.current_average_price || '0')) : 0;
+
+        // INDUK-BRAND RESOLUTION:
+        // Jika item yang diterima adalah Brand (parent_id IS NOT NULL),
+        // arahkan STOK dan HARGA ke Induk (parent), bukan ke Brand itu sendiri.
+        // goods_receipt_items tetap menyimpan Brand ID untuk audit trail PO.
+        const effectiveItemId = effectiveIdMap.get(Number(item.item_id)) ?? Number(item.item_id);
+        const effectiveItemData = parentItemMap.get(effectiveItemId) ?? itemData;
+        const oldAvg = effectiveItemData ? parseFloat(String(effectiveItemData.current_average_price || '0')) : 0;
 
         const qtyInSmallestUnit = Number(item.qty_received) * ratio;
         const unitPriceInSmallestUnit = unit_price / ratio;
 
-        const stockData = stockMap.get(Number(item.item_id));
+        // Stok Induk (effectiveItemId) dari inventory_logs
+        const stockData = stockMap.get(effectiveItemId);
         const currentStock = stockData ? parseFloat(stockData.ending_balance || '0') : 0;
         const newStock = currentStock + qtyInSmallestUnit;
         
-        // Update stockMap agar jika ada item yang sama di baris PO berikutnya, perhitungan stoknya tetap sinkron
+        // Update stockMap agar multi-baris PO ke Induk yang sama tetap sinkron
         if (stockData) {
           stockData.ending_balance = newStock.toString();
         } else {
-          stockMap.set(Number(item.item_id), { ending_balance: newStock.toString() });
+          stockMap.set(effectiveItemId, { ending_balance: newStock.toString() });
         }
 
         const effectiveOldStock = currentStock > 0 ? currentStock : 0;
@@ -154,28 +185,38 @@ export async function createGoodsReceipt(data: {
         const newValue = unitPriceInSmallestUnit * qtyInSmallestUnit;
         const newAvgPrice = effectiveNewStock > 0 ? (oldValue + newValue) / effectiveNewStock : unitPriceInSmallestUnit;
 
+        // goods_receipt_items: tetap pakai Brand ID (item.item_id) untuk audit trail PO
         gri_receiptIds.push(Number(receipt.id));
         gri_poItemIds.push(Number(item.purchase_order_item_id));
         gri_itemIds.push(Number(item.item_id));
         gri_qtyReceived.push(Number(item.qty_received));
 
-        upd_itemIds.push(Number(item.item_id));
+        // Stok, harga, dan price_history → Induk (effectiveItemId)
+        upd_itemIds.push(effectiveItemId);
         upd_newAvgPrices.push(newAvgPrice);
         upd_unitPrices.push(unitPriceInSmallestUnit);
+        
+        // Update harga untuk Brand juga agar auto-fill PO selanjutnya akurat
+        if (effectiveItemId !== Number(item.item_id)) {
+          upd_itemIds.push(Number(item.item_id));
+          upd_newAvgPrices.push(unitPriceInSmallestUnit);
+          upd_unitPrices.push(unitPriceInSmallestUnit);
+        }
 
-        inv_itemIds.push(Number(item.item_id));
+        inv_itemIds.push(effectiveItemId);
         inv_qtyChanges.push(qtyInSmallestUnit);
         inv_newStocks.push(newStock);
         inv_receiptIds.push(Number(receipt.id));
 
-        ph_itemIds.push(Number(item.item_id));
+        ph_itemIds.push(effectiveItemId);
         ph_vendorIds.push(vendorId ? Number(vendorId) : null);
         ph_qtyReceived.push(Number(item.qty_received));
         ph_unitPrices.push(unit_price);
         ph_newAvgPrices.push(newAvgPrice);
         ph_poItemIds.push(Number(item.purchase_order_item_id));
 
-        triggerActions.push({ itemId: item.item_id, newStock });
+        // Alert & auto-fulfill → Induk
+        triggerActions.push({ itemId: effectiveItemId, newStock });
       }
 
       await client.query(

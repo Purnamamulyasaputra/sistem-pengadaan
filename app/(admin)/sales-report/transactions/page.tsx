@@ -3,10 +3,6 @@ import TransactionTableClient from '@/components/moka/TransactionTableClient';
 
 import { getOutlets } from '@/lib/queries/master';
 
-export const metadata = {
-    title: 'Data Transaksi Moka | Sunrise Daily',
-};
-
 export default async function TransactionsPage() {
     const outletsRaw = await getOutlets();
     const outlets = outletsRaw.map(o => ({ id: String(o.id), name: o.name }));

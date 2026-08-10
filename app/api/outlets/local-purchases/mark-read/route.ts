@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { markAllLocalPurchasesRead } from '@/lib/queries/local-purchases';
 import { getSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -8,14 +8,13 @@ export async function POST() {
   try {
     const session = await getSession();
     if (!session || session.role !== 'ADMIN_PUSAT') {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    await query(`UPDATE outlet_local_purchases SET is_read_by_central = true WHERE is_read_by_central = false`);
-    
+    await markAllLocalPurchasesRead();
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: (err instanceof Error ? err.message : 'Unknown error') }, { status: 500 });
   }
 }

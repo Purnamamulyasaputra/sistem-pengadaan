@@ -233,13 +233,6 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        {!isLocked && (
-          <div style={{ padding: '12px 24px', background: '#fffbeb', borderBottom: '1px solid #fde68a', color: '#b45309', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-            <strong>Mode Draft:</strong> Stok fisik belum berubah. Klik "Kunci & Submit" untuk menerapkan penyesuaian stok.
-          </div>
-        )}
-
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <Table>
             <thead>

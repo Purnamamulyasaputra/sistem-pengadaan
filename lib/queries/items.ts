@@ -33,7 +33,7 @@ export interface Item {
   has_children?: boolean;
 }
 
-export async function getItems(opts?: { categoryId?: string; search?: string; activeOnly?: boolean }) {
+export async function getItems(opts?: { categoryId?: string; search?: string; activeOnly?: boolean; parentOnly?: boolean }) {
   const conditions: string[] = [];
   const params: unknown[] = [];
   let i = 1;
@@ -48,6 +48,10 @@ export async function getItems(opts?: { categoryId?: string; search?: string; ac
   if (opts?.search) {
     conditions.push(`i.name ILIKE $${i++}`);
     params.push(`%${opts.search}%`);
+  }
+  // parentOnly: hanya tampilkan Induk (bukan Brand / Anak)
+  if (opts?.parentOnly) {
+    conditions.push(`i.parent_id IS NULL`);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

@@ -192,6 +192,7 @@ export async function getItemsForOpname(locationType: string, locationId?: numbe
        FROM items i
        LEFT JOIN categories c ON c.id = i.category_id
        WHERE i.is_active = TRUE
+       AND i.parent_id IS NULL  -- Opname hanya untuk Induk; Brand tidak ditampilkan
        ORDER BY c.name, i.name`
     ).then(r => r.rows);
   } else if (locationType === 'OUTLET' && locationId) {
@@ -209,6 +210,7 @@ export async function getItemsForOpname(locationType: string, locationId?: numbe
        LEFT JOIN recipes r ON r.id = ri.recipe_id
        LEFT JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $1
        WHERE i.is_active = TRUE
+         AND i.parent_id IS NULL
          AND (
            os.outlet_id IS NOT NULL OR 
            ois.outlet_id IS NOT NULL OR 

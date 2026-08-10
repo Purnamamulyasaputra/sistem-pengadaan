@@ -64,7 +64,7 @@ export async function getPurchaseOrderById(id: number) {
   if (!po) return null;
 
   const itemsRes = await query(
-    `SELECT poi.*, i.name AS item_name, i.purchase_unit, i.smallest_unit,
+    `SELECT poi.*, i.name AS item_name, i.purchase_unit, i.smallest_unit, i.parent_id,
             COALESCE((SELECT SUM(qty_received) FROM goods_receipt_items WHERE purchase_order_item_id = poi.id), 0) as total_received
      FROM purchase_order_items poi
      LEFT JOIN items i ON i.id = poi.item_id
@@ -317,11 +317,10 @@ export async function updatePurchaseOrderStatus(id: number, status: string, user
 
     if (status === 'SELESAI') {
       const { rows: items } = await client.query(
-        `SELECT poi.item_id, poi.qty, poi.unit_price, COALESCE(poi.conversion_ratio, i.conversion_ratio) as conversion_ratio, i.current_average_price,
-                COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock
+        `SELECT poi.item_id, poi.qty, poi.unit_price, COALESCE(poi.conversion_ratio, i.conversion_ratio) as conversion_ratio
          FROM purchase_order_items poi
          JOIN items i ON i.id = poi.item_id
-         WHERE poi.purchase_order_id = $1 AND poi.line_type = 'product'`,
+         WHERE poi.purchase_order_id = $1 AND poi.line_type = 'PRODUK'`,
         [id]
       );
 
@@ -334,30 +333,69 @@ export async function updatePurchaseOrderStatus(id: number, status: string, user
         const addedQty = qtyPurchased * ratio;
         const newUnitPrice = unitPricePurchased / ratio; 
 
-        const currentStock = Number(item.current_stock) || 0;
-        const currentAvg = Number(item.current_average_price) || 0;
+        // 1. Temukan Induk (Effective ID)
+        const { rows: parentInfo } = await client.query(
+          `SELECT COALESCE(parent_id, id) AS effective_id FROM items WHERE id = $1`, [item.item_id]
+        );
+        const effectiveId = parentInfo[0]?.effective_id || item.item_id;
+
+        // 2. Dapatkan Sisa Fisik Gabungan Induk
+        const { rows: stockInfo } = await client.query(
+          `SELECT COALESCE(SUM(qty_change), 0) as current_stock 
+           FROM inventory_logs 
+           WHERE item_id = $1 OR item_id IN (SELECT id FROM items WHERE parent_id = $1)`,
+          [effectiveId]
+        );
+        const currentStock = Number(stockInfo[0].current_stock) || 0;
+
+        // 3. Dapatkan HPP Induk Lama
+        const { rows: hppInfo } = await client.query(
+          `SELECT current_average_price FROM items WHERE id = $1`, [effectiveId]
+        );
+        const currentAvg = Number(hppInfo[0]?.current_average_price) || 0;
         
+        // 4. Hitung True Moving Average (Induk)
         const effectiveOldStock = currentStock > 0 ? currentStock : 0;
         const totalNewStock = effectiveOldStock + addedQty;
         const oldValue = currentAvg * effectiveOldStock;
         const newValue = newUnitPrice * addedQty;
         const newAvgPrice = totalNewStock > 0 ? (oldValue + newValue) / totalNewStock : newUnitPrice;
 
+        // 5. Catat IN ke Log Induk
         await client.query(
           `INSERT INTO inventory_logs 
            (item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
            VALUES ($1, 'IN', $2, $3, 'PURCHASE', $4)`,
-          [item.item_id, addedQty, currentStock + addedQty, id]
+          [effectiveId, addedQty, currentStock + addedQty, id]
         );
 
+        // 6. Update HPP Induk
         await client.query(
           `UPDATE items 
            SET current_average_price = $1, 
                last_purchase_price = $2,
                updated_at = now() 
            WHERE id = $3`,
-          [newAvgPrice, newUnitPrice, item.item_id]
+          [newAvgPrice, newUnitPrice, effectiveId]
         );
+
+        // 7. Update visual harga Beli Terakhir untuk Brand tersebut
+        if (effectiveId !== item.item_id) {
+           await client.query(
+             `UPDATE items 
+              SET current_average_price = $1, 
+                  last_purchase_price = $1,
+                  updated_at = now() 
+              WHERE id = $2`,
+             [newUnitPrice, item.item_id]
+           );
+        }
+      }
+      
+      const updatedItemIds = items.map(i => Number(i.item_id)).filter(id => !isNaN(id) && id > 0);
+      if (updatedItemIds.length > 0) {
+        const { syncMenuHppByItems } = await import('@/lib/queries/hpp');
+        await syncMenuHppByItems(client, updatedItemIds);
       }
     }
 
@@ -383,7 +421,7 @@ export async function getPurchaseOrderSuggestions() {
         ), 0) as current_balance
       FROM items i
       LEFT JOIN categories c ON i.category_id = c.id
-      WHERE i.is_active = TRUE
+      WHERE i.is_active = TRUE AND i.parent_id IS NULL
     )
     SELECT * 
     FROM item_balances

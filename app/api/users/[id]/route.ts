@@ -19,8 +19,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     
     return NextResponse.json({ success: true, data: updated, message: 'User successfully updated' });
-  } catch (err: any) {
-    if (err.code === '23505') {
+  } catch (err: unknown) {
+    const pgError = err as { code?: string };
+    if (pgError.code === '23505') {
       return NextResponse.json({ success: false, message: 'Email is already in use' }, { status: 400 });
     }
     return NextResponse.json({ success: false, message: 'Failed to update user' }, { status: 500 });

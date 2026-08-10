@@ -6,14 +6,14 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     if (session?.role !== 'ADMIN_PUSAT') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
     const { category_id, name, variant, sale_price } = body;
 
     if (!category_id || !name || sale_price == null) {
-      return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Data tidak lengkap' }, { status: 400 });
     }
 
     const displayName = variant ? `${name} - ${variant}` : name;
@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json({ success: true, data: menuRow });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating menu:', error);
-    return NextResponse.json({ error: error.message || 'Terjadi kesalahan' }, { status: 500 });
+    return NextResponse.json({ success: false, message: (error instanceof Error ? error.message : 'Terjadi kesalahan') }, { status: 500 });
   }
 }

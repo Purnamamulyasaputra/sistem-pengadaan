@@ -64,7 +64,7 @@ export function LocalPurchaseView({ role, outletId }: { role: 'ADMIN_PUSAT' | 'A
   useEffect(() => {
     fetchPurchases();
     if (role === 'ADMIN_OUTLET') {
-      fetch('/api/items?active_only=true')
+      fetch('/api/items?active_only=true&parent_only=true')
         .then(r => r.json())
         .then(d => setMasterItems(d.data || []));
     }

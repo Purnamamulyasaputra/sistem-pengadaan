@@ -111,6 +111,7 @@ export async function getOutletMonitoringData() {
         COALESCE(i.current_average_price, 0) AS current_average_price
       FROM items i
       WHERE i.is_active = TRUE
+      AND i.parent_id IS NULL
       ORDER BY i.name ASC
     `),
     query<{ item_id: number; outlet_id: number; current_balance: string }>(`

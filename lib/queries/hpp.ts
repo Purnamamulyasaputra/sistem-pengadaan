@@ -560,6 +560,32 @@ export async function createRecipe(data: {
 
     if (menuId) {
       await client.query(`UPDATE recipes SET menu_id = $1 WHERE id = $2`, [menuId, recipeId]);
+      
+      // Update menu's category and sale price if provided
+      if (data.category_id || data.sale_price !== undefined) {
+        const updates = [];
+        const queryParams: any[] = [];
+        let paramIdx = 1;
+  
+        if (data.category_id) {
+          updates.push(`category_id = $${paramIdx++}`);
+          queryParams.push(data.category_id);
+        }
+        if (data.sale_price !== undefined) {
+          updates.push(`sale_price = COALESCE($${paramIdx++}, sale_price)`);
+          queryParams.push(data.sale_price);
+        }
+  
+        if (updates.length > 0) {
+          queryParams.push(menuId);
+          await client.query(`
+            UPDATE menus 
+            SET ${updates.join(', ')} 
+            WHERE id = $${paramIdx}
+          `, queryParams);
+        }
+      }
+      
       await client.query(`
         UPDATE menus
         SET 
@@ -599,12 +625,28 @@ export async function updateRecipe(id: number, data: {
       WHERE id = $9
     `, [data.name, data.venue_id, data.yield_amount, data.yield_unit || null, subtotal, data.x_factor_pct, total_cost, data.sale_price ?? null, id]);
 
-    if (data.category_id) {
-      await client.query(`
-        UPDATE menus 
-        SET category_id = $1 
-        WHERE id = (SELECT menu_id FROM recipes WHERE id = $2)
-      `, [data.category_id, id]);
+    if (data.category_id || data.sale_price !== undefined) {
+      const updates = [];
+      const queryParams: any[] = [];
+      let paramIdx = 1;
+
+      if (data.category_id) {
+        updates.push(`category_id = $${paramIdx++}`);
+        queryParams.push(data.category_id);
+      }
+      if (data.sale_price !== undefined) {
+        updates.push(`sale_price = COALESCE($${paramIdx++}, sale_price)`);
+        queryParams.push(data.sale_price);
+      }
+
+      if (updates.length > 0) {
+        queryParams.push(id);
+        await client.query(`
+          UPDATE menus 
+          SET ${updates.join(', ')} 
+          WHERE id = (SELECT menu_id FROM recipes WHERE id = $${paramIdx})
+        `, queryParams);
+      }
     }
 
     // 3. Delete old ingredients
@@ -620,10 +662,10 @@ export async function updateRecipe(id: number, data: {
       `, [id, ing.ingredient_id, ing.quantity, ing.unit || null, ing.cost_per_unit, extension, i + 1]);
     }
 
-    // 5. Update menus HPP and link menu_id automatically by name matching
+    // 5. Update menus HPP and link menu_id automatically by name matching if not already linked
     await client.query(`
       UPDATE recipes 
-      SET menu_id = (SELECT id FROM menus WHERE display_name ILIKE $2 LIMIT 1)
+      SET menu_id = COALESCE(menu_id, (SELECT id FROM menus WHERE display_name ILIKE $2 LIMIT 1))
       WHERE id = $1
     `, [id, data.name]);
 
@@ -698,10 +740,77 @@ export async function deleteIngredient(id: number) {
 // REAL-TIME SYNC
 // ─────────────────────────────────────────────
 
+/**
+ * Sync HPP untuk menus yang terpengaruh ketika harga item berubah.
+ * Mendukung brand/child items: jika itemId adalah child (punya parent_id),
+ * maka parent juga diupdate current_average_price-nya (rata-rata dari semua child aktif),
+ * dan resep yang mengacu ke parent akan ikut ter-sync.
+ */
 export async function syncMenuHppByItems(client: PoolClient, itemIds: number[]) {
   if (!itemIds || itemIds.length === 0) return;
 
-  // 1. Update recipe_ingredients for the affected items
+  // Step 1: Resolve child items → temukan parent_id mereka (jika ada)
+  // Sekaligus kumpulkan semua "effective item ids" (parent jika child, atau dirinya sendiri jika standalone)
+  const resolvedRes = await client.query(`
+    SELECT
+      i.id          AS item_id,
+      i.parent_id,
+      COALESCE(i.parent_id, i.id) AS effective_id
+    FROM items i
+    WHERE i.id = ANY($1::int[])
+  `, [itemIds]);
+
+  const parentIds: number[] = resolvedRes.rows
+    .filter((r: { parent_id: number | null }) => r.parent_id != null)
+    .map((r: { parent_id: number }) => r.parent_id);
+
+  // Step 2: Update current_average_price di item INDUK
+  // Ambil rata-rata harga dari semua child brand yang aktif di bawah parent tersebut.
+  // Ini agar resep yang pakai nama induk ("Susu UHT Full Cream") mendapat harga terkini
+  // berdasarkan brand terakhir yang dibeli via PO.
+  if (parentIds.length > 0) {
+    await client.query(`
+      UPDATE items parent
+      SET current_average_price = (
+        SELECT AVG(child.current_average_price)
+        FROM items child
+        WHERE child.parent_id = parent.id
+          AND child.is_active = TRUE
+          AND child.current_average_price > 0
+      ),
+      last_purchase_price = (
+        SELECT child.last_purchase_price
+        FROM items child
+        WHERE child.parent_id = parent.id
+          AND child.is_active = TRUE
+          AND child.last_purchase_price > 0
+        ORDER BY child.updated_at DESC
+        LIMIT 1
+      ),
+      updated_at = now()
+      WHERE parent.id = ANY($1::int[])
+        AND COALESCE((
+          SELECT SUM(qty_change) 
+          FROM inventory_logs 
+          WHERE item_id = parent.id
+        ), 0) <= 0
+    `, [parentIds]);
+  }
+
+  // Step 3: Kumpulkan semua effective IDs (standalone items + parent IDs) untuk sync HPP resep
+  const effectiveIds: number[] = Array.from(new Set([
+    ...resolvedRes.rows
+      .filter((r: { parent_id: number | null }) => r.parent_id == null)
+      .map((r: { item_id: number }) => r.item_id),
+    ...parentIds,
+  ]));
+
+  if (effectiveIds.length === 0) return;
+
+  // Step 4: Update recipe_ingredients untuk item-item yang terpengaruh
+  // Catatan: Asumsi arsitektur sistem adalah `items.smallest_unit` harus SAMA dengan `ingredients.default_unit`.
+  // Jika resep menggunakan 'ml', maka smallest_unit di item barang juga harus 'ml'.
+  // Konversi dari Karton ke ml dilakukan di `conversion_ratio` barang.
   await client.query(`
     UPDATE recipe_ingredients ri
     SET cost_per_unit = COALESCE(it.current_average_price, i.standard_cost_per_unit),
@@ -710,9 +819,9 @@ export async function syncMenuHppByItems(client: PoolClient, itemIds: number[]) 
     JOIN items it ON it.id = i.item_id
     WHERE ri.ingredient_id = i.id
       AND i.item_id = ANY($1::int[])
-  `, [itemIds]);
+  `, [effectiveIds]);
 
-  // 2. Recalculate recipes total
+  // Step 5: Recalculate recipe subtotal & total_cost
   await client.query(`
     WITH updated_recipes AS (
       SELECT r.id AS recipe_id,
@@ -733,9 +842,9 @@ export async function syncMenuHppByItems(client: PoolClient, itemIds: number[]) 
         total_cost = ur.new_subtotal + (ur.new_subtotal * ur.x_factor_pct)
     FROM updated_recipes ur
     WHERE r.id = ur.recipe_id
-  `, [itemIds]);
+  `, [effectiveIds]);
 
-  // 3. Update menus HPP
+  // Step 6: Update menus.hpp & hpp_ratio
   await client.query(`
     UPDATE menus m
     SET hpp = r.total_cost / NULLIF(r.yield, 0),
@@ -748,5 +857,5 @@ export async function syncMenuHppByItems(client: PoolClient, itemIds: number[]) 
         JOIN ingredients i2 ON i2.id = ri2.ingredient_id
         WHERE i2.item_id = ANY($1::int[])
       )
-  `, [itemIds]);
+  `, [effectiveIds]);
 }

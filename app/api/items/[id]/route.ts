@@ -47,11 +47,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const item = await updateItem(Number(id), body);
     if (!item) return NextResponse.json({ success: false, message: 'Item tidak ditemukan', data: null }, { status: 404 });
     return NextResponse.json({ success: true, message: 'Item berhasil diperbarui', data: item });
-  } catch (error: any) {
-    if (error.code === '23505') {
+  } catch (error: unknown) {
+    const pgError = error as { code?: string; message?: string };
+    if (pgError.code === '23505') {
       return NextResponse.json({ success: false, message: 'Gagal menyimpan: Barcode sudah digunakan oleh barang lain.', data: null }, { status: 400 });
     }
-    return NextResponse.json({ success: false, message: 'Gagal memperbarui: ' + error.message, data: null }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Gagal memperbarui: ' + (error instanceof Error ? error.message : 'Unknown error'), data: null }, { status: 500 });
   }
 }
 

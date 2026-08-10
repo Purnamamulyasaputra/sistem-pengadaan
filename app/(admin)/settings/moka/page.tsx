@@ -5,10 +5,6 @@ import MokaToaster from '@/components/moka/MokaToaster';
 import { Store, AlertCircle, Database } from 'lucide-react';
 import Link from 'next/link';
 
-export const metadata = {
-    title: 'Moka POS Integration - Sunrise Daily',
-};
-
 export default async function MokaIntegrationPage(props: {
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {

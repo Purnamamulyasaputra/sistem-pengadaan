@@ -64,6 +64,7 @@ export async function checkAndCreateAlertBulk(triggerActions: {itemId: number, n
     SELECT id, minimum_threshold, threshold_type, computed_threshold_cache 
     FROM items 
     WHERE id = ANY($1::int[])
+    AND parent_id IS NULL  -- Hanya proses alert untuk Induk, bukan Brand
   `, [itemIds]);
 
   const itemsMap = new Map(itemRes.rows.map((r: any) => [r.id, r]));
@@ -148,6 +149,7 @@ export async function getAlerts(opts?: { resolved?: boolean }) {
      LEFT JOIN items i ON i.id = sa.item_id
      LEFT JOIN categories c ON c.id = i.category_id
      ${where}
+     AND (i.parent_id IS NULL OR i.id IS NULL)  -- Hanya tampilkan alert untuk Induk, bukan Brand
      ORDER BY sa.created_at DESC`,
     params
   );

@@ -111,7 +111,7 @@ export function Select({ value, onChange, options, style, className = '', placeh
           if (!isOpen && searchable) setSearchTerm('');
         }}
       >
-        <span style={{ color: selectedOption ? 'inherit' : '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span title={selectedOption ? selectedOption.label : placeholder || 'Select...'} style={{ color: selectedOption ? 'inherit' : '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {selectedOption ? selectedOption.label : placeholder || 'Select...'}
         </span>
         <ChevronDown size={14} style={{ color: '#64748b', marginLeft: 8, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />

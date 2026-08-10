@@ -65,6 +65,7 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
       GROUP BY oi.item_id
     ) agg_in ON agg_in.item_id = i.id
     WHERE i.is_active = true
+      AND i.parent_id IS NULL -- Outlet hanya melihat stok Induk
       AND (
         os.outlet_id IS NOT NULL 
         OR ois.outlet_id IS NOT NULL 
@@ -93,12 +94,17 @@ export async function deductOutletStockFromSales(outletId: number, dateStr: stri
     
     const trxIds = trxRes.rows.map(r => r.id);
 
-    // Get aggregated sold items
+    // Get aggregated sold items that HAVE been mapped
     const itemsRes = await client.query(`
-      SELECT item_name, SUM(quantity) as total_qty
-      FROM moka_transaction_items
-      WHERE transaction_id = ANY($1)
-      GROUP BY item_name
+      SELECT 
+        miv.internal_recipe_id, 
+        MAX(mti.item_name) as item_name,
+        SUM(mti.quantity) as total_qty
+      FROM moka_transaction_items mti
+      JOIN moka_item_variants miv ON miv.id = mti.item_variant_id
+      WHERE mti.transaction_id = ANY($1)
+        AND miv.internal_recipe_id IS NOT NULL
+      GROUP BY miv.internal_recipe_id
     `, [trxIds]);
 
     let totalIngredientsDeducted = 0;
@@ -108,28 +114,15 @@ export async function deductOutletStockFromSales(outletId: number, dateStr: stri
       const qtySold = Number(item.total_qty);
       if (qtySold <= 0) continue;
 
-      // Cari bahan-bahan dari resep menu ini, difilter hanya dari venue yang dimiliki outlet ini.
-      // JOIN outlet_venues memastikan resep dari outlet/venue lain tidak ikut terhitung (cross-venue contamination).
+      // Tarik bahan-bahan langsung dari resep yang sudah ditautkan di Katalog Moka
       const ingRes = await client.query(`
         SELECT i.id as ingredient_id, SUM(ri.quantity) as quantity
-        FROM menus m
-        JOIN recipes r ON r.menu_id = m.id
-        JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $2
-        JOIN recipe_ingredients ri ON ri.recipe_id = r.id
+        FROM recipe_ingredients ri
         JOIN ingredients ing ON ing.id = ri.ingredient_id
         JOIN items i ON (i.id = ing.item_id OR i.ingredient_id = ing.id)
-        WHERE (
-          LOWER(TRIM(m.name)) = LOWER(TRIM($1))
-          OR (m.display_name IS NOT NULL AND m.display_name <> '' AND LOWER(TRIM(m.display_name)) = LOWER(TRIM($1)))
-          OR (
-            m.name IS NOT NULL AND m.name <> ''
-            AND m.variant IS NOT NULL AND m.variant <> ''
-            AND LOWER(TRIM($1)) LIKE LOWER(TRIM(m.name)) || ' %'
-            AND LOWER(TRIM($1)) LIKE '%' || LOWER(TRIM(m.variant))
-          )
-        )
+        WHERE ri.recipe_id = $1
         GROUP BY i.id
-      `, [item.item_name, outletId]);
+      `, [item.internal_recipe_id]);
 
       if (ingRes.rows.length === 0) {
         unmatchedMenus.push(item.item_name);

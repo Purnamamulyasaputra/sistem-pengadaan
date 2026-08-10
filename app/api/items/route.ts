@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     categoryId: searchParams.get('category_id') ?? undefined,
     search: searchParams.get('search') ?? undefined,
     activeOnly: searchParams.get('active_only') !== 'false',
+    parentOnly: searchParams.get('parent_only') === 'true', // Hanya Induk (untuk monitoring stok & opname)
   });
   return NextResponse.json({ success: true, message: 'OK', data: items });
 }
@@ -59,10 +60,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: 'Item berhasil ditambahkan', data: item }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === '23505') {
+  } catch (error: unknown) {
+    const pgError = error as { code?: string; message?: string };
+    if (pgError.code === '23505') {
       return NextResponse.json({ success: false, message: 'Gagal menambahkan: Barcode sudah digunakan oleh barang lain.', data: null }, { status: 400 });
     }
-    return NextResponse.json({ success: false, message: 'Gagal menambahkan: ' + error.message, data: null }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Gagal menambahkan: ' + (error instanceof Error ? error.message : 'Unknown error'), data: null }, { status: 500 });
   }
 }
