@@ -1,4 +1,5 @@
-import { query } from '@/lib/db';
+import { query, withTransaction } from '@/lib/db';
+import { PoolClient } from 'pg';
 
 export interface LocalPurchaseItem {
   item_id: number;
@@ -14,11 +15,9 @@ export async function createLocalPurchase(
   totalAmount: number,
   items: LocalPurchaseItem[]
 ) {
-  // Use a transaction
-  await query('BEGIN');
-  try {
+  return withTransaction(async (client: PoolClient) => {
     // 1. Insert local purchase
-    const purchaseRes = await query(
+    const purchaseRes = await client.query(
       `INSERT INTO outlet_local_purchases (outlet_id, purchase_date, receipt_url, total_amount)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [outletId, purchaseDate, receiptUrl, totalAmount]
@@ -27,19 +26,19 @@ export async function createLocalPurchase(
 
     for (const item of items) {
       // Get conversion ratio
-      const itemRes = await query(`SELECT conversion_ratio FROM items WHERE id = $1`, [item.item_id]);
+      const itemRes = await client.query(`SELECT conversion_ratio FROM items WHERE id = $1`, [item.item_id]);
       const conversionRatio = Number(itemRes.rows[0]?.conversion_ratio || 1);
       const stockAdded = item.qty * conversionRatio;
 
       // 2. Insert items
-      await query(
+      await client.query(
         `INSERT INTO outlet_local_purchase_items (purchase_id, item_id, qty, price_per_unit, subtotal)
          VALUES ($1, $2, $3, $4, $5)`,
         [purchaseId, item.item_id, item.qty, item.price_per_unit, item.subtotal]
       );
 
       // 3. Get current physical stock to calculate ending balance and HPP
-      const stockRes = await query(
+      const stockRes = await client.query(
         `SELECT current_balance FROM outlet_stocks WHERE outlet_id = $1 AND item_id = $2`,
         [outletId, item.item_id]
       );
@@ -47,7 +46,7 @@ export async function createLocalPurchase(
       const newQty = currentQty + stockAdded;
 
       // 4. Upsert into outlet_stocks
-      await query(
+      await client.query(
         `INSERT INTO outlet_stocks (outlet_id, item_id, current_balance, updated_at)
          VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
          ON CONFLICT (outlet_id, item_id) DO UPDATE SET current_balance = EXCLUDED.current_balance, updated_at = EXCLUDED.updated_at`,
@@ -55,23 +54,23 @@ export async function createLocalPurchase(
       );
 
       // 5. Log movement into outlet_inventory_logs
-      await query(
+      await client.query(
         `INSERT INTO outlet_inventory_logs (outlet_id, item_id, movement_type, qty_change, ending_balance, reference_type, reference_id)
          VALUES ($1, $2, 'LOCAL_PURCHASE', $3, $4, 'OUTLET_LOCAL_PURCHASE', $5)`,
         [outletId, item.item_id, stockAdded, newQty, purchaseId]
       );
 
       // 6. Recalculate Global HPP (items.current_average_price)
-      const globalStockRes = await query(
+      const globalStockRes = await client.query(
         `SELECT 
-           COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1), 0) +
+           COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1), 0) +
            COALESCE((SELECT SUM(current_balance) FROM outlet_stocks WHERE item_id = $1), 0) AS total_stock`,
         [item.item_id]
       );
       const totalStock = Number(globalStockRes.rows[0]?.total_stock || 0);
       const oldStock = Math.max(0, totalStock - stockAdded);
 
-      const hppRes = await query(
+      const hppRes = await client.query(
         `SELECT current_average_price FROM items WHERE id = $1 FOR UPDATE`,
         [item.item_id]
       );
@@ -81,24 +80,48 @@ export async function createLocalPurchase(
       const pricePerSmallestUnit = item.price_per_unit / conversionRatio;
       const newAvg = totalStock === 0 ? 0 : ((oldStock * currentAvg) + (stockAdded * pricePerSmallestUnit)) / totalStock;
 
-      await query(
+      await client.query(
         `UPDATE items SET current_average_price = $1, last_purchase_price = $2, updated_at = NOW() WHERE id = $3`,
         [newAvg, pricePerSmallestUnit, item.item_id]
       );
+
+      // If it's a brand (has parent), update the parent's HPP as well
+      const parentCheck = await client.query(`SELECT parent_id FROM items WHERE id = $1`, [item.item_id]);
+      const parentId = parentCheck.rows[0]?.parent_id;
+      if (parentId) {
+        // Fetch parent global stock
+        const parentStockRes = await client.query(
+          `SELECT 
+             COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1), 0) +
+             COALESCE((SELECT SUM(current_balance) FROM outlet_stocks WHERE item_id = $1), 0) AS total_stock`,
+          [parentId]
+        );
+        const parentTotalStock = Number(parentStockRes.rows[0]?.total_stock || 0);
+        const parentOldStock = Math.max(0, parentTotalStock - stockAdded);
+
+        const parentHppRes = await client.query(`SELECT current_average_price FROM items WHERE id = $1 FOR UPDATE`, [parentId]);
+        const parentCurrentAvg = Number(parentHppRes.rows[0]?.current_average_price || 0);
+        
+        const parentNewAvg = parentTotalStock === 0 ? 0 : ((parentOldStock * parentCurrentAvg) + (stockAdded * pricePerSmallestUnit)) / parentTotalStock;
+
+        await client.query(
+          `UPDATE items SET current_average_price = $1, last_purchase_price = $2, updated_at = NOW() WHERE id = $3`,
+          [parentNewAvg, pricePerSmallestUnit, parentId]
+        );
+      }
     }
 
     // 7. Sync Menus HPP
-    const itemIds = items.map(i => i.item_id);
+    const itemIdsToSync = new Set<number>();
+    for (const i of items) {
+       itemIdsToSync.add(i.item_id);
+       const pc = await client.query(`SELECT parent_id FROM items WHERE id = $1`, [i.item_id]);
+       if (pc.rows[0]?.parent_id) itemIdsToSync.add(pc.rows[0].parent_id);
+    }
+    const itemIds = Array.from(itemIdsToSync);
+
     if (itemIds.length > 0) {
-      // Import the sync function dynamically to avoid circular dependencies if any
-      const { syncMenuHppByItems } = await import('@/lib/queries/hpp');
-      // We pass null for client because syncMenuHppByItems uses query internally if client is not provided, 
-      // wait, syncMenuHppByItems requires a PoolClient.
-      // But query() doesn't expose the client. I'll just run the sync logic directly or let a background job do it.
-      // Let's just require the user to view the updated items in HPP menu.
-      // Wait, syncMenuHppByItems takes a PoolClient. Let's just import and call it with a fresh connection if needed, 
-      // or we can write the sync logic directly since it's just two UPDATE statements.
-      await query(`
+      await client.query(`
         UPDATE recipe_ingredients ri
         SET cost_per_unit = COALESCE(it.current_average_price, i.standard_cost_per_unit),
             extension = ri.quantity * COALESCE(it.current_average_price, i.standard_cost_per_unit)
@@ -107,7 +130,7 @@ export async function createLocalPurchase(
         WHERE ri.ingredient_id = i.id AND i.item_id = ANY($1::int[])
       `, [itemIds]);
 
-      await query(`
+      await client.query(`
         WITH recipe_totals AS (
           SELECT recipe_id, SUM(extension) as total_cost FROM recipe_ingredients GROUP BY recipe_id
         )
@@ -120,7 +143,7 @@ export async function createLocalPurchase(
         )
       `, [itemIds]);
 
-      await query(`
+      await client.query(`
         WITH recipe_totals AS (
           SELECT recipe_id, SUM(extension) as total_cost FROM recipe_ingredients GROUP BY recipe_id
         )
@@ -137,12 +160,8 @@ export async function createLocalPurchase(
       `, [itemIds]);
     }
 
-    await query('COMMIT');
     return purchaseId;
-  } catch (err) {
-    await query('ROLLBACK');
-    throw err;
-  }
+  });
 }
 
 export async function getLocalPurchases(outletId?: number, date?: string) {

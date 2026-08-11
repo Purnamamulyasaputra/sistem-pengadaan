@@ -16,7 +16,7 @@ interface PO {
 }
 
 interface Vendor { id: number; name: string; is_active?: boolean; email?: string; phone?: string; }
-interface Item { id: number; name: string; purchase_unit: string; smallest_unit?: string; conversion_ratio: number; current_average_price: number; parent_id?: number | null; has_children?: boolean; }
+interface Item { id: number; name: string; purchase_unit: string; smallest_unit?: string; conversion_ratio: number; current_average_price: number; last_purchase_price?: number; parent_id?: number | null; has_children?: boolean; }
 interface Outlet { id: number; name: string; is_active?: boolean; }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
@@ -50,7 +50,7 @@ export default function PurchaseOrdersPage() {
     if (message) setToast({ isOpen: true, message, type: 'error' });
   };
   const [form, setForm] = useState({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
-  const [lines, setLines] = useState<{ type: string; parent_id?: string | number; item_id: string | number; description: string; qty: string | number; unit_price: string | number; tax_percent: string | number; disc_percent: string | number }[]>([{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }]);
+  const [lines, setLines] = useState<{ type: string; parent_id?: string | number; item_id: string | number; description: string; qty: string | number; unit_price: string | number; tax_percent: string | number; disc_percent: string | number }[]>([{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '0', disc_percent: '0' }]);
   const [draftPO, setDraftPO] = useState<PO | null>(null);
   const [activeTab, setActiveTab] = useState('Bahan / Produk');
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
@@ -113,7 +113,7 @@ export default function PurchaseOrdersPage() {
   }, []);
 
   function addLine() {
-    setLines(l => [{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0' }, ...l]);
+    setLines(l => [{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '0', disc_percent: '0' }, ...l]);
   }
 
   function addNote() {
@@ -163,9 +163,9 @@ export default function PurchaseOrdersPage() {
               unit_price: (() => {
                 if (hasBrands) return ''; // user must select brand to get price
                 if (!item) return '0';
-                return String(Math.round((item.current_average_price || 0) * conversion));
+                return String(Math.round((item.last_purchase_price || item.current_average_price || 0) * conversion));
               })(),
-              tax_percent: '11',
+              tax_percent: '0',
               disc_percent: '0',
               purchase_unit: item ? item.purchase_unit : a.smallest_unit,
             };
@@ -186,8 +186,8 @@ export default function PurchaseOrdersPage() {
   function handleItemTextChange(lineIdx: number, text: string) {
     const item = items.find(i => i.name === text);
     if (item) {
-      // Gunakan current_average_price (Harga Pokok dari Master Data)
-      const prefillPricePerUnit = Math.round((item.current_average_price || 0) * (item.conversion_ratio || 1));
+      // Gunakan last_purchase_price atau current_average_price (Harga dari Master Data)
+      const prefillPricePerUnit = Math.round((item.last_purchase_price || item.current_average_price || 0) * (item.conversion_ratio || 1));
       setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: String(item.id), description: text, unit_price: String(prefillPricePerUnit), purchase_unit: item.purchase_unit || '', package_qty: '', package_inner_size: '', conversion_ratio: item.conversion_ratio ? String(item.conversion_ratio) : '' } : line));
     } else {
       setLines(l => l.map((line, idx) => idx === lineIdx ? { ...line, item_id: '', description: text } : line));
@@ -308,7 +308,7 @@ export default function PurchaseOrdersPage() {
       conversion_ratio: i.conversion_ratio ? String(i.conversion_ratio) : ''
     }));
 
-    setLines(fetchedLines.length ? fetchedLines : [{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
+    setLines(fetchedLines.length ? fetchedLines : [{ type: 'product', parent_id: '', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '0', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' }]);
     setActiveTab('Bahan / Produk');
     setShowModal(true);
   }
@@ -545,7 +545,7 @@ export default function PurchaseOrdersPage() {
               setError('');
               setDraftPO(null);
               setForm({ vendor_id: '', vendor_reference: '', deliver_to: 'Gudang Cihapit', destination_outlet_id: '', order_date: new Date().toISOString().split('T')[0], order_deadline: '', payment_terms: '', internal_notes: '' });
-              setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '11', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' } as any]);
+              setLines([{ type: 'product', item_id: '', description: '', qty: '', unit_price: '', tax_percent: '0', disc_percent: '0', purchase_unit: '', package_qty: '', package_inner_size: '', conversion_ratio: '' } as any]);
               setActiveTab('Bahan / Produk');
               setShowModal(true);
             }}>Buat PO</button>
@@ -895,14 +895,14 @@ export default function PurchaseOrdersPage() {
                         <table style={{ margin: 0, width: '100%' }}>
                           <thead>
                             <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                              <th style={{ padding: '12px 0', paddingRight: '16px', minWidth: 200, maxWidth: 280 }}>Bahan / Produk</th>
-                              <th className="right" style={{ minWidth: 80 }}>Kuantitas</th>
-                              <th className="center" style={{ minWidth: 220 }}>Satuan</th>
-                              <th className="right" style={{ minWidth: 130 }}>Harga Satuan</th>
-                              <th className="right" style={{ minWidth: 70 }}>Pajak %</th>
-                              <th className="right" style={{ minWidth: 70 }}>Diskon %</th>
-                              <th className="right" style={{ minWidth: 140 }}>Jumlah</th>
-                              <th style={{ width: 40 }}></th>
+                              <th style={{ padding: '12px 0', paddingRight: '8px', minWidth: 140, maxWidth: 200 }}>Bahan / Produk</th>
+                              <th className="right" style={{ minWidth: 70 }}>Kuantitas</th>
+                              <th className="center" style={{ minWidth: 120 }}>Satuan</th>
+                              <th className="right" style={{ minWidth: 110 }}>Harga Satuan</th>
+                              <th className="right" style={{ minWidth: 60 }}>Pajak %</th>
+                              <th className="right" style={{ minWidth: 60 }}>Diskon %</th>
+                              <th className="right" style={{ minWidth: 120 }}>Jumlah</th>
+                              <th style={{ width: 30 }}></th>
                             </tr>
                           </thead>
                           <tbody style={{ background: '#fff' }}>
@@ -915,7 +915,7 @@ export default function PurchaseOrdersPage() {
                                     </td>
                                     <td colSpan={6}></td>
                                     <td className="center" style={{ padding: '6px 4px' }}>
-                                      <button onClick={() => removeLine(idx)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                                      <button onClick={() => removeLine(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                                       </button>
                                     </td>
@@ -924,7 +924,7 @@ export default function PurchaseOrdersPage() {
                               }
                               return (
                                 <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                  <td style={{ padding: '6px 16px', position: 'relative' }}>
+                                  <td style={{ padding: '6px 8px', position: 'relative' }}>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                       <Select
                                         value={String(line.parent_id || line.item_id || '')}
@@ -940,7 +940,7 @@ export default function PurchaseOrdersPage() {
                                             updateLine(idx, 'parent_id', String(found.id));
                                             updateLine(idx, 'item_id', String(found.id));
                                             updateLine(idx, 'description', found.name);
-                                            const price = Math.round((found.current_average_price || 0) * (found.conversion_ratio || 1));
+                                            const price = Math.round((found.last_purchase_price || found.current_average_price || 0) * (found.conversion_ratio || 1));
                                             updateLine(idx, 'unit_price', String(price));
                                             updateLine(idx, 'purchase_unit', found.purchase_unit || '');
                                           }
@@ -963,7 +963,7 @@ export default function PurchaseOrdersPage() {
                                                 if (!foundBrand) return;
                                                 updateLine(idx, 'item_id', String(foundBrand.id));
                                                 updateLine(idx, 'description', foundBrand.name);
-                                                const price = Math.round((foundBrand.current_average_price || 0) * (foundBrand.conversion_ratio || 1));
+                                                const price = Math.round((foundBrand.last_purchase_price || foundBrand.current_average_price || 0) * (foundBrand.conversion_ratio || 1));
                                                 updateLine(idx, 'unit_price', String(price));
                                                 updateLine(idx, 'purchase_unit', foundBrand.purchase_unit || '');
                                               }}
@@ -979,10 +979,10 @@ export default function PurchaseOrdersPage() {
                                       )}
                                     </div>
                                   </td>
-                                  <td style={{ padding: '6px 16px' }}>
+                                  <td style={{ padding: '6px 8px' }}>
                                     <input type="text" className="po-table-input transparent-input right" value={line.qty === '0' ? '' : (line.qty ? Number(line.qty).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'qty', raw); }} onFocus={e => e.target.select()} placeholder="0" />
                                   </td>
-                                  <td className="center" style={{ padding: '8px 12px', minWidth: 150 }}>
+                                  <td className="center" style={{ padding: '8px 8px' }}>
                                     <div style={{ color: '#334155', fontWeight: 600, fontSize: 14 }}>
                                       {line.item_id ? ((items.find((i: any) => String(i.id) === line.item_id) as any)?.purchase_unit || (line as any).purchase_unit || '-') : ((line as any).purchase_unit || '-')}
                                     </div>
@@ -992,16 +992,16 @@ export default function PurchaseOrdersPage() {
                                       </div>
                                     )}
                                   </td>
-                                  <td style={{ padding: '6px 16px' }}>
+                                  <td style={{ padding: '6px 8px' }}>
                                     <input type="text" className="po-table-input transparent-input right" value={line.unit_price === '0' ? '' : (line.unit_price ? Number(line.unit_price).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'unit_price', raw); }} onFocus={e => e.target.select()} placeholder="0" />
                                   </td>
-                                  <td style={{ padding: '6px 16px' }}>
+                                  <td style={{ padding: '6px 8px' }}>
                                     <input type="text" className="po-table-input transparent-input right" value={line.tax_percent === '0' ? '' : (line.tax_percent ? Number(line.tax_percent).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'tax_percent', raw); }} onFocus={e => e.target.select()} placeholder="0" />
                                   </td>
-                                  <td style={{ padding: '6px 16px' }}>
+                                  <td style={{ padding: '6px 8px' }}>
                                     <input type="text" className="po-table-input transparent-input right" value={line.disc_percent === '0' ? '' : (line.disc_percent ? Number(line.disc_percent).toLocaleString('id-ID') : '')} onChange={e => { const raw = e.target.value.replace(/\./g, ''); if (/^\d*$/.test(raw)) updateLine(idx, 'disc_percent', raw); }} onFocus={e => e.target.select()} placeholder="0" />
                                   </td>
-                                  <td style={{ padding: '6px 16px' }}>
+                                  <td style={{ padding: '6px 8px' }}>
                                     <input
                                       type="text"
                                       className="po-table-input transparent-input right font-bold"
@@ -1025,7 +1025,7 @@ export default function PurchaseOrdersPage() {
                                     />
                                   </td>
                                   <td className="center" style={{ padding: '6px 4px' }}>
-                                    <button onClick={() => removeLine(idx)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                                    <button onClick={() => removeLine(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
                                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                                     </button>
                                   </td>

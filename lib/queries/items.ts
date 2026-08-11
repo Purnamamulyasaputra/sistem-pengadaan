@@ -58,12 +58,13 @@ export async function getItems(opts?: { categoryId?: string; search?: string; ac
   const result = await query<Item & { current_stock?: number }>(
     `SELECT i.*, c.name AS category_name,
             COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock,
-            (i.ingredient_id IS NOT NULL OR ing.id IS NOT NULL) AS is_hpp,
-            ing.name AS ingredient_name,
+            (i.ingredient_id IS NOT NULL OR ing_by_item.id IS NOT NULL) AS is_hpp,
+            COALESCE(ing_by_id.name, ing_by_item.name) AS ingredient_name,
             EXISTS(SELECT 1 FROM items child WHERE child.parent_id = i.id) AS has_children
      FROM items i
      LEFT JOIN categories c ON c.id = i.category_id
-     LEFT JOIN ingredients ing ON (ing.id = i.ingredient_id OR ing.item_id = i.id)
+     LEFT JOIN ingredients ing_by_id ON ing_by_id.id = i.ingredient_id
+     LEFT JOIN ingredients ing_by_item ON ing_by_item.item_id = i.id
      ${where}
      ORDER BY COALESCE(i.parent_id, i.id), i.parent_id IS NOT NULL, i.name`,
     params
@@ -75,12 +76,13 @@ export async function getItemById(id: number) {
   const result = await query<Item & { current_stock?: number; is_hpp?: boolean; ingredient_name?: string }>(
     `SELECT i.*, c.name AS category_name,
             COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock,
-            (i.ingredient_id IS NOT NULL OR ing.id IS NOT NULL) AS is_hpp,
-            ing.name AS ingredient_name,
+            (i.ingredient_id IS NOT NULL OR ing_by_item.id IS NOT NULL) AS is_hpp,
+            COALESCE(ing_by_id.name, ing_by_item.name) AS ingredient_name,
             EXISTS(SELECT 1 FROM items child WHERE child.parent_id = i.id) AS has_children
      FROM items i
      LEFT JOIN categories c ON c.id = i.category_id
-     LEFT JOIN ingredients ing ON (ing.id = i.ingredient_id OR ing.item_id = i.id)
+     LEFT JOIN ingredients ing_by_id ON ing_by_id.id = i.ingredient_id
+     LEFT JOIN ingredients ing_by_item ON ing_by_item.item_id = i.id
      WHERE i.id = $1`,
     [id]
   );
@@ -126,23 +128,21 @@ export async function createItem(data: {
 
 export async function createItemWithBrands(
   parentData: Parameters<typeof createItem>[0],
-  brands: Array<{ name: string; barcode: string; purchase_price: number; conversion_ratio: number }>
+  brands: Array<{ name: string; barcode: string; purchase_price: number; conversion_ratio: number; purchase_unit?: string; is_active?: boolean }>
 ) {
   return withTransaction(async (client) => {
     // 1. Create Parent
     const parentRes = await client.query(
       `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-       RETURNING id`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULL) RETURNING id`,
       [
         parentData.name, parentData.category_id, parentData.purchase_unit, parentData.smallest_unit, parentData.conversion_ratio,
         parentData.minimum_threshold, parentData.target_stock ?? 0, parentData.threshold_type, parentData.is_perishable,
-        parentData.barcode ?? null, parentData.current_average_price ?? 0, parentData.last_purchase_price ?? parentData.current_average_price ?? 0,
+        parentData.barcode, parentData.current_average_price, parentData.current_average_price,
         parentData.ingredient_id ?? null,
         parentData.is_split_allowed ?? false,
         parentData.min_order_qty ?? 1,
-        parentData.order_multiple ?? 1,
-        null
+        parentData.order_multiple ?? 1
       ]
     );
     const parentId = parentRes.rows[0].id;
@@ -150,17 +150,18 @@ export async function createItemWithBrands(
     // 2. Create Brands
     for (const brand of brands) {
       await client.query(
-        `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+        `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id, is_active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
         [
-          brand.name, parentData.category_id, parentData.purchase_unit, parentData.smallest_unit, brand.conversion_ratio,
+          brand.name, parentData.category_id, brand.purchase_unit || parentData.purchase_unit, parentData.smallest_unit, brand.conversion_ratio,
           parentData.minimum_threshold, parentData.target_stock ?? 0, parentData.threshold_type, parentData.is_perishable,
           brand.barcode, brand.purchase_price, brand.purchase_price,
           parentData.ingredient_id ?? null,
           parentData.is_split_allowed ?? false,
           parentData.min_order_qty ?? 1,
           parentData.order_multiple ?? 1,
-          parentId
+          parentId,
+          brand.is_active ?? true
         ]
       );
     }
@@ -181,7 +182,6 @@ export async function updateItem(id: number, data: Partial<{
   is_active: boolean;
   barcode: string;
   current_average_price: number;
-  /** Harga beli terakhir per satuan terkecil */
   last_purchase_price: number;
   ingredient_id: number | null;
   is_split_allowed: boolean;
@@ -193,6 +193,8 @@ export async function updateItem(id: number, data: Partial<{
     barcode: string;
     purchase_price: number;
     conversion_ratio: number;
+    purchase_unit?: string;
+    is_active?: boolean;
   }>;
 }>) {
   const ALLOWED_COLUMNS = [
@@ -259,22 +261,23 @@ export async function updateItem(id: number, data: Partial<{
       for (const brand of data.brands) {
         if (brand.id) {
           await client.query(
-            `UPDATE items SET name=$1, barcode=$2, current_average_price=$3, last_purchase_price=$3, conversion_ratio=$4, updated_at=now() WHERE id=$5`,
-            [brand.name, brand.barcode || null, brand.purchase_price, brand.conversion_ratio, Number(brand.id)]
+            `UPDATE items SET name=$1, barcode=$2, current_average_price=$3, last_purchase_price=$3, conversion_ratio=$4, purchase_unit=$5, is_active=$6, updated_at=now() WHERE id=$7`,
+            [brand.name, brand.barcode || null, brand.purchase_price, brand.conversion_ratio, brand.purchase_unit || updatedItem.purchase_unit, brand.is_active ?? true, Number(brand.id)]
           );
         } else {
           await client.query(
-            `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+            `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id, is_active)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
             [
-              brand.name, updatedItem.category_id, updatedItem.purchase_unit, updatedItem.smallest_unit, brand.conversion_ratio,
+              brand.name, updatedItem.category_id, brand.purchase_unit || updatedItem.purchase_unit, updatedItem.smallest_unit, brand.conversion_ratio,
               updatedItem.minimum_threshold, updatedItem.target_stock, updatedItem.threshold_type, updatedItem.is_perishable,
               brand.barcode || null, brand.purchase_price, brand.purchase_price,
               updatedItem.ingredient_id,
               updatedItem.is_split_allowed,
               updatedItem.min_order_qty,
               updatedItem.order_multiple,
-              id
+              id,
+              brand.is_active ?? true
             ]
           );
         }

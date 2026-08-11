@@ -67,13 +67,15 @@ export async function checkAndCreateAlertBulk(triggerActions: {itemId: number, n
     AND parent_id IS NULL  -- Hanya proses alert untuk Induk, bukan Brand
   `, [itemIds]);
 
-  const itemsMap = new Map(itemRes.rows.map((r: any) => [r.id, r]));
+  // IMPORTANT: PostgreSQL returns all IDs as strings. Cast to Number so that Map lookups
+  // with numeric keys (from triggerActions) work correctly.
+  const itemsMap = new Map(itemRes.rows.map((r: any) => [Number(r.id), r]));
 
   // Also get existing unresolved alerts
   const existingRes = await doQuery(`
     SELECT id, item_id FROM stock_alerts WHERE item_id = ANY($1::int[]) AND is_resolved = FALSE
   `, [itemIds]);
-  const existingAlertsMap = new Map(existingRes.rows.map((r: any) => [r.item_id, r.id]));
+  const existingAlertsMap = new Map(existingRes.rows.map((r: any) => [Number(r.item_id), r.id]));
 
   const alertsToResolve: number[] = [];
   const alertsToInsert: {itemId: number, balance: number, threshold: number}[] = [];
@@ -90,7 +92,7 @@ export async function checkAndCreateAlertBulk(triggerActions: {itemId: number, n
       GROUP BY item_id
     `, [itemsNeedsAvg]);
     for (const row of avgRes.rows) {
-      avgMap.set(row.item_id, parseFloat(row.avg_monthly));
+      avgMap.set(Number(row.item_id), parseFloat(row.avg_monthly));
     }
   }
 

@@ -10,6 +10,16 @@ import { Toast } from '@/components/ui/Toast';
 import { OrderStatusBadge } from '@/components/shared/OrderStatusBadge';
 import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { FileText } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+interface ShoppingListItemState {
+  checked: boolean;
+  qty_adjust: string;
+  notes: string;
+}
 
 interface Order {
   id: number; outlet_name: string; order_date: string; delivery_date: string;
@@ -78,11 +88,15 @@ function RequestsContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [saving, setSaving] = useState<number | null>(null);
   const [toast, setToast] = useState({ open: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
-  const [viewMode, setViewMode] = useState<'by-outlet' | 'by-product'>('by-outlet');
+  const [viewMode, setViewMode] = useState<'by-outlet' | 'by-product' | 'history'>('by-outlet');
+  const [histories, setHistories] = useState<any[]>([]);
   const [aggregatedProducts, setAggregatedProducts] = useState<AggregatedProduct[]>([]);
   const [aggCurrentPage, setAggCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAggProduct, setSelectedAggProduct] = useState<AggregatedProduct | null>(null);
+  const [shoppingListState, setShoppingListState] = useState<Record<number, ShoppingListItemState>>({});
+  const [showPrintConfirm, setShowPrintConfirm] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
   const ITEMS_PER_PAGE = 25;
   const AGG_ITEMS_PER_PAGE = 20;
@@ -113,7 +127,14 @@ function RequestsContent() {
 
     const res = await fetch(`/api/orders/aggregated?${params}`);
     const data = await res.json();
-    setAggregatedProducts(data.data ?? []);
+    if (data.success) {
+      setAggregatedProducts(data.data);
+    }
+    const histRes = await fetch('/api/shopping-list-histories');
+    const histData = await histRes.json();
+    if (histData.success) {
+      setHistories(histData.data);
+    }
     if (!silent) setLoading(false);
     if (!silent) setAggCurrentPage(1);
   }, [statusFilter, startDate, endDate]);
@@ -124,13 +145,13 @@ function RequestsContent() {
     } else {
       fetchAggregated();
     }
-    
+
     // Auto-refresh interval (silent)
     const interval = setInterval(() => {
       if (viewMode === 'by-outlet') fetchOrders(true);
       else fetchAggregated(true);
     }, 15000);
-    
+
     return () => clearInterval(interval);
   }, [viewMode, fetchOrders, fetchAggregated]);
 
@@ -172,10 +193,119 @@ function RequestsContent() {
           items: prev.items.map(i => i.id === orderItemId ? { ...i, ...updates } : i)
         } : null);
       }
-    } finally { setSaving(null); }
+    } catch (e) {
+      console.error(e);
+      setToast({ open: true, message: 'Gagal menolak item', type: 'error' });
+    } finally {
+      setSaving(null);
+    }
   }
 
+  function generatePDFFromTableData(tableData: any[], dateStr: string) {
+    const doc = new jsPDF('portrait');
 
+    doc.setFontSize(14);
+    doc.text('Daftar Belanja Kebutuhan Outlet', 14, 16);
+    doc.setFontSize(9);
+    doc.text(`Tanggal Cetak: ${dateStr}`, 14, 22);
+
+    autoTable(doc, {
+      startY: 28,
+      head: [['Nama Barang', 'Jumlah', 'Catatan', 'Harga Beli', 'Toko']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [1, 110, 63], halign: 'center' }, // Sunrise Daily green
+      columnStyles: {
+        0: { cellWidth: 50 },
+        1: { halign: 'center', cellWidth: 30 },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 35 }
+      },
+      styles: { fontSize: 9, cellPadding: 3, minCellHeight: 10, valign: 'middle' },
+    });
+
+    return doc;
+  }
+
+  function generateShoppingListPDF() {
+    const tableData: any[] = [];
+    aggregatedProducts.forEach(p => {
+      const state = shoppingListState[p.item_id] || {};
+      if (!state.checked) return;
+
+      const neededPurchase = Number(p.total_requested) || 0;
+      const finalQty = state.qty_adjust !== undefined && state.qty_adjust !== '' ? state.qty_adjust : neededPurchase.toLocaleString('id-ID', { maximumFractionDigits: 2 });
+
+      tableData.push([
+        p.item_name,
+        `${finalQty} ${p.unit}`,
+        state.notes || '',
+        '', // Harga Asli (empty for manual input)
+        '' // Nama Toko / Vendor (empty for manual input)
+      ]);
+    });
+
+    if (tableData.length === 0) {
+      setToast({ open: true, message: 'Tidak ada produk yang dipilih / tersedia.', type: 'info' });
+      return null;
+    }
+
+    const dateStr = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+    const doc = generatePDFFromTableData(tableData, dateStr);
+    doc.save('daftar-belanja-pusat.pdf');
+    return true;
+  }
+
+  const handleSaveHistoryAndClear = async () => {
+    const tableData: any[] = [];
+    aggregatedProducts.forEach(p => {
+      const state = shoppingListState[p.item_id] || {};
+      if (!state.checked) return;
+      const neededPurchase = Number(p.total_requested) || 0;
+      const finalQty = state.qty_adjust !== undefined && state.qty_adjust !== '' ? state.qty_adjust : neededPurchase.toLocaleString('id-ID', { maximumFractionDigits: 2 });
+      tableData.push([
+        p.item_name,
+        `${finalQty} ${p.unit}`,
+        state.notes || '',
+        '', 
+        '' 
+      ]);
+    });
+
+    try {
+      await fetch('/api/shopping-list-histories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          created_by: 1,
+          created_by_name: 'Admin Pusat',
+          total_items: tableData.length,
+          print_data: tableData
+        })
+      });
+      const histRes = await fetch('/api/shopping-list-histories');
+      const histData = await histRes.json();
+      if (histData.success) {
+        setHistories(histData.data);
+      }
+    } catch (e) {
+      console.error('Failed to save history', e);
+    }
+    
+    setPdfPreviewUrl(null);
+    setShoppingListState({});
+    setToast({open: true, message: 'Daftar ceklis telah di-reset & riwayat disimpan.', type: 'success'});
+  };
+
+  const handlePrintClick = () => {
+    const hasChecked = Object.values(shoppingListState).some(state => state.checked);
+    if (!hasChecked) {
+      setToast({ open: true, message: 'Harap ceklis minimal satu barang terlebih dahulu untuk dicetak.', type: 'error' });
+      return;
+    }
+    setShowPrintConfirm(true);
+  };
 
   return (
     <section className="screen">
@@ -183,19 +313,25 @@ function RequestsContent() {
       <div className="card">
         <div className="card-head" style={{ alignItems: 'flex-start' }}>
           <div>
-            <h3 style={{ margin: '0 0 12px 0' }}>Rekap Purchase Request (PR)</h3>
-            <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border)' }}>
+            <h3 style={{ margin: '0 0 12px 0' }}>Permintaan Outlet</h3>
+            <div style={{ display: 'flex', gap: 16, borderBottom: '1px solid var(--border)' }}>
               <div
-                style={{ paddingBottom: 8, cursor: 'pointer', fontWeight: viewMode === 'by-outlet' ? 600 : 500, color: viewMode === 'by-outlet' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-outlet' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
+                style={{ paddingBottom: 6, cursor: 'pointer', fontSize: 12, fontWeight: viewMode === 'by-outlet' ? 600 : 500, color: viewMode === 'by-outlet' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-outlet' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
                 onClick={() => setViewMode('by-outlet')}
               >
-                Per Outlet (PO)
+                Per Outlet
               </div>
               <div
-                style={{ paddingBottom: 8, cursor: 'pointer', fontWeight: viewMode === 'by-product' ? 600 : 500, color: viewMode === 'by-product' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-product' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
+                style={{ paddingBottom: 6, cursor: 'pointer', fontSize: 12, fontWeight: viewMode === 'by-product' ? 600 : 500, color: viewMode === 'by-product' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'by-product' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
                 onClick={() => setViewMode('by-product')}
               >
-                Per Produk (Agregat)
+                Per Produk
+              </div>
+              <div
+                style={{ paddingBottom: 6, cursor: 'pointer', fontSize: 12, fontWeight: viewMode === 'history' ? 600 : 500, color: viewMode === 'history' ? 'var(--primary)' : 'var(--muted)', borderBottom: viewMode === 'history' ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: -1 }}
+                onClick={() => setViewMode('history')}
+              >
+                Riwayat Belanja
               </div>
             </div>
           </div>
@@ -226,8 +362,8 @@ function RequestsContent() {
               title="End Date"
             />
             {viewMode === 'by-outlet' && (
-              <Select 
-                value={statusFilter} 
+              <Select
+                value={statusFilter}
                 onChange={val => setStatusFilter(String(val))}
                 options={[
                   { value: '', label: 'Semua Status' },
@@ -240,13 +376,27 @@ function RequestsContent() {
                 inputStyle={{ height: 32 }}
               />
             )}
+            {viewMode === 'by-product' && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                {Object.values(shoppingListState).some(s => s.checked) && (
+                  <Button onClick={() => setShoppingListState({})} variant="outline" style={{ display: 'flex', alignItems: 'center', height: 26, padding: '0 8px', fontSize: 11 }}>
+                    Bersihkan Ceklis
+                  </Button>
+                )}
+                <Button onClick={handlePrintClick} variant="primary" style={{ display: 'flex', alignItems: 'center', gap: 4, height: 26, padding: '0 8px', fontSize: 11 }}>
+                  <FileText size={12} /> Cetak PDF
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="card-body flush">
-          {loading ? (
+          {loading && (
             <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat data...</div>
-          ) : viewMode === 'by-product' ? (
+          )}
+          
+          {!loading && viewMode === 'by-product' && (
             aggregatedProducts.length === 0 ? (
               <div className="empty-state">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
@@ -259,10 +409,30 @@ function RequestsContent() {
                   <Table>
                     <thead>
                       <tr>
-                        <th>Nama Barang</th>
-                        <th className="center">Total Diminta</th>
-                        <th className="center">Stok Pusat</th>
-                        <th className="center">Status</th>
+                        <th style={{ width: 40, textAlign: 'center', padding: '4px 10px' }}>
+                          <input
+                            type="checkbox"
+                            style={{ cursor: 'pointer' }}
+                            checked={
+                              aggregatedProducts.length > 0 &&
+                              aggregatedProducts.every(p => shoppingListState[p.item_id]?.checked)
+                            }
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              const newState = { ...shoppingListState };
+                              aggregatedProducts.forEach(p => {
+                                newState[p.item_id] = { ...newState[p.item_id], checked };
+                              });
+                              setShoppingListState(newState);
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: '4px 10px', fontSize: 11 }}>Nama Barang</th>
+                        <th className="center" style={{ padding: '4px 10px', fontSize: 11 }}>Diminta Outlet</th>
+                        <th className="center" style={{ padding: '4px 10px', fontSize: 11 }}>Stok Gudang</th>
+                        <th className="center" style={{ padding: '4px 10px', fontSize: 11 }}>Beli (Edit)</th>
+                        <th style={{ padding: '4px 10px', fontSize: 11 }}>Catatan Belanja</th>
+                        <th className="center" style={{ padding: '4px 10px', fontSize: 11 }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -273,7 +443,7 @@ function RequestsContent() {
                           const neededPurchase = Number(p.total_requested) || 0;
                           const neededRaw = neededPurchase * ratio;
                           const stockRaw = Number(p.central_stock) || 0;
-                          
+
                           const stockPurchase = stockRaw / ratio;
 
                           const isShortage = neededRaw > stockRaw;
@@ -282,24 +452,67 @@ function RequestsContent() {
                           const fmtRaw = (num: number) => num.toLocaleString('id-ID');
 
                           return (
-                            <tr 
+                            <tr
                               key={p.item_id}
-                              onClick={() => setSelectedAggProduct(p)}
-                              style={{ cursor: 'pointer' }}
                               className="hover:bg-[#f8fafc] transition-colors"
                             >
-                              <td className="font-bold" style={{ padding: '8px 16px', fontSize: 13 }}>
+                              <td className="center" style={{ padding: '4px 10px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={shoppingListState[p.item_id]?.checked || false}
+                                  onChange={(e) => {
+                                    setShoppingListState(prev => ({
+                                      ...prev,
+                                      [p.item_id]: { ...(prev[p.item_id] || {}), checked: e.target.checked }
+                                    }));
+                                  }}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                              </td>
+                              <td className="font-bold text-primary" style={{ padding: '4px 10px', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelectedAggProduct(p)}>
                                 {p.item_name}
                               </td>
-                              <td className="center" style={{ padding: '8px 16px' }}>
-                                <div className="font-bold text-primary" style={{ fontSize: 13 }}>{fmt(neededPurchase)} {p.unit}</div>
+                              <td className="center" style={{ padding: '4px 10px' }}>
+                                <div className="font-bold text-primary" style={{ fontSize: 12 }}>{fmt(neededPurchase)} <span style={{ fontSize: 11, fontWeight: 'normal' }}>{p.unit}</span></div>
                                 {ratio > 1 && <div className="muted" style={{ fontSize: 10 }}>({fmtRaw(neededRaw)} {p.smallest_unit})</div>}
                               </td>
-                              <td className="center" style={{ padding: '8px 16px' }}>
-                                <div className="text-dark" style={{ fontSize: 13 }}>{fmt(stockPurchase)} {p.unit}</div>
+                              <td className="center" style={{ padding: '4px 10px', cursor: 'pointer' }} onClick={() => setSelectedAggProduct(p)}>
+                                <div className="text-dark" style={{ fontSize: 12 }}>{fmt(stockPurchase)} <span style={{ fontSize: 11 }}>{p.unit}</span></div>
                                 {ratio > 1 && <div className="muted" style={{ fontSize: 10 }}>({fmtRaw(stockRaw)} {p.smallest_unit})</div>}
                               </td>
-                              <td className="center" style={{ padding: '8px 16px' }}>
+                              <td className="center" style={{ padding: '4px 10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                  <input
+                                    type="text"
+                                    className="input right font-bold"
+                                    style={{ width: 50, height: 26, padding: '2px 6px', fontSize: 12, borderColor: shoppingListState[p.item_id]?.qty_adjust ? 'var(--primary)' : 'var(--border)' }}
+                                    value={shoppingListState[p.item_id]?.qty_adjust !== undefined ? shoppingListState[p.item_id].qty_adjust : neededPurchase}
+                                    onChange={(e) => {
+                                      setShoppingListState(prev => ({
+                                        ...prev,
+                                        [p.item_id]: { ...(prev[p.item_id] || {}), qty_adjust: e.target.value, checked: true } // Auto check on edit
+                                      }));
+                                    }}
+                                  />
+                                  <span className="muted" style={{ fontSize: 11 }}>{p.unit}</span>
+                                </div>
+                              </td>
+                              <td style={{ padding: '4px 10px' }}>
+                                <input
+                                  type="text"
+                                  className="input"
+                                  placeholder="Catatan..."
+                                  style={{ width: '100%', minWidth: 140, height: 26, padding: '2px 6px', fontSize: 11 }}
+                                  value={shoppingListState[p.item_id]?.notes || ''}
+                                  onChange={(e) => {
+                                    setShoppingListState(prev => ({
+                                      ...prev,
+                                      [p.item_id]: { ...(prev[p.item_id] || {}), notes: e.target.value, checked: true } // Auto check on edit
+                                    }));
+                                  }}
+                                />
+                              </td>
+                              <td className="center" style={{ padding: '4px 10px' }}>
                                 {isShortage ? (
                                   <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRadius: 4, background: '#fee2e2', color: '#991b1b' }}>Perlu Restock</span>
                                 ) : (
@@ -330,14 +543,17 @@ function RequestsContent() {
                 })()}
               </>
             )
-          ) : orders.length === 0 ? (
-            <div className="empty-state">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
-              <h4>Belum ada permintaan</h4>
-              <p>Belum ada permintaan masuk dari outlet</p>
-            </div>
-          ) : (
-            <>
+          )}
+
+          {!loading && viewMode === 'by-outlet' && (
+            orders.length === 0 ? (
+              <div className="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
+                <h4>Belum ada permintaan</h4>
+                <p>Belum ada permintaan masuk dari outlet</p>
+              </div>
+            ) : (
+              <>
               <Table>
                 <thead>
                   <tr>
@@ -348,8 +564,8 @@ function RequestsContent() {
                 </thead>
                 <tbody>
                   {(() => {
-                    const filteredOrders = orders.filter(o => 
-                      o.outlet_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    const filteredOrders = orders.filter(o =>
+                      o.outlet_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                       `PO-${new Date(o.order_date).getFullYear()}-${String(o.id).padStart(5, '0')}`.toLowerCase().includes(searchQuery.toLowerCase())
                     );
                     return filteredOrders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => (
@@ -373,8 +589,8 @@ function RequestsContent() {
               </Table>
 
               {(() => {
-                const filteredOrders = orders.filter(o => 
-                  o.outlet_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                const filteredOrders = orders.filter(o =>
+                  o.outlet_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                   `PO-${new Date(o.order_date).getFullYear()}-${String(o.id).padStart(5, '0')}`.toLowerCase().includes(searchQuery.toLowerCase())
                 );
                 if (filteredOrders.length <= ITEMS_PER_PAGE) return null;
@@ -390,6 +606,52 @@ function RequestsContent() {
                   </div>
                 );
               })()}
+            </>
+          )
+        )}
+
+          {!loading && viewMode === 'history' && (
+            <>
+              <Table>
+                  <thead style={{ background: '#f8fafc' }}>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: 'var(--muted)', fontWeight: 600 }}>Tanggal Cetak</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: 'var(--muted)', fontWeight: 600 }}>Dicetak Oleh</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', color: 'var(--muted)', fontWeight: 600 }}>Jumlah Barang</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', color: 'var(--muted)', fontWeight: 600 }}>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {histories.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>Belum ada riwayat cetak PDF.</td>
+                      </tr>
+                    ) : (
+                      histories.map(h => (
+                        <tr key={h.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '12px 16px', fontWeight: 500 }}>
+                            {new Date(h.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>{h.created_by_name}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>{h.total_items} item</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <Button 
+                              variant="outline" 
+                              onClick={() => {
+                                const dateStr = new Date(h.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+                                const doc = generatePDFFromTableData(h.print_data, dateStr);
+                                setPdfPreviewUrl(doc.output('datauristring'));
+                              }}
+                              style={{ padding: '4px 8px', fontSize: 12, height: 26, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            >
+                              <FileText size={12} /> Lihat PDF
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+              </Table>
             </>
           )}
         </div>
@@ -431,80 +693,81 @@ function RequestsContent() {
                   {selectedOrder?.items?.map(item => {
                     const isReadOnly = ['SHIPPED', 'COMPLETED', 'DIKIRIM', 'SELESAI'].includes(selectedOrder.order.status);
                     return (
-                    <tr key={item.id}>
-                      <td className="font-bold">{item.item_name}</td>
-                      <td className="muted">{item.category_name}</td>
-                      <td className="right">
-                        <div className="muted num" style={{ fontSize: 13 }}>{parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
-                      </td>
-                      <td className="right">
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                          <input 
-                            type="number"
-                            className="input right font-bold"
-                            style={{ width: 70, height: 28, padding: '2px 8px', backgroundColor: isReadOnly ? '#f1f5f9' : 'white' }}
-                            defaultValue={item.qty_approved ?? item.qty_request}
+                      <tr key={item.id}>
+                        <td className="font-bold">{item.item_name}</td>
+                        <td className="muted">{item.category_name}</td>
+                        <td className="right">
+                          <div className="muted num" style={{ fontSize: 13 }}>{parseFloat(Number(item.qty_request).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}</div>
+                        </td>
+                        <td className="right">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                            <input
+                              type="number"
+                              className="input right font-bold"
+                              style={{ width: 70, height: 28, padding: '2px 8px', backgroundColor: isReadOnly ? '#f1f5f9' : 'white' }}
+                              defaultValue={item.qty_approved ?? item.qty_request}
+                              disabled={isReadOnly}
+                              onBlur={(e) => {
+                                const val = parseFloat(e.target.value);
+                                if (!isNaN(val) && val >= 0) {
+                                  handleUpdateItem(item.id, {
+                                    qty_approved: val,
+                                    approved_smallest_qty: val * Number(item.conversion_ratio || 1)
+                                  });
+                                }
+                              }}
+                            />
+                            <span style={{ fontSize: 13 }}>{item.purchase_unit}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="input"
+                            style={{ width: 140, height: 28, padding: '2px 8px', fontSize: 12, backgroundColor: isReadOnly ? '#f1f5f9' : 'white' }}
+                            placeholder="Alasan / Catatan..."
+                            defaultValue={item.center_notes ?? ''}
                             disabled={isReadOnly}
                             onBlur={(e) => {
-                              const val = parseFloat(e.target.value);
-                              if (!isNaN(val) && val >= 0) {
-                                handleUpdateItem(item.id, { 
-                                  qty_approved: val,
-                                  approved_smallest_qty: val * Number(item.conversion_ratio || 1)
-                                });
+                              if (e.target.value !== (item.center_notes ?? '')) {
+                                handleUpdateItem(item.id, { center_notes: e.target.value });
                               }
                             }}
                           />
-                          <span style={{ fontSize: 13 }}>{item.purchase_unit}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <input 
-                          type="text"
-                          className="input"
-                          style={{ width: 140, height: 28, padding: '2px 8px', fontSize: 12, backgroundColor: isReadOnly ? '#f1f5f9' : 'white' }}
-                          placeholder="Alasan / Catatan..."
-                          defaultValue={item.center_notes ?? ''}
-                          disabled={isReadOnly}
-                          onBlur={(e) => {
-                            if (e.target.value !== (item.center_notes ?? '')) {
-                              handleUpdateItem(item.id, { center_notes: e.target.value });
-                            }
-                          }}
-                        />
-                      </td>
-                      <td className="right">
-                        <div className="font-bold num" style={{ color: Number(item.current_stock) >= (item.approved_smallest_qty ?? item.smallest_unit_qty) ? '#166534' : '#991b1b' }}>
-                          {parseFloat((Number(item.current_stock ?? 0) / Number(item.conversion_ratio || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
-                        </div>
-                      </td>
-                      <td>
-                        <Select
-                          inputStyle={{ height: 30, padding: '2px 8px', ...getFulfillmentStyle(item.fulfillment_status), opacity: isReadOnly ? 0.7 : 1 }}
-                          value={item.fulfillment_status}
-                          onChange={val => handleUpdateItem(item.id, { fulfillment_status: String(val) })}
-                          disabled={isReadOnly}
-                          options={[
-                            { value: 'MENUNGGU', label: 'Menunggu' },
-                            { value: 'SANGGUP', label: 'Sanggup' },
-                            { value: 'TIDAK', label: 'Tidak' }
-                          ]}
-                        />
-                      </td>
-                      <td>
-                        <Select
-                          inputStyle={{ height: 30, padding: '2px 8px', ...getStatusStyle(item.item_status), opacity: isReadOnly ? 0.7 : 1 }}
-                          value={item.item_status}
-                          onChange={val => handleUpdateItem(item.id, { item_status: String(val) })}
-                          disabled={isReadOnly}
-                          options={Object.entries(ITEM_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l as string }))}
-                        />
-                      </td>
-                      <td>
-                        {saving === item.id && <span className="muted" style={{ fontSize: 11 }}>...</span>}
-                      </td>
-                    </tr>
-                  )})}
+                        </td>
+                        <td className="right">
+                          <div className="font-bold num" style={{ color: Number(item.current_stock) >= (item.approved_smallest_qty ?? item.smallest_unit_qty) ? '#166534' : '#991b1b' }}>
+                            {parseFloat((Number(item.current_stock ?? 0) / Number(item.conversion_ratio || 1)).toFixed(3)).toLocaleString('id-ID')} {item.purchase_unit}
+                          </div>
+                        </td>
+                        <td>
+                          <Select
+                            inputStyle={{ height: 30, padding: '2px 8px', ...getFulfillmentStyle(item.fulfillment_status), opacity: isReadOnly ? 0.7 : 1 }}
+                            value={item.fulfillment_status}
+                            onChange={val => handleUpdateItem(item.id, { fulfillment_status: String(val) })}
+                            disabled={isReadOnly}
+                            options={[
+                              { value: 'MENUNGGU', label: 'Menunggu' },
+                              { value: 'SANGGUP', label: 'Sanggup' },
+                              { value: 'TIDAK', label: 'Tidak' }
+                            ]}
+                          />
+                        </td>
+                        <td>
+                          <Select
+                            inputStyle={{ height: 30, padding: '2px 8px', ...getStatusStyle(item.item_status), opacity: isReadOnly ? 0.7 : 1 }}
+                            value={item.item_status}
+                            onChange={val => handleUpdateItem(item.id, { item_status: String(val) })}
+                            disabled={isReadOnly}
+                            options={Object.entries(ITEM_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l as string }))}
+                          />
+                        </td>
+                        <td>
+                          {saving === item.id && <span className="muted" style={{ fontSize: 11 }}>...</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </Table>
             )}
@@ -528,27 +791,27 @@ function RequestsContent() {
               </div>
             </div>
           </div>
-          
+
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             <table className="table" style={{ width: '100%', marginBottom: 0 }}>
               <thead style={{ backgroundColor: '#f8fafc' }}>
                 <tr>
-                  <th style={{ padding: '10px 16px', fontSize: 12, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'left' }}>OUTLET</th>
-                  <th style={{ padding: '10px 16px', fontSize: 12, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'left' }}>TANGGAL</th>
-                  <th style={{ padding: '10px 16px', fontSize: 12, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'right' }}>JUMLAH</th>
-                  <th style={{ padding: '10px 16px', fontSize: 12, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'center' }}>NOMOR PO</th>
+                  <th style={{ padding: '6px 12px', fontSize: 11, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'left' }}>OUTLET</th>
+                  <th style={{ padding: '6px 12px', fontSize: 11, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'left' }}>TANGGAL</th>
+                  <th style={{ padding: '6px 12px', fontSize: 11, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'right' }}>JUMLAH</th>
+                  <th style={{ padding: '6px 12px', fontSize: 11, borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'center' }}>NOMOR PO</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedAggProduct?.breakdown?.map((b, i) => (
                   <tr key={i} style={{ borderBottom: i < (selectedAggProduct.breakdown?.length || 0) - 1 ? '1px solid #e2e8f0' : 'none' }}>
-                    <td style={{ padding: '12px 16px', fontWeight: 600, fontSize: 13, color: 'var(--ink)' }}>{b.outlet_name}</td>
-                    <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--ink)' }}>{formatDate(b.order_date)}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--primary)', fontSize: 13 }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 600, fontSize: 12, color: 'var(--ink)' }}>{b.outlet_name}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--ink)' }}>{formatDate(b.order_date)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--primary)', fontSize: 12 }}>
                       {Number(b.qty).toLocaleString('id-ID', { maximumFractionDigits: 2 })} {selectedAggProduct.unit}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      <Link href={`/requests?open_id=${b.order_id}`} style={{ color: 'var(--primary)', textDecoration: 'underline', fontWeight: 600, fontSize: 13 }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                      <Link href={`/requests?open_id=${b.order_id}`} style={{ color: 'var(--primary)', textDecoration: 'underline', fontWeight: 600, fontSize: 12 }}>
                         PO-{new Date(b.order_date).getFullYear()}-{String(b.order_id).padStart(5, '0')}
                       </Link>
                     </td>
@@ -567,6 +830,30 @@ function RequestsContent() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
             <Button variant="outline" onClick={() => setSelectedAggProduct(null)}>Tutup</Button>
           </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={showPrintConfirm}
+        title="Cetak Daftar Belanja?"
+        message="Apakah anda yakin ingin mencetak daftar belanja? Dokumen akan langsung diunduh."
+        onConfirm={async () => {
+          setShowPrintConfirm(false);
+          const success = generateShoppingListPDF();
+          if (success) {
+            await handleSaveHistoryAndClear();
+          }
+        }}
+        onCancel={() => setShowPrintConfirm(false)}
+        confirmText="Unduh PDF"
+        cancelText="Batal"
+      />
+
+      <Modal isOpen={!!pdfPreviewUrl} onClose={() => setPdfPreviewUrl(null)} title="Pratinjau PDF Riwayat Belanja" maxWidth={900}>
+        <div className="modal-body" style={{ padding: '20px', overflow: 'hidden' }}>
+          {pdfPreviewUrl && (
+            <iframe src={pdfPreviewUrl} style={{ width: '100%', height: 'calc(90vh - 100px)', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f1f5f9' }}></iframe>
+          )}
         </div>
       </Modal>
     </section>

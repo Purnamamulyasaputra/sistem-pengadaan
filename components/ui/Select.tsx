@@ -28,7 +28,7 @@ export function Select({ value, onChange, options, style, className = '', placeh
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({ opacity: 0, position: 'fixed', left: -9999 });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -51,6 +51,7 @@ export function Select({ value, onChange, options, style, className = '', placeh
           left: rect.left,
           width: rect.width,
           zIndex: 99999,
+          opacity: 1,
         });
       };
       
@@ -156,9 +157,13 @@ export function Select({ value, onChange, options, style, className = '', placeh
                   key={opt.value}
                   onClick={() => {
                     if (opt.disabled) return;
-                    onChange(opt.value);
                     setIsOpen(false);
                     setSearchTerm('');
+                    requestAnimationFrame(() => {
+                      setTimeout(() => {
+                        onChange(opt.value);
+                      }, 0);
+                    });
                   }}
                   style={{
                     padding: '8px 12px',
@@ -191,9 +196,13 @@ export function Select({ value, onChange, options, style, className = '', placeh
             {creatable && searchTerm.trim() !== '' && !options.some(o => String(o.label).toLowerCase() === searchTerm.toLowerCase()) && (
               <div
                 onClick={() => {
-                  onChange(searchTerm.trim());
                   setIsOpen(false);
                   setSearchTerm('');
+                  requestAnimationFrame(() => {
+                    setTimeout(() => {
+                      onChange(searchTerm.trim());
+                    }, 0);
+                  });
                 }}
                 style={{
                   padding: '8px 12px',

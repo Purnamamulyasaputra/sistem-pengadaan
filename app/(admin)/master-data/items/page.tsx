@@ -28,7 +28,7 @@ interface Item {
   parent_id?: number | null;
   has_children?: boolean;
 }
-interface BrandForm { id?: string; name: string; barcode: string; purchase_price: string; conversion_ratio: string; current_average_price?: number; last_purchase_price?: number; }
+interface BrandForm { id?: string; name: string; barcode: string; purchase_unit: string; purchase_price: string; conversion_ratio: string; current_average_price?: number; last_purchase_price?: number; is_active?: boolean; }
 interface Category { id: number; name: string; }
 interface Ingredient { id: number; name: string; unit?: string; }
 
@@ -213,10 +213,12 @@ export default function ItemsPage() {
       id: String(child.id),
       name: child.name,
       barcode: child.barcode || `ERC${String(child.id).padStart(5, '0')}`,
+      purchase_unit: child.purchase_unit || '',
       purchase_price: String(Math.round(Number(child.current_average_price ?? 0) * Number(child.conversion_ratio || 1))),
       conversion_ratio: String(child.conversion_ratio),
       current_average_price: child.current_average_price,
-      last_purchase_price: child.last_purchase_price
+      last_purchase_price: child.last_purchase_price,
+      is_active: child.is_active
     }));
     setBrands(childBrands);
     setForm(f => ({ ...f, has_brands: childBrands.length > 0 }));
@@ -240,8 +242,8 @@ export default function ItemsPage() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.category_id || !form.purchase_unit || !form.smallest_unit) {
-      setToastInfo({ show: true, msg: 'Nama, kategori, satuan beli, dan satuan terkecil wajib diisi', type: 'error' });
+    if (!form.name || !form.category_id || (!form.has_brands && !form.purchase_unit) || !form.smallest_unit) {
+      setToastInfo({ show: true, msg: form.has_brands ? 'Nama, kategori, dan satuan terkecil wajib diisi' : 'Nama, kategori, satuan beli, dan satuan terkecil wajib diisi', type: 'error' });
       return;
     }
     setSaving(true);
@@ -252,7 +254,8 @@ export default function ItemsPage() {
 
       const finalRatio = Number(form.conversion_ratio) || 1;
       const finalSmallestUnit = form.smallest_unit;
-      const finalAvgPrice = Number(purchase_price) / finalRatio;
+      const finalAvgPrice = form.has_brands ? 0 : (Number(purchase_price) / finalRatio);
+      const finalPurchaseUnit = form.purchase_unit;
 
       const minThresholdSmall = Number(form.minimum_threshold) * finalRatio;
       const targetStockSmall = Number(form.target_stock) * finalRatio;
@@ -272,6 +275,7 @@ export default function ItemsPage() {
       const payload = {
         ...cleanForm,
         category_id: Number(form.category_id),
+        purchase_unit: finalPurchaseUnit,
         smallest_unit: finalSmallestUnit,
         conversion_ratio: finalRatio,
         minimum_threshold: minThresholdSmall,
@@ -281,13 +285,18 @@ export default function ItemsPage() {
         is_split_allowed: Boolean(form.is_split_allowed),
         min_order_qty: Number(form.min_order_qty || 1),
         order_multiple: Number(form.order_multiple || 1),
-        brands: brands.filter(b => b.name).map(b => ({
-          id: b.id,
-          name: b.name,
-          barcode: b.barcode,
-          purchase_price: Number(b.purchase_price || 0) / finalRatio,
-          conversion_ratio: finalRatio
-        }))
+        brands: brands.filter(b => b.name).map(b => {
+          const brandRatio = Number(b.conversion_ratio) || 1;
+          return {
+            id: b.id,
+            name: b.name,
+            barcode: b.barcode,
+            purchase_unit: b.purchase_unit || form.purchase_unit,
+            purchase_price: Number(b.purchase_price || 0) / brandRatio,
+            conversion_ratio: brandRatio,
+            is_active: b.is_active ?? true
+          };
+        })
       };
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       let data;
@@ -368,7 +377,7 @@ export default function ItemsPage() {
                   { value: '', label: 'Semua Kategori' },
                   ...categories.map(c => ({ value: String(c.id), label: c.name }))
                 ]}
-                style={{ width: 170 }}
+                style={{ width: 155 }}
                 inputStyle={{ height: 34 }}
               />
               <Select
@@ -379,7 +388,7 @@ export default function ItemsPage() {
                   { value: 'PERISHABLE', label: 'Cepat Basi' },
                   { value: 'DURABLE', label: 'Tahan Lama' }
                 ]}
-                style={{ width: 140 }}
+                style={{ width: 125 }}
                 inputStyle={{ height: 34 }}
               />
               <Select
@@ -391,7 +400,7 @@ export default function ItemsPage() {
                   { value: 'MENIPIS', label: stokMenipisCount > 0 ? `Stok Menipis (${stokMenipisCount})` : 'Stok Menipis' },
                   { value: 'AMAN', label: 'Stok Aman' }
                 ]}
-                style={{ width: 170 }}
+                style={{ width: 145 }}
                 inputStyle={{ height: 34 }}
               />
               <Select
@@ -402,7 +411,7 @@ export default function ItemsPage() {
                   { value: '50', label: '50' },
                   { value: '100', label: '100' }
                 ]}
-                style={{ width: 110 }}
+                style={{ width: 75 }}
                 inputStyle={{ height: 34 }}
               />
               {(search || catFilter || filterPerishable || filterStockStatus) && (
@@ -635,24 +644,67 @@ export default function ItemsPage() {
                 </div>
               </div>
 
+              {!form.has_brands && (
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <label className="req">Satuan Beli (Terbesar)</label>
+                    <Select
+                      searchable
+                      creatable
+                      value={form.purchase_unit}
+                      onChange={val => setForm(f => ({ ...f, purchase_unit: String(val) }))}
+                      placeholder="Pilih atau cari..."
+                      options={[
+                        { value: '', label: 'Pilih...' },
+                        ...getUniqueUnits(PURCHASE_UNITS, items.map(i => i.purchase_unit))
+                      ]}
+                    />
+                  </div>
+                  
+                  <div className="form-group" style={{ flex: 1.5, marginBottom: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                      <label className="req" style={{ marginBottom: 0 }}>Isi per 1 {form.purchase_unit || 'Satuan Beli'}</label>
+                      <InfoTooltip
+                        align="left"
+                        width={280}
+                        text={
+                          Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0
+                            ? `1 ${form.purchase_unit} = ${form.conversion_ratio} ${form.smallest_unit} • Harga HPP (Moving Avg): ${fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per ${form.smallest_unit}${editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0
+                              ? ` • Beli Terakhir: ${fmtCurrency(Number(editing.last_purchase_price))} per ${editing.smallest_unit}`
+                              : ''
+                            }`
+                            : 'Masukkan angka konversi dari satuan beli (contoh: 1 Kg berisi 1000 gr).'
+                        }
+                      />
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        className="input"
+                        type="text"
+                        value={formatNumberInput(form.conversion_ratio)}
+                        onChange={e => {
+                          const raw = parseNumberInput(e.target.value);
+                          if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, conversion_ratio: raw }));
+                        }}
+                        style={{ paddingRight: 60 }}
+                      />
+                      <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)' }}>{form.smallest_unit}</span>
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ flex: 1.2, marginBottom: 0 }}>
+                    <label>Harga Beli per {form.purchase_unit || 'Satuan'} (Rp)</label>
+                    <input className="input" type="text" placeholder="0" value={form.purchase_price === '0' || !form.purchase_price ? '' : Number(form.purchase_price).toLocaleString('id-ID')} onChange={e => {
+                      const raw = e.target.value.replace(/\./g, '');
+                      if (/^\d*$/.test(raw)) setForm(f => ({ ...f, purchase_price: raw }));
+                    }} onFocus={e => e.target.select()} />
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: '12px' }}>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                  <label className="req">Satuan Beli (Terbesar)</label>
-                  <Select
-                    searchable
-                    creatable
-                    value={form.purchase_unit}
-                    onChange={val => setForm(f => ({ ...f, purchase_unit: String(val) }))}
-                    placeholder="Pilih atau cari..."
-                    options={[
-                      { value: '', label: 'Pilih...' },
-                      ...getUniqueUnits(PURCHASE_UNITS, items.map(i => i.purchase_unit))
-                    ]}
-                  />
-                </div>
-
-                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                  <label className="req">Satuan Terkecil (Outlet)</label>
+                  <label className="req">Satuan Dasar</label>
                   <Select
                     searchable
                     creatable
@@ -665,53 +717,10 @@ export default function ItemsPage() {
                     ]}
                   />
                 </div>
-
-                <div className="form-group" style={{ flex: 1.5, marginBottom: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label className="req" style={{ marginBottom: 0 }}>Isi per 1 {form.purchase_unit || 'Satuan Beli'}</label>
-                    <InfoTooltip
-                      align="left"
-                      width={280}
-                      text={
-                        Number(form.purchase_price) > 0 && Number(form.conversion_ratio) > 0
-                          ? `1 ${form.purchase_unit} = ${form.conversion_ratio} ${form.smallest_unit} • Harga HPP (Moving Avg): ${fmtCurrency(Number(form.purchase_price) / Number(form.conversion_ratio))} per ${form.smallest_unit}${editing?.last_purchase_price != null && Number(editing.last_purchase_price) > 0
-                            ? ` • Beli Terakhir: ${fmtCurrency(Number(editing.last_purchase_price))} per ${editing.smallest_unit}`
-                            : ''
-                          }`
-                          : 'Masukkan angka konversi dari satuan beli (contoh: 1 Kg berisi 1000 gr).'
-                      }
-                    />
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      className="input"
-                      type="text"
-                      value={formatNumberInput(form.conversion_ratio)}
-                      onChange={e => {
-                        const raw = parseNumberInput(e.target.value);
-                        if (/^\d*\.?\d*$/.test(raw)) setForm(f => ({ ...f, conversion_ratio: raw }));
-                      }}
-                      style={{ paddingRight: 60 }}
-                    />
-                    <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)' }}>{form.smallest_unit}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px' }}>
-                {!form.has_brands && (
-                  <div className="form-group" style={{ flex: 1.2, marginBottom: 0 }}>
-                    <label>Harga Beli per {form.purchase_unit || 'Satuan'} (Rp)</label>
-                    <input className="input" type="text" placeholder="0" value={form.purchase_price === '0' || !form.purchase_price ? '' : Number(form.purchase_price).toLocaleString('id-ID')} onChange={e => {
-                      const raw = e.target.value.replace(/\./g, '');
-                      if (/^\d*$/.test(raw)) setForm(f => ({ ...f, purchase_price: raw }));
-                    }} onFocus={e => e.target.select()} />
-                  </div>
-                )}
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ marginBottom: 0 }}>Batas Min. {form.purchase_unit ? `(${form.purchase_unit})` : ''}</label>
-                    <InfoTooltip align="left" width={230} text="Stok kritis terendah di outlet. Jika stok mencapai angka ini, sistem memberi peringatan merah (Reorder Point)." />
+                    <label style={{ marginBottom: 0 }}>Batas Minimum {form.has_brands ? (form.smallest_unit ? `(${form.smallest_unit})` : '') : (form.purchase_unit ? `(${form.purchase_unit})` : '')}</label>
+                    <InfoTooltip align="left" width={230} text={`Stok kritis terendah di outlet dalam ${form.has_brands ? 'Satuan Dasar' : 'Satuan Beli'}. Jika stok mencapai angka ini, sistem memberi peringatan.`} />
                   </div>
                   <input
                     className="input"
@@ -725,8 +734,8 @@ export default function ItemsPage() {
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ marginBottom: 0 }}>Target Stok. {form.purchase_unit ? `(${form.purchase_unit})` : ''}</label>
-                    <InfoTooltip align="left" width={230} text="Stok ideal/maksimal di outlet. Sistem menghitung saran pembelian berdasarkan selisih Target Stok dikurangi Stok Saat Ini." />
+                    <label style={{ marginBottom: 0 }}>Target Stok {form.has_brands ? (form.smallest_unit ? `(${form.smallest_unit})` : '') : (form.purchase_unit ? `(${form.purchase_unit})` : '')}</label>
+                    <InfoTooltip align="left" width={230} text={`Stok ideal di outlet dalam ${form.has_brands ? 'Satuan Dasar' : 'Satuan Beli'}. Sistem menghitung saran restock dari Target Stok - Stok Saat Ini.`} />
                   </div>
                   <input
                     className="input"
@@ -790,7 +799,7 @@ export default function ItemsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>
-                      Aturan Pengiriman Gudang Pusat
+                      Aturan Pengiriman
                     </span>
                     <InfoTooltip align="left" width={260} text="Mengatur minimal pembelian & kelipatan order outlet ke gudang pusat. Aturan pembulatan kemasan diatur melalui toggle 'Pusat Boleh Kirim Pecahan' di kolom kanan." />
                   </div>
@@ -803,8 +812,8 @@ export default function ItemsPage() {
                 <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                   <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                      <label style={{ marginBottom: 0 }}>Min. Pengiriman ({form.purchase_unit || 'Satuan Pusat'})</label>
-                      <InfoTooltip align="left" width={220} text="Jumlah minimal barang yang harus dipesan dalam 1 kali order." />
+                      <label style={{ marginBottom: 0 }}>Minimal Kirim {form.has_brands ? (form.smallest_unit ? `(${form.smallest_unit})` : '') : (form.purchase_unit ? `(${form.purchase_unit})` : '')}</label>
+                      <InfoTooltip align="left" width={220} text={`Jumlah minimal barang yang harus dipesan dalam 1 kali order (dalam ${form.has_brands ? 'Satuan Dasar' : 'Satuan Beli'}).`} />
                     </div>
                     <input
                       className="input"
@@ -817,8 +826,8 @@ export default function ItemsPage() {
                   </div>
                   <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                      <label style={{ marginBottom: 0 }}>Kelipatan Kirim ({form.purchase_unit || 'Satuan Pusat'})</label>
-                      <InfoTooltip align="left" width={220} text="Pesanan akan dibulatkan sesuai kelipatan angka ini (misal kelipatan 5: pesanan 7 dibulatkan ke 10)." />
+                      <label style={{ marginBottom: 0 }}>Kelipatan Kirim {form.has_brands ? (form.smallest_unit ? `(${form.smallest_unit})` : '') : (form.purchase_unit ? `(${form.purchase_unit})` : '')}</label>
+                      <InfoTooltip align="left" width={220} text={`Pesanan akan dibulatkan sesuai kelipatan angka ini dalam ${form.has_brands ? 'Satuan Dasar' : 'Satuan Beli'}.`} />
                     </div>
                     <input
                       className="input"
@@ -832,80 +841,7 @@ export default function ItemsPage() {
                 </div>
               </div>
 
-              {/* BRANDS SECTION */}
-              {form.has_brands && (
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '14px 16px', marginTop: 4 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: brands.length > 0 ? 12 : 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>
-                    Daftar Brand / Varian
-                  </span>
-                  <Button variant="outline" size="sm" onClick={() => setBrands([...brands, { name: '', barcode: '', purchase_price: form.purchase_price, conversion_ratio: '1' }])}>
-                    + Tambah Brand
-                  </Button>
-                </div>
-                {brands.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {brands.map((brand, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                            <div style={{ flex: 1.4 }}>
-                              <Input label={i === 0 ? "Nama Brand *" : undefined} placeholder="Misal: Susu Diamond" value={brand.name} onChange={e => {
-                                const newBrands = [...brands];
-                                newBrands[i].name = e.target.value;
-                                if (!newBrands[i].barcode) newBrands[i].barcode = autoGenerateSKU(e.target.value, form.name, i);
-                                setBrands(newBrands);
-                              }} />
-                            </div>
-                            <div style={{ flex: 0.9 }}>
-                              <Input label={i === 0 ? "SKU" : undefined} placeholder="Auto / Scan" value={brand.barcode} onChange={e => {
-                                const newBrands = [...brands];
-                                newBrands[i].barcode = e.target.value;
-                                setBrands(newBrands);
-                              }} />
-                            </div>
-                            <div style={{ flex: 1.8 }}>
-                              <div className="form-group" style={{ marginBottom: 0 }}>
-                                {i === 0 && <label className="form-label">Harga Beli {form.purchase_unit || form.smallest_unit ? `per ${form.purchase_unit || form.smallest_unit}` : ''} (Rp)</label>}
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                  <input className="input" type="text" value={brand.purchase_price ? formatNumberInput(Math.round(Number(brand.purchase_price))) : ''} onChange={e => {
-                                    const raw = parseNumberInput(e.target.value);
-                                    if (/^\d*$/.test(raw)) {
-                                      const newBrands = [...brands];
-                                      newBrands[i].purchase_price = raw;
-                                      setBrands(newBrands);
-                                    }
-                                  }} style={{ flex: 1 }} />
-                                  <Button variant="outline" size="sm" style={{ color: '#dc2626', width: 34, height: 34, padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }} onClick={() => {
-                                    if (brand.id) {
-                                      setConfirmDelete({ id: Number(brand.id), name: brand.name } as Item);
-                                      return;
-                                    }
-                                    setBrands(brands.filter((_, idx) => idx !== i));
-                                  }} title="Hapus Brand">
-                                    <Trash2 size={16} />
-                                  </Button>
-                                </div>
-                                {brand.id && (
-                                  <div style={{ marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                    {brand.last_purchase_price != null && Number(brand.last_purchase_price) > 0 && (
-                                      <span style={{ fontSize: 11, background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: 4, fontWeight: 500 }}>
-                                        Beli Terakhir: {fmtCurrency(Number(brand.last_purchase_price))} / {form.smallest_unit}
-                                      </span>
-                                    )}
-                                    {brand.current_average_price != null && Number(brand.current_average_price) > 0 && (
-                                      <span style={{ fontSize: 11, background: '#eff6ff', color: '#1d4ed8', padding: '2px 6px', borderRadius: 4, fontWeight: 500 }}>
-                                        HPP Saat Ini: {fmtCurrency(Number(brand.current_average_price))} / {form.smallest_unit}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                )}
-              </div>
-              )}
+
 
             </div>
 
@@ -917,46 +853,153 @@ export default function ItemsPage() {
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Punya Brand / Varian?</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Punya Brand / Varian?</span>
                   <InfoTooltip text="Aktifkan jika barang dibeli dengan berbagai merk. Harga akan diisi per merk. Bagian bawah 'Daftar Brand' akan terbuka." />
                 </div>
-                <Toggle checked={form.has_brands} onChange={c => setForm(f => ({ ...f, has_brands: c }))} />
+                <Toggle size="sm" checked={form.has_brands} onChange={c => setForm(f => ({ ...f, has_brands: c }))} />
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', margin: '2px 0' }} />
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Pusat Boleh Kirim Pecahan</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Pusat Boleh Kirim Pecahan</span>
                   <InfoTooltip text="Aktif: Pusat boleh kirim angka desimal (contoh: 1,5 Kg). Nonaktif: Wajib kemasan utuh, saran PO dibulatkan ke atas (contoh: 1,5 Kg → 2 Kg)." />
                 </div>
-                <Toggle checked={form.is_split_allowed} onChange={c => setForm(f => ({ ...f, is_split_allowed: c }))} />
+                <Toggle size="sm" checked={form.is_split_allowed} onChange={c => setForm(f => ({ ...f, is_split_allowed: c }))} />
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', margin: '2px 0' }} />
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Barang Cepat Basi</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>Barang Cepat Basi</span>
                   <InfoTooltip text="Aktifkan untuk barang perishable / mudah rusak agar sistem memberi prioritas stok & peringatan." />
                 </div>
-                <Toggle checked={form.is_perishable} onChange={c => setForm(f => ({ ...f, is_perishable: c }))} />
+                <Toggle size="sm" checked={form.is_perishable} onChange={c => setForm(f => ({ ...f, is_perishable: c }))} />
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', margin: '4px 0' }} />
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: form.is_active ? 'var(--primary)' : 'var(--muted)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: form.is_active ? 'var(--primary)' : 'var(--muted)' }}>
                     {form.is_active ? 'Barang Aktif' : 'Nonaktif'}
                   </span>
                   <InfoTooltip text="Barang aktif dapat dipesan oleh outlet. Nonaktifkan untuk menyembunyikan sementara." />
                 </div>
-                <Toggle checked={form.is_active} onChange={c => setForm(f => ({ ...f, is_active: c }))} />
+                <Toggle size="sm" checked={form.is_active} onChange={c => setForm(f => ({ ...f, is_active: c }))} />
               </div>
             </div>
 
           </div>
+
+          {/* BRANDS SECTION (FULL WIDTH) */}
+          {form.has_brands && (
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 20px', marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: brands.length > 0 ? 16 : 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)' }}>
+                Daftar Brand / Varian
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setBrands([...brands, { name: '', barcode: '', purchase_unit: form.purchase_unit || '', purchase_price: form.purchase_price, conversion_ratio: form.conversion_ratio || '1', is_active: true }])}>
+                + Tambah Brand
+              </Button>
+            </div>
+            {brands.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {brands.map((brand, i) => (
+                  <div key={i} style={{ paddingBottom: 12, borderBottom: i === brands.length - 1 ? 'none' : '1px dashed #cbd5e1' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.9fr 0.8fr 1.2fr 100px', gap: 12, alignItems: 'flex-end' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        {i === 0 && <label className="form-label">Nama Brand *</label>}
+                        <input className="input" placeholder="Misal: Susu Diamond" value={brand.name} disabled={brand.is_active === false} onChange={e => {
+                          const newBrands = [...brands];
+                          newBrands[i].name = e.target.value;
+                          if (!newBrands[i].barcode) newBrands[i].barcode = autoGenerateSKU(e.target.value, form.name, i);
+                          setBrands(newBrands);
+                        }} />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        {i === 0 && <label className="form-label">SKU / Barcode</label>}
+                        <input className="input" placeholder="Auto / Scan" value={brand.barcode} disabled={brand.is_active === false} onChange={e => {
+                          const newBrands = [...brands];
+                          newBrands[i].barcode = e.target.value;
+                          setBrands(newBrands);
+                        }} />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        {i === 0 && <label className="form-label">Satuan Beli</label>}
+                        <select className="input" value={brand.purchase_unit} disabled={brand.is_active === false} onChange={e => {
+                          const newBrands = [...brands];
+                          newBrands[i].purchase_unit = e.target.value;
+                          setBrands(newBrands);
+                        }}>
+                          <option value="">-- Pilih --</option>
+                          {PURCHASE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        {i === 0 && <label className="form-label">Isi per Satuan {form.smallest_unit ? `(${form.smallest_unit})` : ''}</label>}
+                        <input className="input" placeholder="Misal: 12" value={brand.conversion_ratio ? formatNumberInput(Number(brand.conversion_ratio)) : ''} disabled={brand.is_active === false} onChange={e => {
+                          const raw = parseNumberInput(e.target.value);
+                          if (/^\d*\.?\d*$/.test(raw)) {
+                            const newBrands = [...brands];
+                            newBrands[i].conversion_ratio = raw;
+                            setBrands(newBrands);
+                          }
+                        }} />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        {i === 0 && <label className="form-label">Harga Beli (Rp)</label>}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <input className="input" type="text" value={brand.purchase_price ? formatNumberInput(Math.round(Number(brand.purchase_price))) : ''} disabled={brand.is_active === false} onChange={e => {
+                            const raw = parseNumberInput(e.target.value);
+                            if (/^\d*$/.test(raw)) {
+                              const newBrands = [...brands];
+                              newBrands[i].purchase_price = raw;
+                              setBrands(newBrands);
+                            }
+                          }} style={{ flex: 1 }} />
+                          {!brand.id && (
+                            <Button variant="outline" size="sm" style={{ color: '#dc2626', width: 38, height: 38, padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }} onClick={() => {
+                              setBrands(brands.filter((_, idx) => idx !== i));
+                            }} title="Hapus Brand">
+                              <Trash2 size={16} />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        {i === 0 && <label className="form-label">Status</label>}
+                        <div style={{ height: 38, display: 'flex', alignItems: 'center' }}>
+                          <Toggle size="sm" checked={brand.is_active ?? true} onChange={c => {
+                            const newBrands = [...brands];
+                            newBrands[i].is_active = c;
+                            setBrands(newBrands);
+                          }} />
+                        </div>
+                      </div>
+                    </div>
+                    {brand.id && (
+                      <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {brand.last_purchase_price != null && Number(brand.last_purchase_price) > 0 && (
+                          <span style={{ fontSize: 11, background: '#dcfce7', color: '#166534', padding: '3px 8px', borderRadius: 4, fontWeight: 500 }}>
+                            Beli Terakhir: {fmtCurrency(Number(brand.last_purchase_price) * Number(brand.conversion_ratio || 1))} / {brand.purchase_unit || 'Satuan'}
+                          </span>
+                        )}
+                        {brand.current_average_price != null && Number(brand.current_average_price) > 0 && (
+                          <span style={{ fontSize: 11, background: '#eff6ff', color: '#1d4ed8', padding: '3px 8px', borderRadius: 4, fontWeight: 500 }}>
+                            HPP Saat Ini: {fmtCurrency(Number(brand.current_average_price) * Number(brand.conversion_ratio || 1))} / {brand.purchase_unit || 'Satuan'}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          )}
         </div>
       </Modal>
 

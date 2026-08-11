@@ -7,14 +7,12 @@ const cabin = Cabin({
   subsets: ["latin"],
   variable: "--font-cabin",
   display: "swap",
-  weight: ["400", "500", "600", "700"],
 });
 
 const albertSans = Albert_Sans({
   subsets: ["latin"],
   variable: "--font-albert-sans",
   display: "swap",
-  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {

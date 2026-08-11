@@ -76,7 +76,7 @@ export async function createDeliveryNote(data: {
          FROM items i
          LEFT JOIN inventory_logs log ON log.item_id = i.id 
          WHERE i.id = ANY($1::int[]) 
-         ORDER BY i.id, log.created_at DESC`,
+         ORDER BY i.id, log.created_at DESC, log.id DESC`,
         [itemIds]
       );
       const balMap = new Map();
@@ -387,7 +387,7 @@ export async function processPublicReceive(data: {
 
         // Atomic transfer: Deduct from central warehouse
         const balRes = await client.query(
-          `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
           [itemId]
         );
         const centralOldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
@@ -599,7 +599,7 @@ export async function confirmReceipt(deliveryNoteId: number, recipientName: stri
         `SELECT DISTINCT ON (item_id) item_id, ending_balance 
          FROM inventory_logs 
          WHERE item_id = ANY($1::int[]) 
-         ORDER BY item_id, created_at DESC`,
+         ORDER BY item_id, created_at DESC, id DESC`,
         [itemIds]
       );
       const balMap = new Map();
@@ -617,7 +617,7 @@ export async function confirmReceipt(deliveryNoteId: number, recipientName: stri
         const centralNewBalance = centralOldBalance - qty;
         balMap.set(Number(dni.item_id), centralNewBalance); // update for next item if duplicate
 
-        centralLog_itemIds.push(dni.item_id);
+        centralLog_itemIds.push(Number(dni.item_id));
         centralLog_qtyChanges.push(-qty);
         centralLog_newBalances.push(centralNewBalance);
       }
@@ -967,7 +967,7 @@ export async function resolveDeliveryNoteIssue(issueId: number, action: 'REPLACE
       const qtyToWriteOff = parseFloat(issue.qty_issue ?? '0');
       if (qtyToWriteOff > 0) {
         const balRes = await client.query(
-          `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          `SELECT ending_balance FROM inventory_logs WHERE item_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
           [issue.item_id]
         );
         const oldBalance = parseFloat(balRes.rows[0]?.ending_balance ?? '0');
@@ -1063,7 +1063,7 @@ export async function approveAndTransferDeliveryNote(deliveryNoteId: number, adm
     // STEP 1 (BULK): Baca saldo pusat sekaligus
     const balRes = await client.query(
       `SELECT DISTINCT ON (item_id) item_id, ending_balance 
-       FROM inventory_logs WHERE item_id = ANY($1::int[]) ORDER BY item_id, created_at DESC`,
+       FROM inventory_logs WHERE item_id = ANY($1::int[]) ORDER BY item_id, created_at DESC, id DESC`,
       [itemIds]
     );
     const balMap = new Map<number, number>();

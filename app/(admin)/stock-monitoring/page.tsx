@@ -77,10 +77,24 @@ export default function StockMonitoringPage() {
   const [filterOutlet, setFilterOutlet] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, KRITIS, AMAN
   const [filterCategory, setFilterCategory] = useState('ALL');
+
+  const [appliedSearchTerm, setAppliedSearchTerm] = useState('');
+  const [appliedFilterOutlet, setAppliedFilterOutlet] = useState('ALL');
+  const [appliedFilterStatus, setAppliedFilterStatus] = useState('ALL');
+  const [appliedFilterCategory, setAppliedFilterCategory] = useState('ALL');
+
+  const applyFilters = () => {
+    setAppliedSearchTerm(searchTerm);
+    setAppliedFilterOutlet(filterOutlet);
+    setAppliedFilterStatus(filterStatus);
+    setAppliedFilterCategory(filterCategory);
+    setCurrentPage(1);
+  };
+
   const [showLegendTooltip, setShowLegendTooltip] = useState(false);
   const [showAllMaterials, setShowAllMaterials] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // State untuk Sync Moka Modal
   const [syncModal, setSyncModal] = useState(false);
@@ -291,34 +305,34 @@ export default function StockMonitoringPage() {
 
   // Filter Items
   const filteredItems = data?.items.filter((item: Item) => {
-    const matchSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchSearch = item.name.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
+      (item.sku && item.sku.toLowerCase().includes(appliedSearchTerm.toLowerCase()));
 
     if (!matchSearch) return false;
-    if (filterCategory !== 'ALL' && String(item.category_id) !== filterCategory) return false;
+    if (appliedFilterCategory !== 'ALL' && String(item.category_id) !== appliedFilterCategory) return false;
 
     // Check outlet usage
-    if (filterOutlet !== 'ALL') {
+    if (appliedFilterOutlet !== 'ALL') {
       // Show all items, just treat as 0 if not exist
     }
 
-    if (filterStatus === 'ALL') return true;
+    if (appliedFilterStatus === 'ALL') return true;
 
     // Status filter
     let hasStatus = false;
-    const outletsToCheck = filterOutlet === 'ALL'
+    const outletsToCheck = appliedFilterOutlet === 'ALL'
       ? data.outlets
-      : data.outlets.filter((o: Outlet) => String(o.id) === filterOutlet);
+      : data.outlets.filter((o: Outlet) => String(o.id) === appliedFilterOutlet);
 
     for (const outlet of outletsToCheck) {
       const rawCell = data.stockMatrix[item.id]?.[outlet.id];
       const qty = typeof rawCell === 'object' && rawCell !== null ? rawCell.stock_smallest : (typeof rawCell === 'number' ? rawCell : 0);
       const status = getStatus(qty, item.minimum_threshold);
-      if (filterStatus === 'KRITIS' && (status === 'KRITIS' || status === 'MENIPIS')) {
+      if (appliedFilterStatus === 'KRITIS' && (status === 'KRITIS' || status === 'MENIPIS')) {
         hasStatus = true;
         break;
       }
-      if (filterStatus === 'AMAN' && status === 'AMAN') {
+      if (appliedFilterStatus === 'AMAN' && status === 'AMAN') {
         hasStatus = true;
         break;
       }
@@ -327,20 +341,20 @@ export default function StockMonitoringPage() {
     return hasStatus;
   });
 
-  // Reset page when filter changes
+  // Reset page when itemsPerPage changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterCategory, filterOutlet, itemsPerPage]);
+  }, [itemsPerPage]);
 
-  const visibleOutlets = filterOutlet === 'ALL'
+  const visibleOutlets = appliedFilterOutlet === 'ALL'
     ? (data?.outlets || [])
-    : (data?.outlets?.filter((o: Outlet) => String(o.id) === filterOutlet) || []);
+    : (data?.outlets?.filter((o: Outlet) => String(o.id) === appliedFilterOutlet) || []);
 
   const totalItems = filteredItems?.length || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const paginatedItems = filteredItems?.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const selectedOutletObj = filterOutlet !== 'ALL' ? data?.outlets?.find(o => String(o.id) === filterOutlet) : undefined;
+  const selectedOutletObj = appliedFilterOutlet !== 'ALL' ? data?.outlets?.find(o => String(o.id) === appliedFilterOutlet) : undefined;
   const selectedSummary = selectedOutletObj ? data?.consumptionMap?.[selectedOutletObj.id] : undefined;
 
   return (
@@ -369,22 +383,22 @@ export default function StockMonitoringPage() {
           </div>
         </div>
 
-        <div className="tabs" style={{ marginBottom: 0, padding: '0 20px', borderBottom: '1px solid var(--border)' }}>
+        <div className="tabs" style={{ marginBottom: 0, padding: '0 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}>
           <button
             onClick={() => setActiveTab('PER_OUTLET')}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'PER_OUTLET' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 13, fontWeight: activeTab === 'PER_OUTLET' ? 600 : 500, color: activeTab === 'PER_OUTLET' ? 'var(--primary)' : 'var(--muted)' }}
+            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'PER_OUTLET' ? '2px solid var(--primary)' : '2px solid transparent', padding: '8px 12px', fontSize: 12, fontWeight: activeTab === 'PER_OUTLET' ? 600 : 500, color: activeTab === 'PER_OUTLET' ? 'var(--primary)' : 'var(--muted)' }}
           >
             Matriks Stok
           </button>
           <button
             onClick={() => setActiveTab('GABUNGAN')}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'GABUNGAN' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 13, fontWeight: activeTab === 'GABUNGAN' ? 600 : 500, color: activeTab === 'GABUNGAN' ? 'var(--primary)' : 'var(--muted)' }}
+            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'GABUNGAN' ? '2px solid var(--primary)' : '2px solid transparent', padding: '8px 12px', fontSize: 12, fontWeight: activeTab === 'GABUNGAN' ? 600 : 500, color: activeTab === 'GABUNGAN' ? 'var(--primary)' : 'var(--muted)' }}
           >
             Total Gabungan
           </button>
           <button
             onClick={() => setActiveTab('HISTORY')}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'HISTORY' ? '2px solid var(--primary)' : '2px solid transparent', padding: '10px 14px', fontSize: 13, fontWeight: activeTab === 'HISTORY' ? 600 : 500, color: activeTab === 'HISTORY' ? 'var(--primary)' : 'var(--muted)' }}
+            style={{ cursor: 'pointer', background: 'none', border: 'none', borderBottom: activeTab === 'HISTORY' ? '2px solid var(--primary)' : '2px solid transparent', padding: '8px 12px', fontSize: 12, fontWeight: activeTab === 'HISTORY' ? 600 : 500, color: activeTab === 'HISTORY' ? 'var(--primary)' : 'var(--muted)' }}
           >
             Histori Distribusi
           </button>
@@ -549,6 +563,9 @@ export default function StockMonitoringPage() {
                   ]}
                   style={{ width: 160 }}
                 />
+                <Button variant="primary" size="sm" onClick={applyFilters} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '0 12px', height: '100%', minHeight: 34 }}>
+                  Terapkan Filter
+                </Button>
               </div>
             </div>
 
@@ -746,6 +763,19 @@ export default function StockMonitoringPage() {
                                 let color = '#0f172a';
                                 if (status === 'KRITIS') color = '#ef4444';
                                 else if (status === 'MENIPIS') color = '#eab308';
+
+                                const isHidden = (appliedFilterStatus === 'KRITIS' && status === 'AMAN') ||
+                                                 (appliedFilterStatus === 'AMAN' && status !== 'AMAN');
+
+                                if (isHidden) {
+                                  return (
+                                    <Fragment key={outlet.id}>
+                                      <td colSpan={7} className="center" style={{ background: '#f8fafc', color: '#cbd5e1', borderRight: '2px solid #cbd5e1', borderBottom: '1px solid #e2e8f0', fontSize: 14 }}>
+                                        -
+                                      </td>
+                                    </Fragment>
+                                  );
+                                }
 
                                 return (
                                   <Fragment key={outlet.id}>

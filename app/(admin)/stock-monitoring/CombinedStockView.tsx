@@ -199,7 +199,7 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                 { value: 'ALL', label: 'Semua Kategori' },
                 ...(categories.map((cat) => ({ value: cat.id.toString(), label: cat.name })))
               ]}
-              style={{ width: 160 }}
+              style={{ minWidth: 150 }}
             />
             <Select
               value={filterStatus}
@@ -209,7 +209,7 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                 { value: 'KRITIS', label: 'Stok Menipis' },
                 { value: 'AMAN', label: 'Stok Aman' }
               ]}
-              style={{ width: 160 }}
+              style={{ minWidth: 140 }}
             />
             <Select
               value={itemsPerPage.toString()}
@@ -218,11 +218,11 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                 setCurrentPage(1);
               }}
               options={[
-                { value: '10', label: '10' },
                 { value: '20', label: '20' },
-                { value: '50', label: '50' }
+                { value: '50', label: '50' },
+                { value: '100', label: '100' }
               ]}
-              style={{ width: 120 }}
+              style={{ width: 70 }}
             />
           </div>
         </div>
@@ -242,27 +242,27 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                 <Table>
                   <thead>
                     <tr>
-                      <th rowSpan={2} style={{ width: 250, minWidth: 250, maxWidth: 250, position: 'sticky', left: 0, zIndex: 20, background: '#fff', verticalAlign: 'middle', borderRight: '1px solid #e2e8f0' }}>Bahan / Produk</th>
-                      <th colSpan={2} className="center" style={{ position: 'sticky', left: 250, zIndex: 20, background: '#fff', whiteSpace: 'nowrap', textAlign: 'center', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>Pusat</th>
+                      <th rowSpan={2} style={{ padding: '8px 12px', fontSize: 11, width: 250, minWidth: 250, maxWidth: 250, position: 'sticky', left: 0, zIndex: 20, background: '#fff', verticalAlign: 'middle', borderRight: '1px solid #e2e8f0' }}>Bahan / Produk</th>
+                      <th colSpan={2} className="center" style={{ padding: '8px 12px', fontSize: 11, position: 'sticky', left: 250, zIndex: 20, background: '#fff', whiteSpace: 'nowrap', textAlign: 'center', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>Pusat</th>
                       {outlets.map(o => (
-                        <th key={o.id} colSpan={2} className="center" style={{ whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>{o.name}</th>
+                        <th key={o.id} colSpan={2} className="center" style={{ padding: '8px 12px', fontSize: 11, whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>{o.name}</th>
                       ))}
-                      <th colSpan={2} className="center" style={{ whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>Total Outlet</th>
-                      <th colSpan={2} className="center" style={{ whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>Total Keseluruhan</th>
+                      <th colSpan={2} className="center" style={{ padding: '8px 12px', fontSize: 11, whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>Total Outlet</th>
+                      <th colSpan={2} className="center" style={{ padding: '8px 12px', fontSize: 11, whiteSpace: 'nowrap', textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>Total Keseluruhan</th>
                     </tr>
                     <tr>
-                      <th className="right" style={{ width: 100, minWidth: 100, position: 'sticky', left: 250, zIndex: 20, background: '#fff', whiteSpace: 'nowrap' }}>Stok</th>
-                      <th className="right" style={{ width: 120, minWidth: 120, position: 'sticky', left: 350, zIndex: 20, background: '#fff', whiteSpace: 'nowrap', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>Nilai (Rp)</th>
+                      <th className="right" style={{ padding: '6px 12px', fontSize: 10, width: 100, minWidth: 100, position: 'sticky', left: 250, zIndex: 20, background: '#fff', whiteSpace: 'nowrap' }}>Stok</th>
+                      <th className="right" style={{ padding: '6px 12px', fontSize: 10, width: 120, minWidth: 120, position: 'sticky', left: 350, zIndex: 20, background: '#fff', whiteSpace: 'nowrap', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>Nilai (Rp)</th>
                       {outlets.map(o => (
                         <Fragment key={o.id}>
-                          <th className="right" style={{ whiteSpace: 'nowrap', minWidth: 100, borderLeft: '1px solid #e2e8f0' }}>Stok</th>
-                          <th className="right" style={{ whiteSpace: 'nowrap', minWidth: 100 }}>Nilai (Rp)</th>
+                          <th className="right" style={{ padding: '6px 12px', fontSize: 10, whiteSpace: 'nowrap', minWidth: 100, borderLeft: '1px solid #e2e8f0' }}>Stok</th>
+                          <th className="right" style={{ padding: '6px 12px', fontSize: 10, whiteSpace: 'nowrap', minWidth: 100 }}>Nilai (Rp)</th>
                         </Fragment>
                       ))}
-                      <th className="right" style={{ whiteSpace: 'nowrap', borderLeft: '1px solid #e2e8f0' }}>Stok</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Nilai (Rp)</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap', borderLeft: '1px solid #e2e8f0' }}>Stok</th>
-                      <th className="right" style={{ whiteSpace: 'nowrap' }}>Nilai (Rp)</th>
+                      <th className="right" style={{ padding: '6px 12px', fontSize: 10, whiteSpace: 'nowrap', borderLeft: '1px solid #e2e8f0' }}>Stok</th>
+                      <th className="right" style={{ padding: '6px 12px', fontSize: 10, whiteSpace: 'nowrap' }}>Nilai (Rp)</th>
+                      <th className="right" style={{ padding: '6px 12px', fontSize: 10, whiteSpace: 'nowrap', borderLeft: '1px solid #e2e8f0' }}>Stok</th>
+                      <th className="right" style={{ padding: '6px 12px', fontSize: 10, whiteSpace: 'nowrap' }}>Nilai (Rp)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -284,9 +284,9 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                         const largeVal = val / ratio;
                         return (
                           <div style={{ whiteSpace: 'nowrap' }}>
-                            <div className="font-bold text-sm">{largeVal.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted font-normal" style={{ fontSize: 11 }}>{item.purchase_unit}</span></div>
+                            <div className="font-bold" style={{ fontSize: 12 }}>{largeVal.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted font-normal" style={{ fontSize: 10 }}>{item.purchase_unit}</span></div>
                             {ratio > 1 && (
-                              <div className="muted" style={{ fontSize: 11 }}>
+                              <div className="muted" style={{ fontSize: 10 }}>
                                 ({val.toLocaleString('id-ID')} {item.smallest_unit})
                               </div>
                             )}
@@ -295,7 +295,7 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
                       };
 
                       const fmtRupiah = (val: number) => {
-                        return <div className="text-sm" style={{ whiteSpace: 'nowrap' }}>{val.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</div>;
+                        return <div style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{val.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</div>;
                       };
 
                       let totalColor = 'var(--primary)'; // Default hijau
@@ -309,33 +309,33 @@ export function CombinedStockView({ categories = [] }: { categories?: { id: numb
 
                       return (
                         <tr key={item.id}>
-                          <td className="font-bold text-sm" style={{ whiteSpace: 'normal', wordWrap: 'break-word', width: 250, minWidth: 250, maxWidth: 250, position: 'sticky', left: 0, zIndex: 10, background: '#fff', borderRight: '1px solid #e2e8f0' }}>{item.item_name}</td>
-                          <td className="right" style={{ position: 'sticky', left: 250, zIndex: 10, background: '#fff' }}>{fmt(central)}</td>
-                          <td className="right" style={{ position: 'sticky', left: 350, zIndex: 10, background: '#fff', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>{fmtRupiah(valPusat)}</td>
+                          <td className="font-bold" style={{ padding: '8px 12px', fontSize: 12, whiteSpace: 'normal', wordWrap: 'break-word', width: 250, minWidth: 250, maxWidth: 250, position: 'sticky', left: 0, zIndex: 10, background: '#fff', borderRight: '1px solid #e2e8f0' }}>{item.item_name}</td>
+                          <td className="right" style={{ padding: '8px 12px', position: 'sticky', left: 250, zIndex: 10, background: '#fff' }}>{fmt(central)}</td>
+                          <td className="right" style={{ padding: '8px 12px', position: 'sticky', left: 350, zIndex: 10, background: '#fff', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)' }}>{fmtRupiah(valPusat)}</td>
                           
                           {outlets.map(o => {
                             const oStock = Number(item.outlet_stocks_map?.[o.id] || 0);
                             const oVal = (Math.max(0, oStock) / ratio) * Math.round(Number(item.current_average_price) * ratio);
                             return (
                               <Fragment key={o.id}>
-                                <td className="right" style={{ background: '#f8fafc', borderLeft: '1px solid #e2e8f0' }}>
+                                <td className="right" style={{ padding: '8px 12px', background: '#f8fafc', borderLeft: '1px solid #e2e8f0' }}>
                                   {fmt(oStock)}
                                 </td>
-                                <td className="right" style={{ background: '#f8fafc' }}>
+                                <td className="right" style={{ padding: '8px 12px', background: '#f8fafc' }}>
                                   {fmtRupiah(oVal)}
                                 </td>
                               </Fragment>
                             );
                           })}
 
-                          <td className="right" style={{ borderLeft: '1px solid #e2e8f0' }}>{fmt(outlet)}</td>
-                          <td className="right">{fmtRupiah(valOutlet)}</td>
-                          <td className="right" style={{ borderLeft: '1px solid #e2e8f0' }}>
+                          <td className="right" style={{ padding: '8px 12px', borderLeft: '1px solid #e2e8f0' }}>{fmt(outlet)}</td>
+                          <td className="right" style={{ padding: '8px 12px' }}>{fmtRupiah(valOutlet)}</td>
+                          <td className="right" style={{ padding: '8px 12px', borderLeft: '1px solid #e2e8f0' }}>
                             <div style={{ color: totalColor }}>
                               {fmt(total)}
                             </div>
                           </td>
-                          <td className="right">
+                          <td className="right" style={{ padding: '8px 12px' }}>
                             <div style={{ color: totalColor, fontWeight: 'bold' }}>
                               {fmtRupiah(valTotal)}
                             </div>

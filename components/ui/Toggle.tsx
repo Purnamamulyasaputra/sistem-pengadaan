@@ -6,9 +6,15 @@ interface ToggleProps {
   onChange: (checked: boolean) => void;
   label?: string;
   className?: string;
+  size?: 'sm' | 'md';
 }
 
-export function Toggle({ checked, onChange, label, className = '' }: ToggleProps) {
+export function Toggle({ checked, onChange, label, className = '', size = 'md' }: ToggleProps) {
+  const isSm = size === 'sm';
+  const width = isSm ? 42 : 54;
+  const height = isSm ? 24 : 30;
+  const thumbSize = isSm ? 16 : 22;
+
   return (
     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} className={className}>
       <div
@@ -21,8 +27,8 @@ export function Toggle({ checked, onChange, label, className = '' }: ToggleProps
           }
         }}
         style={{
-          width: 54,
-          height: 30,
+          width,
+          height,
           borderRadius: 30,
           background: checked ? 'var(--primary)' : '#cbd5e1',
           border: '3px solid #f1f5f9',
@@ -37,10 +43,10 @@ export function Toggle({ checked, onChange, label, className = '' }: ToggleProps
           style={{
             position: 'absolute',
             top: '50%',
-            left: checked ? 'calc(100% - 22px - 1px)' : '1px',
+            left: checked ? `calc(100% - ${thumbSize}px - 1px)` : '1px',
             transform: 'translateY(-50%)',
-            width: 22,
-            height: 22,
+            width: thumbSize,
+            height: thumbSize,
             background: '#ffffff',
             borderRadius: '50%',
             boxShadow: '0 2px 5px rgba(0,0,0,0.2), 0 1px 1px rgba(0,0,0,0.1)',
@@ -51,7 +57,7 @@ export function Toggle({ checked, onChange, label, className = '' }: ToggleProps
           }}
         >
           <svg 
-            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" 
+            width={isSm ? "10" : "12"} height={isSm ? "10" : "12"} viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" 
             style={{ 
               opacity: checked ? 1 : 0, 
               transform: checked ? 'scale(1)' : 'scale(0)',
@@ -62,7 +68,7 @@ export function Toggle({ checked, onChange, label, className = '' }: ToggleProps
           </svg>
         </div>
       </div>
-      {label && <span style={{ fontSize: 13, fontWeight: 500, userSelect: 'none', color: checked ? 'var(--ink)' : 'var(--muted)', transition: 'color 0.2s' }}>{label}</span>}
+      {label && <span style={{ fontSize: isSm ? 12 : 13, fontWeight: 500, userSelect: 'none', color: checked ? 'var(--ink)' : 'var(--muted)', transition: 'color 0.2s' }}>{label}</span>}
     </label>
   );
 }

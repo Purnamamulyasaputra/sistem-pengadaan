@@ -220,7 +220,7 @@ export default function OutletsPage() {
                 <label style={{ width: 100, fontWeight: 700, fontSize: 13, paddingTop: 6 }}>Alamat</label>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.street} onChange={e => setForm(f => ({ ...f, street: e.target.value }))} placeholder="Jalan 1" />
-                  <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.street2} onChange={e => setForm(f => ({ ...f, street2: e.target.value }))} placeholder="Jalan 2 (Opsional)" />
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Kota" />
                     <input className="input" style={{ padding: '6px 10px', fontSize: 13 }} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="Provinsi" />
@@ -245,10 +245,6 @@ export default function OutletsPage() {
                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="outlet@example.com" />
               </div>
 
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Tautan Peta</label>
-                <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={form.map_location} onChange={e => setForm(f => ({ ...f, map_location: e.target.value }))} placeholder="https://maps.google.com/..." />
-              </div>
             </div>
           </div>
         </div>

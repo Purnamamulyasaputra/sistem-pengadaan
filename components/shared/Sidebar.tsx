@@ -60,8 +60,9 @@ const CENTRAL_MENU: NavItem[] = [
   { href: '/outlet-purchases', label: 'Belanja Outlet', icon: <Icon name="list" /> },
   { href: '/returns', label: 'Tiket Masalah / Retur', icon: <AlertOctagon size={15} /> },
 
-  { section: 'PEMBELIAN (PURCHASING)' },
+  { section: 'PEMBELIAN' },
   { href: '/purchase-orders', label: 'Pembelian (PO)', icon: <Icon name="cart" /> },
+  { href: '/direct-purchases', label: 'Belanja Pasar', icon: <Icon name="cart" /> },
   { href: '/warehouse', label: 'Penerimaan Barang', icon: <Icon name="box" /> },
 
   { section: 'INTEGRASI MOKA POS' },

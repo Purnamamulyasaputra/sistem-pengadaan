@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useDeferredValue, useMemo } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -45,6 +45,27 @@ export default function VendorsPage() {
   const [historyVendor, setHistoryVendor] = useState<Vendor | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyItems, setHistoryItems] = useState<VendorHistoryItem[]>([]);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyDateFilter, setHistoryDateFilter] = useState('');
+
+  const deferredHistorySearch = useDeferredValue(historySearch);
+  const deferredHistoryDateFilter = useDeferredValue(historyDateFilter);
+
+  const filteredHistoryItems = useMemo(() => {
+    return historyItems.filter(item => {
+      let match = true;
+      if (deferredHistorySearch) {
+        const q = deferredHistorySearch.toLowerCase();
+        const matchPO = Boolean(item.po_number?.toLowerCase().includes(q));
+        const matchItem = Boolean(item.item_name?.toLowerCase().includes(q)) || Boolean(item.description?.toLowerCase().includes(q));
+        match = match && (matchPO || matchItem);
+      }
+      if (deferredHistoryDateFilter) {
+        match = match && Boolean(item.order_date?.startsWith(deferredHistoryDateFilter));
+      }
+      return match;
+    });
+  }, [historyItems, deferredHistorySearch, deferredHistoryDateFilter]);
 
   const fetchVendors = useCallback(async () => {
     setLoading(true);
@@ -60,6 +81,8 @@ export default function VendorsPage() {
     setHistoryVendor(v);
     setHistoryLoading(true);
     setHistoryItems([]);
+    setHistorySearch('');
+    setHistoryDateFilter('');
     try {
       const res = await fetch(`/api/vendors/history?id=${v.id}`);
       const data = await res.json();
@@ -385,7 +408,7 @@ export default function VendorsPage() {
       
       <Toast message={toast.message} type={toast.type} isOpen={toast.isOpen} onClose={hideToast} />
 
-      <Modal isOpen={!!historyVendor} onClose={() => setHistoryVendor(null)} title={`Riwayat Pembelian: ${historyVendor?.name}`} maxWidth={800}>
+      <Modal isOpen={!!historyVendor} onClose={() => setHistoryVendor(null)} title={`Riwayat Pembelian: ${historyVendor?.name}`} maxWidth={1000}>
         <div className="modal-body" style={{ padding: '20px 24px' }}>
           {historyLoading ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Memuat riwayat...</div>
@@ -394,36 +417,42 @@ export default function VendorsPage() {
               Tidak ada pesanan pembelian ditemukan untuk vendor ini.
             </div>
           ) : (
-            <div className="table-responsive" style={{ maxHeight: '60vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
-              <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16, justifyContent: 'flex-end' }}>
+                <input type="text" className="input" style={{ width: 250, padding: '8px 12px', fontSize: 13 }} placeholder="Cari No. PO atau Barang..." value={historySearch} onChange={e => setHistorySearch(e.target.value)} />
+                <input type="date" className="input" style={{ padding: '8px 12px', fontSize: 13, width: 150 }} value={historyDateFilter} onChange={e => setHistoryDateFilter(e.target.value)} />
+              </div>
+              <div className="table-responsive" style={{ maxHeight: '60vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead style={{ position: 'sticky', top: 0, background: '#f1f5f9', zIndex: 10 }}>
                   <tr>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>No. PO</th>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Tanggal</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>No. PO</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>Tanggal</th>
                     <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Barang / Material</th>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569' }}>Jml</th>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569' }}>Harga Satuan</th>
-                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569' }}>Subtotal</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>Jml</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>Harga Satuan</th>
+                    <th style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {historyItems.map((item, i) => (
+                  {filteredHistoryItems.map((item, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                      <td style={{ padding: '8px 12px' }} className="font-mono text-blue-600 font-medium">
-                        <a href={`/procurement/orders/${item.po_id}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'var(--blue)' }}>
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }} className="font-mono font-medium">
+                        <a href={`/procurement/orders/${item.po_id}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'var(--primary)' }}>
                           {item.po_number}
                         </a>
                       </td>
-                      <td style={{ padding: '8px 12px' }}>{formatDate(item.order_date)}</td>
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{formatDate(item.order_date)}</td>
                       <td style={{ padding: '8px 12px', fontWeight: 500 }}>{item.item_name || item.description || '—'}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>{item.qty}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>Rp {(item.unit_price || 0).toLocaleString('id-ID')}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600 }}>Rp {(item.subtotal || 0).toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>{Number(item.qty).toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>Rp {Number(item.unit_price || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>Rp {Number(item.subtotal || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       </Modal>
