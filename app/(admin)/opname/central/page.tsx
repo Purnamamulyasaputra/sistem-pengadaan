@@ -16,6 +16,7 @@ interface OpnameSession {
   status: string;
   created_at: string;
   updated_at: string;
+  location_name?: string;
 }
 
 export default function CentralOpnamePage() {
@@ -26,6 +27,7 @@ export default function CentralOpnamePage() {
   const [filterDate, setFilterDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState<number | 'all'>(15);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -75,22 +77,43 @@ export default function CentralOpnamePage() {
     <section className="screen">
       <div className="card">
         <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: 16 }}>
-          <div>
-            <h3 style={{ fontSize: 18, margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>Stock Opname Pusat</h3>
+          <div style={{ overflow: 'hidden' }}>
+            <h3 className="truncate" style={{ fontSize: 18, margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>Stock Opname Pusat</h3>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'nowrap' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap' }}>
             <input
               type="date"
-              className="input"
+              className="input hidden md:block"
               value={filterDate}
               onChange={e => setFilterDate(e.target.value)}
               style={{ fontSize: 13, height: 28, minWidth: 120, width: 'auto' }}
             />
+            <Button variant="outline" size="sm" onClick={() => setShowMobileFilters(!showMobileFilters)} className="md:hidden" style={{ height: 28, padding: '0 8px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            </Button>
             <Button variant="primary" style={{ height: 28, padding: '0 12px', fontSize: 12, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }} onClick={handleStartOpname} disabled={creating}>
-              {creating ? 'Memulai...' : '+ Mulai Opname'}
+              {creating ? 'Memulai...' : (
+                <>
+                  <span className="hidden md:inline">+ Mulai Opname</span>
+                  <span className="md:hidden" title="+ Mulai Opname"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg></span>
+                </>
+              )}
             </Button>
           </div>
         </div>
+
+        {showMobileFilters && (
+          <div className="md:hidden" style={{ padding: '12px 24px', borderBottom: '1px solid var(--border)', background: '#f8fafc' }}>
+            <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 600 }}>Filter Tanggal</div>
+            <input 
+              type="date" 
+              className="input w-full" 
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              style={{ fontSize: 13, height: 32 }}
+            />
+          </div>
+        )}
 
         <div className="card-body flush" style={{ overflowY: 'auto', background: '#f8fafc' }}>
           {loading ? (
@@ -127,44 +150,34 @@ export default function CentralOpnamePage() {
                         <div 
                           key={s.id} 
                           onClick={() => router.push(`/opname/central/${s.id}`)}
-                          style={{ 
-                            display: 'flex', alignItems: 'center', padding: '8px 12px', 
-                            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, 
-                            cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                            position: 'relative'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = '#cbd5e1';
-                            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#e2e8f0';
-                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
-                            e.currentTarget.style.transform = 'none';
-                          }}
+                          className="flex items-center p-2 md:p-3 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all relative"
                         >
-                          <div style={{ width: 4, height: '70%', background: s.status === 'LOCKED' ? '#016e3f' : s.status === 'SUBMITTED' ? '#3b82f6' : '#cbd5e1', position: 'absolute', left: 0, top: '15%', borderRadius: '0 4px 4px 0' }}></div>
-                          <div style={{ width: 130, paddingLeft: 12 }}>
-                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Waktu Mulai</div>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+                          <div className="hidden md:block" style={{ width: 4, height: '70%', background: s.status === 'LOCKED' ? '#016e3f' : s.status === 'SUBMITTED' ? '#3b82f6' : '#cbd5e1', position: 'absolute', left: 0, top: '15%', borderRadius: '0 4px 4px 0' }}></div>
+                          
+                          <div className="w-[50px] md:w-[130px] pl-3 md:pl-4">
+                            <div className="muted text-[9px] md:text-[10px] mb-1">Waktu</div>
+                            <div className="font-bold text-[11px] md:text-[13px] text-slate-900">{new Date(s.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
                           </div>
                           
-                          <div style={{ width: 180 }}>
-                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Dilakukan Oleh</div>
-                            <div style={{ fontWeight: 600, fontSize: 12, color: '#334155' }}>{s.pic_name}</div>
-                          </div>
-              
-                          <div style={{ flex: 1, textAlign: 'right', paddingRight: 32 }}>
-                            <div className="muted" style={{ fontSize: 10, marginBottom: 2 }}>Estimasi Selisih Nilai</div>
-                            <div className="font-mono font-bold" style={{ fontSize: 13, color: Number(s.total_value) > 0 ? '#016e3f' : Number(s.total_value) < 0 ? '#dc2626' : '#94a3b8' }}>
-                              {Number(s.total_value) > 0 ? '+Rp ' : Number(s.total_value) < 0 ? '-Rp ' : 'Rp '}{Math.abs(Number(s.total_value)).toLocaleString('id-ID')}
+                          <div className="flex-1 md:w-[180px] md:flex-none px-2 overflow-hidden">
+                            <div className="muted text-[9px] md:text-[10px] mb-1">Oleh</div>
+                            <div className="font-semibold text-[11px] md:text-[12px] text-slate-700 truncate">
+                              <span className="md:hidden">{s.location_name || 'Pusat'}</span>
+                              <span className="hidden md:inline">{s.pic_name}</span>
                             </div>
                           </div>
-              
-                          <div style={{ width: 140, textAlign: 'right' }}>
+                      
+                          <div className="w-[70px] md:flex-1 text-right md:pr-8 px-1 overflow-hidden">
+                            <div className="muted text-[9px] md:text-[10px] mb-1 truncate">Est. Selisih</div>
+                            <div className="font-mono font-bold text-[11px] md:text-[13px] truncate" style={{ color: Number(s.total_value) > 0 ? '#016e3f' : Number(s.total_value) < 0 ? '#dc2626' : '#94a3b8' }}>
+                              {Number(s.total_value) > 0 ? '+' : Number(s.total_value) < 0 ? '-' : ''}Rp{Math.abs(Number(s.total_value)).toLocaleString('id-ID')}
+                            </div>
+                          </div>
+                      
+                          <div className="w-[60px] md:w-[140px] text-right">
                             <Badge variant={s.status === 'LOCKED' ? 'green' : s.status === 'SUBMITTED' ? 'blue' : 'gray'}>
-                              {s.status === 'LOCKED' ? 'Selesai' : s.status === 'SUBMITTED' ? 'Diajukan' : s.status === 'DRAFT' ? 'Draf' : s.status}
+                              <span className="md:hidden text-[9px]">{s.status === 'LOCKED' ? 'Selesai' : s.status === 'SUBMITTED' ? 'Submit' : 'Draf'}</span>
+                              <span className="hidden md:inline">{s.status === 'LOCKED' ? 'Selesai (Terkunci)' : s.status === 'SUBMITTED' ? 'Diajukan' : s.status === 'DRAFT' ? 'Draf' : s.status}</span>
                             </Badge>
                           </div>
                         </div>

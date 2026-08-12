@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import { useState, useEffect, Fragment, useRef } from 'react';
+import { useState, useEffect, Fragment, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Table } from '@/components/ui/Table';
 import { Pagination } from '@/components/ui/Pagination';
@@ -78,13 +78,11 @@ export default function StockMonitoringPage() {
   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, KRITIS, AMAN
   const [filterCategory, setFilterCategory] = useState('ALL');
 
-  const [appliedSearchTerm, setAppliedSearchTerm] = useState('');
   const [appliedFilterOutlet, setAppliedFilterOutlet] = useState('ALL');
   const [appliedFilterStatus, setAppliedFilterStatus] = useState('ALL');
   const [appliedFilterCategory, setAppliedFilterCategory] = useState('ALL');
 
   const applyFilters = () => {
-    setAppliedSearchTerm(searchTerm);
     setAppliedFilterOutlet(filterOutlet);
     setAppliedFilterStatus(filterStatus);
     setAppliedFilterCategory(filterCategory);
@@ -115,10 +113,35 @@ export default function StockMonitoringPage() {
   
   const previousLowStocksCount = useRef<number | null>(null);
 
+
+
+  const { criticalItems, totalLowStocks } = useMemo(() => {
+    if (!data) return { criticalItems: [], totalLowStocks: 0 };
+    const criticalItemIds = new Set<number>();
+    let totalLowStocks = 0;
+    
+    data.outlets.forEach((outlet: Outlet) => {
+      data.items.forEach((item: Item) => {
+        const minStock = Number(item.minimum_threshold) || 0;
+        if (minStock > 0) {
+          const matrixData = data.stockMatrix[item.id]?.[outlet.id];
+          const isApplicable = typeof matrixData === 'object' && matrixData !== null ? matrixData.is_applicable !== false : true;
+          const qty = typeof matrixData === 'object' && matrixData !== null ? matrixData.stock_smallest : (typeof matrixData === 'number' ? matrixData : 0);
+          
+          if (isApplicable && qty <= minStock * 1.5) {
+            criticalItemIds.add(item.id);
+            totalLowStocks++;
+          }
+        }
+      });
+    });
+    
+    const criticalItemsList = data.items.filter((item: Item) => criticalItemIds.has(item.id));
+    return { criticalItems: criticalItemsList, totalLowStocks };
+  }, [data]);
+
   useEffect(() => {
     if (data) {
-      const { totalLowStocks } = getCriticalItems();
-      
       if (previousLowStocksCount.current !== null && totalLowStocks > previousLowStocksCount.current) {
         const diff = totalLowStocks - previousLowStocksCount.current;
         setToast({ 
@@ -130,31 +153,7 @@ export default function StockMonitoringPage() {
       
       previousLowStocksCount.current = totalLowStocks;
     }
-  }, [data]);
-
-  const getCriticalItems = () => {
-    if (!data) return { criticalItems: [], totalLowStocks: 0 };
-    const criticalItemIds = new Set<number>();
-    let totalLowStocks = 0;
-    
-    data.outlets.forEach(outlet => {
-      data.items.forEach(item => {
-        const minStock = Number(item.minimum_threshold) || 0;
-        if (minStock > 0) {
-          const matrixData = data.stockMatrix[item.id]?.[outlet.id];
-          const qty = typeof matrixData === 'object' && matrixData !== null ? matrixData.stock_smallest : (typeof matrixData === 'number' ? matrixData : 0);
-          
-          if (qty <= minStock * 1.5) {
-            criticalItemIds.add(item.id);
-            totalLowStocks++;
-          }
-        }
-      });
-    });
-    
-    const criticalItems = data.items.filter(item => criticalItemIds.has(item.id));
-    return { criticalItems, totalLowStocks };
-  };
+  }, [data, totalLowStocks]);
 
   const handleCreateDO = (outletId: number) => {
     if (!data) return;
@@ -164,8 +163,9 @@ export default function StockMonitoringPage() {
       const minStock = Number(item.minimum_threshold) || 0;
       if (minStock > 0) {
         const matrixData = data.stockMatrix[item.id]?.[outletId];
+        const isApplicable = typeof matrixData === 'object' && matrixData !== null ? matrixData.is_applicable !== false : true;
         const qty = typeof matrixData === 'object' && matrixData !== null ? matrixData.stock_smallest : (typeof matrixData === 'number' ? matrixData : 0);
-        if (qty <= minStock * 1.5) {
+        if (isApplicable && qty <= minStock * 1.5) {
           itemsToShip.push(item.id);
         }
       }
@@ -179,7 +179,7 @@ export default function StockMonitoringPage() {
     router.push(`/delivery-orders/create?order_id=DIRECT&outlet_id=${outletId}&items=${itemsToShip.join(',')}`);
   };
 
-  const { criticalItems, totalLowStocks } = getCriticalItems();
+
 
   const handleSyncMoka = async () => {
     if (!syncFromDate || !syncToDate) {
@@ -304,47 +304,50 @@ export default function StockMonitoringPage() {
   };
 
   // Filter Items
-  const filteredItems = data?.items.filter((item: Item) => {
-    const matchSearch = item.name.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
-      (item.sku && item.sku.toLowerCase().includes(appliedSearchTerm.toLowerCase()));
+  const filteredItems = useMemo(() => {
+    if (!data?.items) return [];
+    return data.items.filter((item: Item) => {
+      const matchSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    if (!matchSearch) return false;
-    if (appliedFilterCategory !== 'ALL' && String(item.category_id) !== appliedFilterCategory) return false;
+      if (!matchSearch) return false;
+      if (appliedFilterCategory !== 'ALL' && String(item.category_id) !== appliedFilterCategory) return false;
 
-    // Check outlet usage
-    if (appliedFilterOutlet !== 'ALL') {
-      // Show all items, just treat as 0 if not exist
-    }
-
-    if (appliedFilterStatus === 'ALL') return true;
-
-    // Status filter
-    let hasStatus = false;
-    const outletsToCheck = appliedFilterOutlet === 'ALL'
-      ? data.outlets
-      : data.outlets.filter((o: Outlet) => String(o.id) === appliedFilterOutlet);
-
-    for (const outlet of outletsToCheck) {
-      const rawCell = data.stockMatrix[item.id]?.[outlet.id];
-      const qty = typeof rawCell === 'object' && rawCell !== null ? rawCell.stock_smallest : (typeof rawCell === 'number' ? rawCell : 0);
-      const status = getStatus(qty, item.minimum_threshold);
-      if (appliedFilterStatus === 'KRITIS' && (status === 'KRITIS' || status === 'MENIPIS')) {
-        hasStatus = true;
-        break;
+      // Check outlet usage
+      if (appliedFilterOutlet !== 'ALL') {
+        // Show all items, just treat as 0 if not exist
       }
-      if (appliedFilterStatus === 'AMAN' && status === 'AMAN') {
-        hasStatus = true;
-        break;
+
+      if (appliedFilterStatus === 'ALL') return true;
+
+      // Status filter
+      let hasStatus = false;
+      const outletsToCheck = appliedFilterOutlet === 'ALL'
+        ? data.outlets
+        : data.outlets.filter((o: Outlet) => String(o.id) === appliedFilterOutlet);
+
+      for (const outlet of outletsToCheck) {
+        const rawCell = data.stockMatrix[item.id]?.[outlet.id];
+        const qty = typeof rawCell === 'object' && rawCell !== null ? rawCell.stock_smallest : (typeof rawCell === 'number' ? rawCell : 0);
+        const status = getStatus(qty, item.minimum_threshold);
+        if (appliedFilterStatus === 'KRITIS' && (status === 'KRITIS' || status === 'MENIPIS')) {
+          hasStatus = true;
+          break;
+        }
+        if (appliedFilterStatus === 'AMAN' && status === 'AMAN') {
+          hasStatus = true;
+          break;
+        }
       }
-    }
 
-    return hasStatus;
-  });
+      return hasStatus;
+    });
+  }, [data, searchTerm, appliedFilterCategory, appliedFilterOutlet, appliedFilterStatus]);
 
-  // Reset page when itemsPerPage changes
+  // Reset page when itemsPerPage or searchTerm changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [itemsPerPage]);
+  }, [itemsPerPage, searchTerm]);
 
   const visibleOutlets = appliedFilterOutlet === 'ALL'
     ? (data?.outlets || [])
@@ -974,7 +977,7 @@ export default function StockMonitoringPage() {
                   <tr>
                     <th style={{ padding: '8px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', borderBottom: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', background: '#f8fafc', left: 0, zIndex: 21, position: 'sticky', whiteSpace: 'nowrap' }}>Bahan / Produk</th>
                     {data?.outlets.map(outlet => (
-                      <th key={outlet.id} style={{ padding: '8px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', borderBottom: '1px solid #e2e8f0', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <th key={outlet.id} style={{ padding: '8px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', borderBottom: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                           {outlet.name}
                           <Button 
@@ -1002,11 +1005,12 @@ export default function StockMonitoringPage() {
                       {data?.outlets.map(outlet => {
                         const minStock = Number(item.minimum_threshold) || 0;
                         const matrixData = data?.stockMatrix[item.id]?.[outlet.id];
+                        const isApplicable = typeof matrixData === 'object' && matrixData !== null ? matrixData.is_applicable !== false : true;
                         const qty = typeof matrixData === 'object' && matrixData !== null ? matrixData.stock_smallest : (typeof matrixData === 'number' ? matrixData : 0);
                         
                         let isKritis = false;
                         let isMenipis = false;
-                        if (minStock > 0) {
+                        if (isApplicable && minStock > 0) {
                           if (qty <= minStock) isKritis = true;
                           else if (qty <= minStock * 1.5) isMenipis = true;
                         }
@@ -1018,17 +1022,30 @@ export default function StockMonitoringPage() {
                             fontSize: 12, 
                             textAlign: 'right',
                             background: '#fff',
+                            borderRight: '1px solid #e2e8f0',
                             whiteSpace: 'nowrap'
                           }}>
-                            {isLow ? (
-                              <span style={{ 
-                                fontWeight: 600, 
-                                color: isKritis ? '#ef4444' : '#f59e0b'
-                              }}>
-                                {formatQty(qty, 1)} {formatUnit(item.smallest_unit)}
-                              </span>
+                            {!isApplicable ? (
+                              <div style={{ textAlign: 'center' }}>
+                                <span style={{ color: '#cbd5e1' }}>—</span>
+                              </div>
                             ) : (
-                              <span style={{ color: '#cbd5e1' }}>-</span>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
+                                <div style={{ textAlign: 'right' }}>
+                                  <span style={{ fontSize: 9, color: '#94a3b8', display: 'block', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Min</span>
+                                  <span style={{ color: '#64748b', fontWeight: 500 }}>{formatQty(minStock, 1)} {formatUnit(item.smallest_unit)}</span>
+                                </div>
+                                <div style={{ width: 1, height: 24, background: '#e2e8f0' }}></div>
+                                <div style={{ textAlign: 'right', minWidth: 60 }}>
+                                  <span style={{ fontSize: 9, color: '#94a3b8', display: 'block', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Stok</span>
+                                  <span style={{ 
+                                    fontWeight: isLow ? 600 : 400, 
+                                    color: isKritis ? '#ef4444' : isMenipis ? '#f59e0b' : '#0f172a'
+                                  }}>
+                                    {formatQty(qty, 1)} {formatUnit(item.smallest_unit)}
+                                  </span>
+                                </div>
+                              </div>
                             )}
                           </td>
                         );

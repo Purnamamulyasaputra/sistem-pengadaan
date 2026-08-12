@@ -1,5 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 
 interface TopBarProps {
   user: {
@@ -74,13 +75,13 @@ export default function TopBar({ user }: TopBarProps) {
         <p className="page-sub">{roleLabel} • Sunrise Daily</p>
       </div>
 
-      <div className="topbar-right">
+      <Link href="/settings/profile" className="topbar-right" style={{ textDecoration: 'none', color: 'inherit' }}>
         <div className="avatar">{getInitials(displayName)}</div>
         <div className="who">
           <span className="name">{displayName}</span>
           <span className="role">{roleLabel}</span>
         </div>
-      </div>
+      </Link>
     </header>
   );
 }

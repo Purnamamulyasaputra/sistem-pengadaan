@@ -87,6 +87,7 @@ export default function InventoryValueTablePage() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff' }}>
         <div className="tabs" style={{ marginBottom: 0, padding: '0 24px', paddingTop: 16 }}>
           <Link href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Grafik Keuangan</Link>
+          <Link href="/reports/sales-analytics" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Analitik Penjualan</Link>
           <Link href="/reports/inventory-value" className="tab active" style={{ textDecoration: 'none' }}>Tabel Persediaan</Link>
           <Link href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</Link>
         </div>

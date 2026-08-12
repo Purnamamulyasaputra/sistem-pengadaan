@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
         item.smallest_unit || '',
         item.purchase_unit || item.smallest_unit || '',
         Number(item.central_stock || 0),
-        Number((item.central_stock || 0) / ratio)
+        Number(item.central_stock || 0) / ratio
       ];
 
       for (const outlet of outlets) {

@@ -27,6 +27,7 @@ export default function OutletOpnamePage() {
   const [filterDate, setFilterDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState<number | 'all'>(15);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -101,20 +102,42 @@ export default function OutletOpnamePage() {
           <a href="/outlet/items" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Item Reference</a>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexWrap: 'nowrap', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'nowrap' }}>
-            <h3 style={{ fontSize: 15, margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>Stock Opname Outlet</h3>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'nowrap', overflow: 'hidden' }}>
+            <h3 className="truncate" style={{ fontSize: 15, margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>Stock Opname Outlet</h3>
             <input 
               type="date" 
-              className="input" 
+              className="input hidden md:block" 
               value={filterDate}
               onChange={e => setFilterDate(e.target.value)}
               style={{ fontSize: 12, padding: '4px 8px', height: 28, width: 'auto' }}
             />
           </div>
-          <Button variant="primary" size="sm" onClick={handleStartOpname} disabled={creating || !user?.outlet_id} style={{ whiteSpace: 'nowrap', height: 28, padding: '0 12px', fontSize: 12 }}>
-            {creating ? 'Memulai...' : '+ Start Daily Report'}
-          </Button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap' }}>
+            <Button variant="outline" size="sm" onClick={() => setShowMobileFilters(!showMobileFilters)} className="md:hidden" style={{ height: 28, padding: '0 8px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleStartOpname} disabled={creating || !user?.outlet_id} style={{ whiteSpace: 'nowrap', height: 28, padding: '0 12px', fontSize: 12 }}>
+              {creating ? 'Memulai...' : (
+                <>
+                  <span className="hidden md:inline">+ Start Daily Report</span>
+                  <span className="md:hidden" title="+ Start Daily Report"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg></span>
+                </>
+              )}
+            </Button>
+          </div>
         </div>
+        {showMobileFilters && (
+          <div className="md:hidden" style={{ padding: '12px 24px', borderBottom: '1px solid var(--border)', background: '#f8fafc' }}>
+            <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 600 }}>Filter Tanggal</div>
+            <input 
+              type="date" 
+              className="input w-full" 
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              style={{ fontSize: 13, height: 32 }}
+            />
+          </div>
+        )}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {loading ? (
             <div className="muted" style={{ padding: 40, textAlign: 'center' }}>Memuat riwayat opname...</div>

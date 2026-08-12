@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Pagination } from '@/components/ui/Pagination';
 import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
 
-interface Outlet { id: number; name: string; type: string; address?: string; street?: string; street2?: string; city?: string; state?: string; zip?: string; country?: string; pic_name?: string; email?: string; phone?: string; map_location?: string; is_active: boolean; created_at: string; }
+interface Outlet { id: number; name: string; type: string; address?: string; street?: string; street2?: string; city?: string; state?: string; zip?: string; country?: string; pic_name?: string; email?: string; phone?: string; map_location?: string; is_active: boolean; created_at: string; venue_id?: number | null; venue_name?: string | null; }
 
 const TYPE_LABELS: Record<string, string> = { STORE: 'Toko', CENTRAL_KITCHEN: 'Dapur Pusat' };
 import { Toast } from '@/components/ui/Toast';
@@ -20,7 +20,8 @@ export default function OutletsPage() {
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Outlet | null>(null);
-  const [form, setForm] = useState({ name: '', type: 'STORE', address: '', street: '', street2: '', city: '', state: '', zip: '', country: '', pic_name: '', email: '', phone: '', map_location: '', is_active: true });
+  const [venues, setVenues] = useState<{id: number, name: string}[]>([]);
+  const [form, setForm] = useState({ name: '', type: 'STORE', address: '', street: '', street2: '', city: '', state: '', zip: '', country: '', pic_name: '', email: '', phone: '', map_location: '', is_active: true, venue_id: '' as string | number });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ isOpen: boolean, message: string, type: 'success' | 'error' | 'info' }>({ isOpen: false, message: '', type: 'info' });
 
@@ -33,16 +34,24 @@ export default function OutletsPage() {
 
   const fetchOutlets = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/outlets');
-    const data = await res.json();
+    const [resOutlets, resVenues] = await Promise.all([
+      fetch('/api/outlets'),
+      fetch('/api/settings/venues')
+    ]);
+    const data = await resOutlets.json();
+    const vData = await resVenues.json();
     setOutlets(data.data ?? []);
+    setVenues(vData.data ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchOutlets(); }, [fetchOutlets]);
 
-  function openAdd() { setEditing(null); setForm({ name: '', type: 'STORE', address: '', street: '', street2: '', city: '', state: '', zip: '', country: '', pic_name: '', email: '', phone: '', map_location: '', is_active: true }); hideToast(); setShowModal(true); }
-  function openEdit(o: Outlet) { setEditing(o); setForm({ name: o.name, type: o.type, address: o.address ?? '', street: o.street ?? '', street2: o.street2 ?? '', city: o.city ?? '', state: o.state ?? '', zip: o.zip ?? '', country: o.country ?? '', pic_name: o.pic_name ?? '', email: o.email ?? '', phone: o.phone ?? '', map_location: o.map_location ?? '', is_active: o.is_active ?? true }); hideToast(); setShowModal(true); }
+  function openAdd() { setEditing(null); setForm({ name: '', type: 'STORE', address: '', street: '', street2: '', city: '', state: '', zip: '', country: '', pic_name: '', email: '', phone: '', map_location: '', is_active: true, venue_id: '' }); hideToast(); setShowModal(true); }
+  function openEdit(o: Outlet) { setEditing(o); setForm({ name: o.name, type: o.type, address: o.address ?? '', street: o.street ?? '', street2: o.street2 ?? '', city: o.city ?? '', state: o.state ?? '', zip: o.zip ?? '', country: o.country ?? '', pic_name: o.pic_name ?? '', email: o.email ?? '', phone: o.phone ?? '', map_location: o.map_location ?? '', is_active: o.is_active ?? true,
+    // Konversi ke string agar cocok dengan value option di <select> (pg BIGINT bisa number atau string)
+    venue_id: o.venue_id != null ? String(o.venue_id) : ''
+  }); hideToast(); setShowModal(true); }
 
   async function handleSave() {
     if (!form.name.trim()) { showToast('Nama outlet wajib diisi', 'error'); return; }
@@ -76,8 +85,9 @@ export default function OutletsPage() {
     setSaving(true); hideToast();
     try {
       const method = editing ? 'PATCH' : 'POST';
-      const body = editing ? { id: editing.id, ...form } : form;
-      const res = await fetch('/api/outlets', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const body = { ...form, venue_id: form.venue_id ? Number(form.venue_id) : null };
+      const finalBody = editing ? { id: editing.id, ...body } : body;
+      const res = await fetch('/api/outlets', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(finalBody) });
       const data = await res.json();
       if (!data.success) { showToast(data.message, 'error'); return; }
       setShowModal(false); fetchOutlets();
@@ -124,7 +134,14 @@ export default function OutletsPage() {
                         </td>
                         <td><Badge variant={o.type === 'STORE' ? 'blue' : 'green'}>{TYPE_LABELS[o.type] ?? o.type}</Badge></td>
                         <td style={{ fontSize: 13 }}>
-                          {o.pic_name ? <div style={{ fontWeight: 600 }}>{o.pic_name}</div> : <span className="muted">—</span>}
+                          <div style={{ fontWeight: 600 }}>{o.pic_name || <span className="muted">—</span>}</div>
+                          <div style={{ marginTop: 2 }}>
+                            {o.venue_name && (
+                              <span style={{ fontSize: 10, background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>
+                                {o.venue_name.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={{ fontSize: 13 }}>
                           {o.phone ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -243,6 +260,16 @@ export default function OutletsPage() {
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Email</label>
                 <input className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="outlet@example.com" />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <label style={{ width: 100, fontWeight: 700, fontSize: 13 }}>Lingkungan</label>
+                <select className="input" style={{ flex: 1, padding: '6px 10px', fontSize: 13 }} value={String(form.venue_id)} onChange={e => setForm(f => ({ ...f, venue_id: e.target.value }))}>
+                  <option value="">-- Tidak Ditautkan --</option>
+                  {venues.map(v => (
+                    <option key={v.id} value={String(v.id)}>{v.name}</option>
+                  ))}
+                </select>
               </div>
 
             </div>

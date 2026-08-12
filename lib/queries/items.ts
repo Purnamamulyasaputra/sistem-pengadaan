@@ -31,9 +31,11 @@ export interface Item {
   ingredient_name?: string;
   parent_id?: number | null;
   has_children?: boolean;
+  is_global?: boolean;
+  venue_ids?: number[];
 }
 
-export async function getItems(opts?: { categoryId?: string; search?: string; activeOnly?: boolean; parentOnly?: boolean }) {
+export async function getItems(opts?: { categoryId?: string; search?: string; activeOnly?: boolean; parentOnly?: boolean; venueId?: number }) {
   const conditions: string[] = [];
   const params: unknown[] = [];
   let i = 1;
@@ -53,6 +55,10 @@ export async function getItems(opts?: { categoryId?: string; search?: string; ac
   if (opts?.parentOnly) {
     conditions.push(`i.parent_id IS NULL`);
   }
+  if (opts?.venueId) {
+    conditions.push(`(i.is_global = TRUE OR EXISTS(SELECT 1 FROM item_venues iv WHERE iv.item_id = i.id AND iv.venue_id = $${i++}))`);
+    params.push(opts.venueId);
+  }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const result = await query<Item & { current_stock?: number }>(
@@ -60,7 +66,8 @@ export async function getItems(opts?: { categoryId?: string; search?: string; ac
             COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock,
             (i.ingredient_id IS NOT NULL OR ing_by_item.id IS NOT NULL) AS is_hpp,
             COALESCE(ing_by_id.name, ing_by_item.name) AS ingredient_name,
-            EXISTS(SELECT 1 FROM items child WHERE child.parent_id = i.id) AS has_children
+            EXISTS(SELECT 1 FROM items child WHERE child.parent_id = i.id) AS has_children,
+            COALESCE((SELECT json_agg(venue_id ORDER BY venue_id) FILTER (WHERE venue_id IS NOT NULL) FROM item_venues WHERE item_id = i.id), '[]'::json) AS venue_ids
      FROM items i
      LEFT JOIN categories c ON c.id = i.category_id
      LEFT JOIN ingredients ing_by_id ON ing_by_id.id = i.ingredient_id
@@ -78,7 +85,8 @@ export async function getItemById(id: number) {
             COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock,
             (i.ingredient_id IS NOT NULL OR ing_by_item.id IS NOT NULL) AS is_hpp,
             COALESCE(ing_by_id.name, ing_by_item.name) AS ingredient_name,
-            EXISTS(SELECT 1 FROM items child WHERE child.parent_id = i.id) AS has_children
+            EXISTS(SELECT 1 FROM items child WHERE child.parent_id = i.id) AS has_children,
+            COALESCE((SELECT json_agg(venue_id ORDER BY venue_id) FILTER (WHERE venue_id IS NOT NULL) FROM item_venues WHERE item_id = i.id), '[]'::json) AS venue_ids
      FROM items i
      LEFT JOIN categories c ON c.id = i.category_id
      LEFT JOIN ingredients ing_by_id ON ing_by_id.id = i.ingredient_id
@@ -107,23 +115,35 @@ export async function createItem(data: {
   min_order_qty?: number;
   order_multiple?: number;
   parent_id?: number | null;
+  is_global?: boolean;
+  venue_ids?: number[];
 }) {
-  const result = await query<Item>(
-    `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-     RETURNING *`,
-    [
-      data.name, data.category_id, data.purchase_unit, data.smallest_unit, data.conversion_ratio,
-      data.minimum_threshold, data.target_stock ?? 0, data.threshold_type, data.is_perishable,
-      data.barcode ?? null, data.current_average_price ?? 0, data.last_purchase_price ?? data.current_average_price ?? 0,
-      data.ingredient_id ?? null,
-      data.is_split_allowed ?? false,
-      data.min_order_qty ?? 1,
-      data.order_multiple ?? 1,
-      data.parent_id ?? null
-    ]
-  );
-  return result.rows[0];
+  return withTransaction(async (client) => {
+    const result = await client.query<Item>(
+      `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id, is_global)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+       RETURNING *`,
+      [
+        data.name, data.category_id, data.purchase_unit, data.smallest_unit, data.conversion_ratio,
+        data.minimum_threshold, data.target_stock ?? 0, data.threshold_type, data.is_perishable,
+        data.barcode ?? null, data.current_average_price ?? 0, data.last_purchase_price ?? data.current_average_price ?? 0,
+        data.ingredient_id ?? null,
+        data.is_split_allowed ?? false,
+        data.min_order_qty ?? 1,
+        data.order_multiple ?? 1,
+        data.parent_id ?? null,
+        data.is_global ?? true
+      ]
+    );
+    const item = result.rows[0];
+
+    if (data.venue_ids && data.venue_ids.length > 0) {
+      for (const vid of data.venue_ids) {
+        await client.query(`INSERT INTO item_venues (item_id, venue_id) VALUES ($1, $2)`, [item.id, vid]);
+      }
+    }
+    return item;
+  });
 }
 
 export async function createItemWithBrands(
@@ -133,8 +153,8 @@ export async function createItemWithBrands(
   return withTransaction(async (client) => {
     // 1. Create Parent
     const parentRes = await client.query(
-      `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULL) RETURNING id`,
+      `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id, is_global)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULL,$17) RETURNING id`,
       [
         parentData.name, parentData.category_id, parentData.purchase_unit, parentData.smallest_unit, parentData.conversion_ratio,
         parentData.minimum_threshold, parentData.target_stock ?? 0, parentData.threshold_type, parentData.is_perishable,
@@ -142,16 +162,23 @@ export async function createItemWithBrands(
         parentData.ingredient_id ?? null,
         parentData.is_split_allowed ?? false,
         parentData.min_order_qty ?? 1,
-        parentData.order_multiple ?? 1
+        parentData.order_multiple ?? 1,
+        parentData.is_global ?? true
       ]
     );
     const parentId = parentRes.rows[0].id;
 
+    if (parentData.venue_ids && parentData.venue_ids.length > 0) {
+      for (const vid of parentData.venue_ids) {
+        await client.query(`INSERT INTO item_venues (item_id, venue_id) VALUES ($1, $2)`, [parentId, vid]);
+      }
+    }
+
     // 2. Create Brands
     for (const brand of brands) {
-      await client.query(
-        `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id, is_active)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      const brandRes = await client.query(
+        `INSERT INTO items (name, category_id, purchase_unit, smallest_unit, conversion_ratio, minimum_threshold, target_stock, threshold_type, is_perishable, barcode, current_average_price, last_purchase_price, ingredient_id, is_split_allowed, min_order_qty, order_multiple, parent_id, is_active, is_global)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
         [
           brand.name, parentData.category_id, brand.purchase_unit || parentData.purchase_unit, parentData.smallest_unit, brand.conversion_ratio,
           parentData.minimum_threshold, parentData.target_stock ?? 0, parentData.threshold_type, parentData.is_perishable,
@@ -161,9 +188,16 @@ export async function createItemWithBrands(
           parentData.min_order_qty ?? 1,
           parentData.order_multiple ?? 1,
           parentId,
-          brand.is_active ?? true
+          brand.is_active ?? true,
+          parentData.is_global ?? true
         ]
       );
+      const childId = brandRes.rows[0].id;
+      if (parentData.venue_ids && parentData.venue_ids.length > 0) {
+        for (const vid of parentData.venue_ids) {
+          await client.query(`INSERT INTO item_venues (item_id, venue_id) VALUES ($1, $2)`, [childId, vid]);
+        }
+      }
     }
     return { id: parentId };
   });
@@ -187,6 +221,8 @@ export async function updateItem(id: number, data: Partial<{
   is_split_allowed: boolean;
   min_order_qty: number;
   order_multiple: number;
+  is_global: boolean;
+  venue_ids?: number[];
   brands?: Array<{
     id?: string;
     name: string;
@@ -202,10 +238,9 @@ export async function updateItem(id: number, data: Partial<{
     'minimum_threshold', 'target_stock', 'threshold_type', 'is_perishable',
     'is_active', 'barcode', 'current_average_price', 'last_purchase_price',
     'ingredient_id', 'is_split_allowed', 'min_order_qty', 'order_multiple',
-    'package_unit', 'package_qty', 'package_inner_size'
+    'package_unit', 'package_qty', 'package_inner_size', 'is_global'
   ];
   const fields = Object.keys(data).filter(key => ALLOWED_COLUMNS.includes(key) && (data as Record<string, unknown>)[key] !== undefined);
-  if (!fields.length) return null;
   const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
   const values = fields.map(f => (data as Record<string, unknown>)[f]);
 
@@ -220,11 +255,26 @@ export async function updateItem(id: number, data: Partial<{
     const newSmallestUnit = data.smallest_unit ?? null;
 
     // 2. Update item utama
-    const result = await client.query<Item>(
-      `UPDATE items SET ${sets}, updated_at = now() WHERE id = $1 RETURNING *`,
-      [id, ...values]
-    );
-    const updatedItem = result.rows[0] ?? null;
+    let updatedItem = oldItem as Item;
+    if (fields.length > 0) {
+      const result = await client.query<Item>(
+        `UPDATE items SET ${sets}, updated_at = now() WHERE id = $1 RETURNING *`,
+        [id, ...values]
+      );
+      updatedItem = result.rows[0] ?? null;
+    }
+
+    if (data.venue_ids !== undefined) {
+      await client.query(`DELETE FROM item_venues WHERE item_id = $1`, [id]);
+      // Dedup untuk mencegah 23505 jika frontend kirim nilai duplikat
+      const uniqueVenueIds = [...new Set(data.venue_ids.map((v: number | string) => Number(v)))].filter(v => v > 0);
+      for (const vid of uniqueVenueIds) {
+        await client.query(
+          `INSERT INTO item_venues (item_id, venue_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [id, vid]
+        );
+      }
+    }
 
     // 3. Sinkronisasi recipe_ingredients.unit jika smallest_unit berubah
     // Ini memastikan unit di resep HPP selalu mengikuti perubahan satuan terkecil barang.
@@ -329,4 +379,38 @@ export async function getCurrentStock(itemId: number, client?: PoolClient): Prom
     [itemId]
   );
   return Number(result.rows[0]?.ending_balance ?? 0);
+}
+
+export async function bulkUpdateItemVenues(itemIds: number[], isGlobal?: boolean | null, venueIds?: number[] | null): Promise<void> {
+  if (!itemIds || itemIds.length === 0) return;
+
+  await withTransaction(async (client) => {
+    // 1. Update is_global if provided
+    if (typeof isGlobal === 'boolean') {
+      await client.query(`UPDATE items SET is_global = $1, updated_at = now() WHERE id = ANY($2::int[])`, [isGlobal, itemIds]);
+    }
+
+    // 2. Update venue mappings if provided
+    if (Array.isArray(venueIds)) {
+      await client.query(`DELETE FROM item_venues WHERE item_id = ANY($1::int[])`, [itemIds]);
+      
+      if (venueIds.length > 0) {
+        // Build efficient bulk insert: (item1, venue1), (item1, venue2), (item2, venue1), ...
+        // Using UNNEST with two parallel arrays
+        const insertItemIds: number[] = [];
+        const insertVenueIds: number[] = [];
+        for (const item_id of itemIds) {
+          for (const venue_id of venueIds) {
+            insertItemIds.push(item_id);
+            insertVenueIds.push(venue_id);
+          }
+        }
+        
+        await client.query(
+          `INSERT INTO item_venues (item_id, venue_id) SELECT * FROM UNNEST($1::int[], $2::int[])`,
+          [insertItemIds, insertVenueIds]
+        );
+      }
+    }
+  });
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useDeferredValue, useMemo } from 'react';
+import { useState, useEffect, useCallback, useDeferredValue, useMemo, useRef } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Pagination } from '@/components/ui/Pagination';
 import { MasterDataTabs } from '@/components/ui/MasterDataTabs';
 import { Toast } from '@/components/ui/Toast';
+import { Download, Upload, CheckCircle2, XCircle } from 'lucide-react';
 
 interface Vendor { id: number; name: string; type?: string; email?: string; phone?: string; address?: string; tax_id?: string; website?: string; is_active: boolean; created_at: string; }
 
@@ -41,6 +42,66 @@ export default function VendorsPage() {
   const [confirmDelete, setConfirmDelete] = useState<Vendor | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+  
+  // Import Export Template State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
+  const [importSummary, setImportSummary] = useState<any>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importingStatus, setImportingStatus] = useState(false);
+
+  const handleUploadExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const formData = new FormData();
+    formData.append('file', file);
+    showToast('Membaca file Excel...', 'info');
+    try {
+      const res = await fetch('/api/master-data/vendors/template/preview', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setImportPreviewData(data.data || []);
+        setImportSummary(data.summary || null);
+        setIsImportModalOpen(true);
+        hideToast();
+      } else {
+        showToast(data.error || 'Gagal membaca file', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error uploading file', 'error');
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (importPreviewData.length === 0 || !importSummary) return;
+    if (importSummary.error > 0) {
+      return showToast('Masih ada data error, harap perbaiki file terlebih dahulu', 'error');
+    }
+    setImportingStatus(true);
+    try {
+      const res = await fetch('/api/master-data/vendors/template/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: importPreviewData })
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        showToast('Berhasil mengimpor data vendor', 'success');
+        setIsImportModalOpen(false);
+        fetchVendors();
+      } else {
+        showToast(resData.error || 'Gagal import data', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error importing data', 'error');
+    } finally {
+      setImportingStatus(false);
+    }
+  };
   
   const [historyVendor, setHistoryVendor] = useState<Vendor | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -227,7 +288,18 @@ export default function VendorsPage() {
           <div>
             <h3>Supplier & Vendor</h3>
           </div>
-          <Button variant="primary" size="sm" onClick={openAdd}>+ Tambah Vendor</Button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Button variant="outline" size="sm" onClick={() => window.open('/api/master-data/vendors/template/download', '_blank')}>
+              <Download size={14} style={{ marginRight: 4 }} /> Download Template
+            </Button>
+            
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <Upload size={14} style={{ marginRight: 4 }} /> Upload Excel
+            </Button>
+            <input type="file" ref={fileInputRef} accept=".xlsx" style={{ display: 'none' }} onChange={handleUploadExcel} />
+
+            <Button variant="primary" size="sm" onClick={openAdd}>+ Tambah Vendor</Button>
+          </div>
         </div>
 
         <div className="card-body flush">
@@ -460,6 +532,88 @@ export default function VendorsPage() {
       <Modal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} title="Preview Foto">
         <div className="modal-body" style={{ padding: 24, textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
           {previewImage && <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />}
+        </div>
+      </Modal>
+
+      {/* Modal Import Preview */}
+      <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Preview Import Vendor" maxWidth={1000}>
+        <div style={{ padding: 20 }}>
+          {importSummary && (
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ padding: 12, borderRadius: 8, background: importSummary.error > 0 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${importSummary.error > 0 ? '#fecaca' : '#bbf7d0'}` }}>
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                  <div><strong>Total Baris:</strong> {importSummary.total}</div>
+                  <div style={{ color: '#0ea5e9' }}><strong>Insert:</strong> {importSummary.insert}</div>
+                  <div style={{ color: '#f59e0b' }}><strong>Update:</strong> {importSummary.update}</div>
+                  <div style={{ color: '#15803d' }}><strong>Valid:</strong> {importSummary.valid}</div>
+                  <div style={{ color: '#b91c1c' }}><strong>Error:</strong> {importSummary.error}</div>
+                </div>
+                {importSummary.error > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: '#b91c1c' }}>
+                    Masih terdapat error pada baris data. Harap perbaiki file Excel Anda dan upload kembali.
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                <Button variant="outline" onClick={() => setIsImportModalOpen(false)}>Batal</Button>
+                <Button 
+                  variant="primary"
+                  onClick={handleConfirmImport} 
+                  disabled={!importSummary || importSummary.error > 0 || importingStatus}
+                >
+                  {importingStatus ? 'Menyimpan...' : 'Proses Import'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ maxHeight: 400, overflowY: 'auto', borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+            <Table>
+              <thead>
+                <tr>
+                  <th style={{ width: 60, textAlign: 'center' }}>Baris</th>
+                  <th style={{ width: 80, textAlign: 'center' }}>Aksi</th>
+                  <th>Vendor</th>
+                  <th>Kontak</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importPreviewData.map((row, i) => (
+                  <tr key={i} style={{ background: row.isValid ? 'transparent' : '#fef2f2' }}>
+                    <td style={{ textAlign: 'center' }}>{row.row_index}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {row.action === 'INSERT' ? (
+                        <span style={{ padding: '2px 6px', background: '#e0f2fe', color: '#0369a1', borderRadius: 4, fontSize: 11, fontWeight: 500 }}>NEW</span>
+                      ) : (
+                        <span style={{ padding: '2px 6px', background: '#fef3c7', color: '#b45309', borderRadius: 4, fontSize: 11, fontWeight: 500 }}>UPDATE</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="font-bold">{row.vendor_name}</div>
+                      <div className="muted" style={{ fontSize: 11 }}>{row.vendor_type} {row.vendor_id ? `| ID: ${row.vendor_id}` : ''}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: 12 }}>{row.phone || '-'}</div>
+                      <div className="muted" style={{ fontSize: 11 }}>{row.email || '-'}</div>
+                    </td>
+                    <td>
+                      {row.isValid ? (
+                        <span style={{ color: '#15803d', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                          <CheckCircle2 size={14} /> Valid
+                        </span>
+                      ) : (
+                        <span style={{ color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                          <XCircle size={14} /> {row.errorMessage}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
         </div>
       </Modal>
     </section>

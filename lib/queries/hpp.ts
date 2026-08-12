@@ -309,7 +309,9 @@ export async function getHppRecipes(opts?: {
     SELECT 
       r.id, r.venue_id, v.name AS venue_name,
       r.menu_id, r.name,
-      r.yield, r.yield_unit, r.subtotal, r.x_factor_pct,
+      r.yield, 
+      LOWER(COALESCE(r.yield_unit, (SELECT smallest_unit FROM items WHERE LOWER(name) = LOWER(r.name) LIMIT 1))) AS yield_unit, 
+      r.subtotal, r.x_factor_pct,
       r.total_cost, r.sale_price
     FROM recipes r
     JOIN venues v ON v.id = r.venue_id
@@ -333,7 +335,9 @@ export async function getHppRecipeDetail(recipeId: number): Promise<{
     SELECT 
       r.id, r.venue_id, v.name AS venue_name,
       r.menu_id, r.name,
-      r.yield, r.yield_unit, r.subtotal, r.x_factor_pct,
+      r.yield, 
+      LOWER(COALESCE(r.yield_unit, (SELECT smallest_unit FROM items WHERE LOWER(name) = LOWER(r.name) LIMIT 1))) AS yield_unit, 
+      r.subtotal, r.x_factor_pct,
       r.total_cost, r.sale_price,
       m.category_id
     FROM recipes r

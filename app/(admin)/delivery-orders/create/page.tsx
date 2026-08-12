@@ -32,12 +32,13 @@ interface OrderItem extends Omit<RawOrderItem, 'current_stock'> {
   keterangan: string;
   current_stock: number;
   is_additional?: boolean;
+  parent_id?: number | string;
 }
 
 export default function CreateDeliveryOrderPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<{ order_id: number; outlet_id: number; outlet_name: string; order_date: string; items: RawOrderItem[] }[]>([]);
-  const [outlets, setOutlets] = useState<{ id: number; name: string }[]>([]);
+  const [outlets, setOutlets] = useState<{ id: number; name: string; venue_id?: number | null }[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [targetOutletId, setTargetOutletId] = useState<string>('');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -95,7 +96,7 @@ export default function CreateDeliveryOrderPage() {
       }
     }
     async function fetchItems() {
-      const res = await fetch('/api/items');
+      const res = await fetch('/api/items?active_only=true');
       if (res.ok) {
         const data = await res.json();
         setAllItems(data.data?.filter((i: any) => i.is_active) || []);
@@ -217,6 +218,7 @@ export default function CreateDeliveryOrderPage() {
     setOrderItems([{
       order_item_id: tempId,
       item_id: 0,
+      parent_id: '',
       item_name: '',
       item_status: 'READY_DI_GUDANG',
       smallest_unit: '',
@@ -232,7 +234,24 @@ export default function CreateDeliveryOrderPage() {
     }, ...orderItems]);
   };
 
-  const handleSelectAdditionalItem = (orderItemId: number, newItemId: string) => {
+  const handleSelectParent = (orderItemId: number, parentId: string) => {
+    const parentItem = allItems.find(i => String(i.id) === parentId);
+    if (!parentItem) return;
+
+    if (parentItem.has_children) {
+      setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? {
+        ...i,
+        parent_id: parentItem.id,
+        item_id: 0,
+        item_name: parentItem.name,
+      } : i));
+    } else {
+      // It's a standalone item
+      handleSelectAdditionalItem(orderItemId, parentId, parentItem.id);
+    }
+  };
+
+  const handleSelectAdditionalItem = (orderItemId: number, newItemId: string, parentId?: number | string) => {
     const itemData = allItems.find(i => String(i.id) === newItemId);
     if (!itemData) return;
 
@@ -245,6 +264,7 @@ export default function CreateDeliveryOrderPage() {
 
     setOrderItems(orderItems.map(i => String(i.order_item_id) === String(orderItemId) ? {
       ...i,
+      parent_id: parentId || itemData.parent_id || itemData.id,
       item_id: itemData.id,
       item_name: itemData.name,
       purchase_unit: itemData.purchase_unit,
@@ -366,6 +386,15 @@ export default function CreateDeliveryOrderPage() {
       setSaving(false);
     }
   };
+  const targetOutlet = outlets.find(o => String(o.id) === targetOutletId);
+  const availableItems = allItems.filter(item => {
+    if (item.is_global) return true;
+    if (!targetOutlet) return true;
+    if (item.venue_ids && targetOutlet.venue_id) {
+      return item.venue_ids.map(String).includes(String(targetOutlet.venue_id));
+    }
+    return false;
+  });
 
   return (
     <section className="screen">
@@ -559,14 +588,33 @@ export default function CreateDeliveryOrderPage() {
                           />
                         </td>
                         <td className="font-bold">
-                          {item.item_id === 0 ? (
-                            <div style={{ position: 'relative', width: 200, zIndex: 10 }}>
-                              <ItemSelectWithBrand
-                                value={item.item_id === 0 ? '' : item.item_id}
-                                onChange={(val) => handleSelectAdditionalItem(item.order_item_id, String(val))}
-                                items={allItems as any}
-                                placeholder="Cari barang..."
+                          {item.is_additional ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 200 }}>
+                              <Select
+                                value={String(item.parent_id || item.item_id || '')}
+                                onChange={(val) => handleSelectParent(item.order_item_id, String(val))}
+                                options={[
+                                  { value: '', label: 'Pilih Bahan Utama...' },
+                                  ...allItems.filter(i => !i.parent_id).map(i => ({ value: String(i.id), label: i.name }))
+                                ]}
+                                searchable
                               />
+                              {item.parent_id && allItems.find(i => String(i.id) === String(item.parent_id))?.has_children && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 8 }}>
+                                  <span style={{ color: '#94a3b8', fontSize: 16 }}>↳</span>
+                                  <div style={{ flex: 1, border: item.item_id === 0 ? '1px solid #ef4444' : 'none', borderRadius: 6 }}>
+                                    <Select
+                                      value={item.item_id === 0 ? '' : String(item.item_id)}
+                                      onChange={(val) => handleSelectAdditionalItem(item.order_item_id, String(val), item.parent_id)}
+                                      options={[
+                                        { value: '', label: 'Pilih Brand (Wajib)...' },
+                                        ...allItems.filter(i => String(i.parent_id) === String(item.parent_id)).map(i => ({ value: String(i.id), label: i.name }))
+                                      ]}
+                                      searchable
+                                    />
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <>

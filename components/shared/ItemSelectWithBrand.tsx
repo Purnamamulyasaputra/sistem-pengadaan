@@ -18,9 +18,10 @@ interface ItemSelectWithBrandProps {
   placeholder?: string;
   disabled?: boolean;
   style?: React.CSSProperties;
+  parentOnly?: boolean;
 }
 
-export function ItemSelectWithBrand({ value, onChange, items, placeholder = 'Ketik untuk mencari...', disabled, style }: ItemSelectWithBrandProps) {
+export function ItemSelectWithBrand({ value, onChange, items, placeholder = 'Ketik untuk mencari...', disabled, style, parentOnly = false }: ItemSelectWithBrandProps) {
   const [fetchedItems, setFetchedItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(!items);
 
@@ -53,21 +54,28 @@ export function ItemSelectWithBrand({ value, onChange, items, placeholder = 'Ket
 
     // 1. Tampilkan Parent beserta Children-nya
     parents.forEach(parent => {
-      // Masukkan parent sebagai Group Header
-      result.push({
-        value: `group-${parent.id}`,
-        label: `📦 ${parent.name}`,
-        isGroup: true
-      });
-
-      // Cari anak-anaknya
-      const myChildren = children.filter(c => c.parent_id === parent.id);
-      myChildren.forEach(child => {
+      if (parentOnly) {
         result.push({
-          value: child.id,
-          label: `   ↳ ${child.name}` // indentasi
+          value: parent.id,
+          label: parent.name
         });
-      });
+      } else {
+        // Masukkan parent sebagai Group Header
+        result.push({
+          value: `group-${parent.id}`,
+          label: `📦 ${parent.name}`,
+          isGroup: true
+        });
+
+        // Cari anak-anaknya
+        const myChildren = children.filter(c => c.parent_id === parent.id);
+        myChildren.forEach(child => {
+          result.push({
+            value: child.id,
+            label: `   ↳ ${child.name}` // indentasi
+          });
+        });
+      }
     });
 
     // 2. Tampilkan Standalone items

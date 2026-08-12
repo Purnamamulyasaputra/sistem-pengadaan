@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Toast } from '@/components/ui/Toast';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 
 export default function SalesAnalyticsPage() {
   const [loading, setLoading] = useState(true);
@@ -119,6 +120,12 @@ export default function SalesAnalyticsPage() {
       <Toast {...toast} onClose={() => setToast({ ...toast, isOpen: false })} />
 
       <div className="card">
+        <div className="tabs" style={{ marginBottom: 0 }}>
+          <Link href="/reports" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Grafik Keuangan</Link>
+          <Link href="/reports/sales-analytics" className="tab active" style={{ textDecoration: 'none' }}>Analitik Penjualan</Link>
+          <Link href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</Link>
+          <Link href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</Link>
+        </div>
         <div className="card-head">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
             <div>

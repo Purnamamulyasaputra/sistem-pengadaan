@@ -103,7 +103,7 @@ export async function getOrderById(id: number) {
   const itemsResult = await query<OrderItem>(
     `SELECT oi.*, i.name AS item_name, c.name AS category_name,
             i.purchase_unit, i.smallest_unit, i.conversion_ratio,
-            COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC LIMIT 1), 0) AS current_stock
+            COALESCE((SELECT ending_balance FROM inventory_logs WHERE item_id = i.id ORDER BY created_at DESC, id DESC LIMIT 1), 0) AS current_stock
      FROM order_items oi
      LEFT JOIN items i ON i.id = oi.item_id
      LEFT JOIN categories c ON c.id = i.category_id

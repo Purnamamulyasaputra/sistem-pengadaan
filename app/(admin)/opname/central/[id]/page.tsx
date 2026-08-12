@@ -39,6 +39,7 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
   const [limit, setLimit] = useState<number | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isOpen: boolean }>({ message: '', type: 'info', isOpen: false });
   const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => { } });
@@ -197,29 +198,37 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <input
-              type="text"
-              className="input"
-              placeholder="Cari nama barang..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              style={{ width: 180, height: 32, fontSize: 11 }}
-            />
-            <Select
-              value={limit}
-              onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
-              options={[
-                { value: 'all', label: 'Semua' },
-                { value: 8, label: '8' },
-                { value: 32, label: '32' }
-              ]}
-              inputStyle={{ padding: '4px 10px', height: 32, fontSize: 11, minWidth: 90 }}
-              style={{ width: 100 }}
-            />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Button variant="outline" size="sm" onClick={() => setShowMobileFilters(!showMobileFilters)} className="md:hidden" style={{ height: 32, padding: '0 8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            </Button>
+            <div className="hidden md:flex gap-2">
+              <input
+                type="text"
+                className="input"
+                placeholder="Cari nama barang..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                style={{ width: 180, height: 32, fontSize: 11 }}
+              />
+              <Select
+                value={limit}
+                onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
+                options={[
+                  { value: 'all', label: 'Semua' },
+                  { value: 8, label: '8' },
+                  { value: 32, label: '32' }
+                ]}
+                inputStyle={{ padding: '4px 10px', height: 32, fontSize: 11, minWidth: 90 }}
+                style={{ width: 100 }}
+              />
+            </div>
             {!isLocked && (
               <>
-                <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving}>Simpan Draft</Button>
+                <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving} style={{ padding: '0 8px', height: 32 }}>
+                  <span className="hidden md:inline">Simpan Draft</span>
+                  <span className="md:hidden" title="Simpan Draft"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg></span>
+                </Button>
                 <Button variant="primary" size="sm" onClick={() => {
                   setConfirmState({
                     open: true,
@@ -230,16 +239,50 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                       handleSave(true);
                     }
                   });
-                }} disabled={saving}>
-                  Kunci & Submit
+                }} disabled={saving} style={{ padding: '0 8px', height: 32 }}>
+                  <span className="hidden md:inline">Kunci & Submit</span>
+                  <span className="md:hidden" title="Kunci & Submit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
                 </Button>
               </>
             )}
             <Link href="/opname/central">
-              <Button variant="outline" size="sm">Kembali</Button>
+              <Button variant="outline" size="sm" style={{ padding: '0 8px', height: 32 }}>
+                <span className="hidden md:inline">Kembali</span>
+                <span className="md:hidden" title="Kembali"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></span>
+              </Button>
             </Link>
           </div>
         </div>
+
+        {showMobileFilters && (
+          <div className="md:hidden" style={{ padding: '12px 24px', borderBottom: '1px solid var(--border)', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div>
+              <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 600 }}>Cari Barang</div>
+              <input
+                type="text"
+                className="input w-full"
+                placeholder="Nama barang..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                style={{ height: 32, fontSize: 12 }}
+              />
+            </div>
+            <div>
+              <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 600 }}>Tampilkan Data</div>
+              <Select
+                value={limit}
+                onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
+                options={[
+                  { value: 'all', label: 'Semua' },
+                  { value: 8, label: '8' },
+                  { value: 32, label: '32' }
+                ]}
+                inputStyle={{ padding: '4px 10px', height: 32, fontSize: 12, width: '100%' }}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+        )}
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <Table>
@@ -280,10 +323,10 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
 
                 return (
                   <tr key={item.item_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td className="font-bold" style={{ padding: '8px 16px', fontSize: 11 }}>
+                    <td className="font-bold text-[10px] md:text-[11px]" style={{ padding: '8px 16px' }}>
                       {item.item_name as string}
                       {ratio > 1 ? (
-                        <div style={{ fontSize: 10, marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <div style={{ marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }} className="text-[9px] md:text-[10px]">
                           <span style={{ background: '#f1f5f9', color: '#475569', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
                             Input: {largeUnit}
                           </span>
@@ -292,19 +335,19 @@ export default function CentralOpnameDetailPage({ params }: { params: Promise<{ 
                           </span>
                         </div>
                       ) : (
-                        <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
+                        <div className="muted font-normal text-[9px] md:text-[10px]" style={{ marginTop: 2 }}>
                           Satuan: {smallUnit}
                         </div>
                       )}
                     </td>
-                    <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
+                    <td className="right num text-[10px] md:text-[11px]" style={{ padding: '8px 16px' }}>
                       Rp {Math.round(priceLarge).toLocaleString('id-ID')}
-                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
+                      <div className="muted font-normal text-[9px] md:text-[10px]" style={{ marginTop: 2 }}>
                         / {largeUnit}
                       </div>
                     </td>
-                    <td className="right num" style={{ padding: '8px 16px', fontSize: 11 }}>
-                      {sysBalLarge.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted" style={{ fontSize: 10 }}>{largeUnit}</span>
+                    <td className="right num text-[10px] md:text-[11px]" style={{ padding: '8px 16px' }}>
+                      {sysBalLarge.toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="muted text-[9px] md:text-[10px]">{largeUnit}</span>
                     </td>
                     <td className="right" style={{ padding: '8px 16px' }}>
                       <div style={{ position: 'relative' }}>

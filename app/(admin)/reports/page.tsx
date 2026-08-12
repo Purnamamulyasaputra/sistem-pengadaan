@@ -68,6 +68,7 @@ export default function ReportsPage() {
             <div className="card">
                 <div className="tabs" style={{ marginBottom: 0 }}>
                     <Link href="/reports" className="tab active" style={{ textDecoration: 'none' }}>Grafik Keuangan</Link>
+                    <Link href="/reports/sales-analytics" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Analitik Penjualan</Link>
                     <Link href="/reports/inventory-value" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Tabel Persediaan</Link>
                     <Link href="/price-history" className="tab" style={{ textDecoration: 'none', color: 'inherit' }}>Riwayat Harga</Link>
                 </div>

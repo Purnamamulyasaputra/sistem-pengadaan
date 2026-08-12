@@ -258,12 +258,22 @@ function RequestsContent() {
   }
 
   const handleSaveHistoryAndClear = async () => {
+    const localStorageItems: any[] = [];
+
     const tableData: any[] = [];
     aggregatedProducts.forEach(p => {
       const state = shoppingListState[p.item_id] || {};
       if (!state.checked) return;
       const neededPurchase = Number(p.total_requested) || 0;
+      
+      // finalQty is used strictly for display in the PDF (formatted as ID locale if auto-calculated)
       const finalQty = state.qty_adjust !== undefined && state.qty_adjust !== '' ? state.qty_adjust : neededPurchase.toLocaleString('id-ID', { maximumFractionDigits: 2 });
+      
+      // rawQty is the absolute raw number safely passed to the next page
+      const rawQty = state.qty_adjust !== undefined && state.qty_adjust !== '' 
+        ? Number(String(state.qty_adjust).replace(',', '.')) 
+        : neededPurchase;
+
       tableData.push([
         p.item_name,
         `${finalQty} ${p.unit}`,
@@ -271,9 +281,43 @@ function RequestsContent() {
         '', 
         '' 
       ]);
+
+      // Save to array for passing to direct-purchases/create
+      localStorageItems.push({
+        item_id: p.item_id,
+        item_name: p.item_name,
+        qty: String(rawQty), 
+        unit: p.unit
+      });
     });
 
     try {
+      if (typeof window !== 'undefined' && localStorageItems.length > 0) {
+        const timestamp = new Date().toLocaleString('id-ID', {
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        });
+        const newSession = {
+          id: Date.now().toString(),
+          timestamp: timestamp,
+          total_items: localStorageItems.length,
+          items: localStorageItems
+        };
+        
+        let existingSessions: any[] = [];
+        try {
+          const raw = localStorage.getItem('pendingMarketPurchases');
+          if (raw) {
+            existingSessions = JSON.parse(raw);
+            if (!Array.isArray(existingSessions)) existingSessions = [];
+          }
+        } catch (e) {
+          existingSessions = [];
+        }
+        
+        existingSessions.push(newSession);
+        localStorage.setItem('pendingMarketPurchases', JSON.stringify(existingSessions));
+      }
       await fetch('/api/shopping-list-histories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

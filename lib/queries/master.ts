@@ -2,7 +2,12 @@ import { query } from '@/lib/db';
 
 // --- Outlets ---
 export async function getOutlets() {
-  const result = await query(`SELECT * FROM outlets ORDER BY type, name`);
+  const result = await query(`
+    SELECT o.*, v.name as venue_name 
+    FROM outlets o 
+    LEFT JOIN venues v ON o.venue_id = v.id 
+    ORDER BY o.type, o.name
+  `);
   return result.rows;
 }
 export async function getOutletsWithBusiness() {
@@ -26,10 +31,10 @@ export async function getActiveStoreOutlets() {
   return result.rows;
 }
 
-export async function createOutlet(data: { name: string; type: string; address?: string; street?: string; street2?: string; city?: string; state?: string; zip?: string; country?: string; pic_name?: string; email?: string; phone?: string; map_location?: string; is_active?: boolean }) {
+export async function createOutlet(data: { name: string; type: string; address?: string; street?: string; street2?: string; city?: string; state?: string; zip?: string; country?: string; pic_name?: string; email?: string; phone?: string; map_location?: string; is_active?: boolean; venue_id?: number | null }) {
   const result = await query(
-    `INSERT INTO outlets (name, type, address, street, street2, city, state, zip, country, pic_name, email, phone, map_location, is_active) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`, 
-    [data.name, data.type, data.address ?? null, data.street ?? null, data.street2 ?? null, data.city ?? null, data.state ?? null, data.zip ?? null, data.country ?? null, data.pic_name ?? null, data.email ?? null, data.phone ?? null, data.map_location ?? null, data.is_active ?? true]
+    `INSERT INTO outlets (name, type, address, street, street2, city, state, zip, country, pic_name, email, phone, map_location, is_active, venue_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`, 
+    [data.name, data.type, data.address ?? null, data.street ?? null, data.street2 ?? null, data.city ?? null, data.state ?? null, data.zip ?? null, data.country ?? null, data.pic_name ?? null, data.email ?? null, data.phone ?? null, data.map_location ?? null, data.is_active ?? true, data.venue_id ?? null]
   );
   return result.rows[0];
 }
@@ -38,7 +43,7 @@ export async function updateOutlet(id: number, data: Record<string, unknown>) {
   const fields = Object.keys(data).map((f, i) => `${f} = $${i + 2}`).join(', ');
   const values = Object.values(data);
   const result = await query(
-    `UPDATE outlets SET ${fields}, updated_at = now() WHERE id = $1 RETURNING *`,
+    `UPDATE outlets SET ${fields} WHERE id = $1 RETURNING *`,
     [id, ...values]
   );
   return result.rows[0];
@@ -128,4 +133,24 @@ export async function updateCategory(id: number, data: { name: string }) {
 
 export async function deleteCategory(id: number) {
   await query(`DELETE FROM categories WHERE id = $1`, [id]);
+}
+
+// --- Venues ---
+export async function getVenues() {
+  const result = await query(`SELECT * FROM venues ORDER BY name`);
+  return result.rows;
+}
+
+export async function createVenue(name: string) {
+  const result = await query(`INSERT INTO venues (name) VALUES ($1) RETURNING *`, [name]);
+  return result.rows[0];
+}
+
+export async function updateVenue(id: number, name: string) {
+  const result = await query(`UPDATE venues SET name = $1 WHERE id = $2 RETURNING *`, [name, id]);
+  return result.rows[0];
+}
+
+export async function deleteVenue(id: number) {
+  await query(`DELETE FROM venues WHERE id = $1`, [id]);
 }

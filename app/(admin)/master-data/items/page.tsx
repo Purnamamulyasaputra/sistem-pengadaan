@@ -27,10 +27,13 @@ interface Item {
   order_multiple?: number;
   parent_id?: number | null;
   has_children?: boolean;
+  is_global?: boolean;
+  venue_ids?: number[];
 }
 interface BrandForm { id?: string; name: string; barcode: string; purchase_unit: string; purchase_price: string; conversion_ratio: string; current_average_price?: number; last_purchase_price?: number; is_active?: boolean; }
 interface Category { id: number; name: string; }
 interface Ingredient { id: number; name: string; unit?: string; }
+interface Venue { id: number; name: string; }
 
 const fmtCurrency = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
@@ -137,6 +140,7 @@ function InfoTooltip({ text, align = 'right', width = 230 }: { text: string; ali
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
@@ -146,7 +150,7 @@ export default function ItemsPage() {
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1', has_brands: false });
+  const [form, setForm] = useState({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1', has_brands: false, is_global: true, venue_ids: [] as number[] });
   const [brands, setBrands] = useState<BrandForm[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -159,6 +163,12 @@ export default function ItemsPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // Bulk Edit
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ is_global: true, venue_ids: [] as number[] });
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -178,13 +188,14 @@ export default function ItemsPage() {
 
   useEffect(() => {
     fetch('/api/categories').then(r => r.json()).then(d => setCategories(d.data ?? []));
+    fetch('/api/settings/venues').then(r => r.json()).then(d => setVenues(d.data ?? []));
   }, []);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   function openAdd() {
     setEditing(null);
-    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1', has_brands: false });
+    setForm({ name: '', barcode: '', category_id: '', purchase_unit: '', package_inner_size: '', smallest_unit: '', conversion_ratio: '1', minimum_threshold: '10', target_stock: '20', threshold_type: 'ABSOLUT', is_perishable: false, is_active: true, purchase_price: '0', has_conversion: false, ingredient_id: '', is_split_allowed: false, min_order_qty: '1', order_multiple: '1', has_brands: false, is_global: true, venue_ids: [] });
     setBrands([]);
     setError('');
     setShowModal(true);
@@ -194,7 +205,7 @@ export default function ItemsPage() {
     setEditing(item);
     const hasConv = item.purchase_unit !== item.smallest_unit || Number(item.conversion_ratio) > 1;
     setForm({
-      name: item.name, barcode: item.barcode || `ERC${String(item.id).padStart(5, '0')}`, category_id: String(item.category_id ?? ''),
+      name: item.name, barcode: item.barcode || `ERC${String(item.id).padStart(6, '0')}`, category_id: String(item.category_id ?? ''),
       purchase_unit: normalizeUnit(item.purchase_unit), package_inner_size: '',
       smallest_unit: normalizeUnit(item.smallest_unit), conversion_ratio: String(Number(item.conversion_ratio)),
       minimum_threshold: String(Number(item.minimum_threshold) / (hasConv ? Number(item.conversion_ratio || 1) : 1)),
@@ -207,12 +218,15 @@ export default function ItemsPage() {
       is_split_allowed: item.is_split_allowed ?? false,
       min_order_qty: String(Number(item.min_order_qty ?? 1)),
       order_multiple: String(Number(item.order_multiple ?? 1)),
-      has_brands: false
+      has_brands: false,
+      is_global: item.is_global ?? true,
+      // Postgres json_agg mengembalikan venue_id sebagai string, pastikan dikonversi ke number & filter nilai 0/null
+      venue_ids: (item.venue_ids || []).map((id: number | string) => Number(id)).filter((id: number) => id > 0)
     });
     const childBrands = items.filter(i => i.parent_id === item.id).map(child => ({
       id: String(child.id),
       name: child.name,
-      barcode: child.barcode || `ERC${String(child.id).padStart(5, '0')}`,
+      barcode: child.barcode || `ERC${String(child.id).padStart(6, '0')}`,
       purchase_unit: child.purchase_unit || '',
       purchase_price: String(Math.round(Number(child.current_average_price ?? 0) * Number(child.conversion_ratio || 1))),
       conversion_ratio: String(child.conversion_ratio),
@@ -285,6 +299,8 @@ export default function ItemsPage() {
         is_split_allowed: Boolean(form.is_split_allowed),
         min_order_qty: Number(form.min_order_qty || 1),
         order_multiple: Number(form.order_multiple || 1),
+        is_global: form.is_global,
+        venue_ids: form.is_global ? [] : form.venue_ids,
         brands: brands.filter(b => b.name).map(b => {
           const brandRatio = Number(b.conversion_ratio) || 1;
           return {
@@ -332,6 +348,31 @@ export default function ItemsPage() {
       setIsDeleting(false);
       setConfirmDelete(null);
       fetchItems();
+    }
+  }
+
+  async function handleBulkSave() {
+    setBulkSaving(true);
+    try {
+      const payload = {
+        item_ids: selectedItems,
+        is_global: bulkForm.is_global,
+        venue_ids: bulkForm.is_global ? [] : bulkForm.venue_ids
+      };
+      const res = await fetch('/api/items/bulk-venue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!data.success) {
+        setToastInfo({ show: true, msg: data.message, type: 'error' });
+      } else {
+        setToastInfo({ show: true, msg: data.message, type: 'success' });
+        setShowBulkModal(false);
+        setSelectedItems([]);
+        fetchItems();
+      }
+    } catch (err) {
+      setToastInfo({ show: true, msg: 'Gagal menghubungi server', type: 'error' });
+    } finally {
+      setBulkSaving(false);
     }
   }
 
@@ -441,7 +482,12 @@ export default function ItemsPage() {
                 </button>
               )}
             </div>
-            <Button variant="primary" size="sm" onClick={openAdd} style={{ height: 34 }}>+ Tambah Barang</Button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {selectedItems.length > 0 && (
+                <Button variant="outline" size="sm" onClick={() => { setBulkForm({ is_global: true, venue_ids: [] }); setShowBulkModal(true); }} style={{ height: 34 }}>Edit Venue Massal ({selectedItems.length})</Button>
+              )}
+              <Button variant="primary" size="sm" onClick={openAdd} style={{ height: 34 }}>+ Tambah Barang</Button>
+            </div>
           </div>
 
           {loading ? (
@@ -458,6 +504,21 @@ export default function ItemsPage() {
                 <Table>
                   <thead>
                     <tr>
+                      <th style={{ width: 40, textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={paginatedItems.length > 0 && paginatedItems.every(i => selectedItems.includes(i.id))}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const newSelected = new Set([...selectedItems, ...paginatedItems.map(i => i.id)]);
+                              setSelectedItems(Array.from(newSelected));
+                            } else {
+                              const pageIds = new Set(paginatedItems.map(i => i.id));
+                              setSelectedItems(selectedItems.filter(id => !pageIds.has(id)));
+                            }
+                          }}
+                        />
+                      </th>
                       <th style={{ width: 100 }}>Kode</th>
                       <th style={{ width: 300 }}>Barang</th>
                       <th style={{ width: 140 }}>Satuan (Beli / Ecer)</th>
@@ -473,9 +534,22 @@ export default function ItemsPage() {
                       const isParent = !item.parent_id && item.has_children;
                       return (
                         <tr key={item.id} style={{ background: isParent ? '#f8fafc' : '#fff' }}>
+                          <td style={{ textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedItems.includes(item.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedItems([...selectedItems, item.id]);
+                                } else {
+                                  setSelectedItems(selectedItems.filter(id => id !== item.id));
+                                }
+                              }}
+                            />
+                          </td>
                           <td className="font-mono text-muted">
                             {isChild && <span style={{ color: '#cbd5e1', marginRight: 4 }}>↳</span>}
-                            {item.barcode || `ERC${String(item.id).padStart(5, '0')}`}
+                            {item.barcode || `ERC${String(item.id).padStart(6, '0')}`}
                           </td>
                           <td style={{ paddingLeft: isChild ? 24 : 12 }}>
                             <div className="font-bold" style={{ display: 'flex', alignItems: 'center', gap: 6, color: isParent ? '#475569' : 'inherit' }}>
@@ -883,6 +957,43 @@ export default function ItemsPage() {
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Barang Global</span>
+                  <InfoTooltip text="Jika aktif, barang tersedia untuk seluruh outlet/venue. Jika nonaktif, Anda harus memilih venue (brand/lingkungan) yang berhak memakai barang ini." />
+                </div>
+                <Toggle size="sm" checked={form.is_global} onChange={c => setForm(f => ({ ...f, is_global: c, venue_ids: c ? [] : f.venue_ids }))} />
+              </div>
+
+              {!form.is_global && venues.length > 0 && (
+                <div style={{ background: '#ffffff', padding: '10px', borderRadius: 6, border: '1px solid #e2e8f0', marginTop: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 8 }}>PILIH VENUE / LINGKUNGAN</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {venues.map(v => {
+                      const vid = Number(v.id); // pg mengembalikan BIGINT sebagai string, konversi ke number
+                      return (
+                        <label key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12 }}>
+                          <input
+                            type="checkbox"
+                            checked={form.venue_ids.includes(vid)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setForm(f => ({ ...f, venue_ids: [...f.venue_ids.filter(id => id !== vid), vid] }));
+                              } else {
+                                setForm(f => ({ ...f, venue_ids: f.venue_ids.filter(id => id !== vid) }));
+                              }
+                            }}
+                          />
+                          {v.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ borderTop: '1px dashed #cbd5e1', margin: '4px 0' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: form.is_active ? 'var(--primary)' : 'var(--muted)' }}>
                     {form.is_active ? 'Barang Aktif' : 'Nonaktif'}
                   </span>
@@ -1005,14 +1116,68 @@ export default function ItemsPage() {
 
       <ConfirmDialog
         open={!!confirmDelete}
-        title="Hapus Barang Secara Permanen"
-        message={`Apakah Anda yakin ingin menghapus "${confirmDelete?.name}"?`}
+        title="Hapus Barang"
+        message={`Apakah Anda yakin ingin menghapus barang ${confirmDelete?.name}? Tindakan ini tidak dapat dibatalkan.`}
+        confirmText={isDeleting ? 'Menghapus...' : 'Ya, Hapus Barang'}
         onCancel={() => setConfirmDelete(null)}
         onConfirm={handleDelete}
-        confirmText="Ya"
         danger={true}
         loading={isDeleting}
       />
+
+      <Modal
+        isOpen={showBulkModal}
+        onClose={() => setShowBulkModal(false)}
+        title="Edit Venue Massal"
+        maxWidth={500}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowBulkModal(false)}>Batal</Button>
+            <Button variant="primary" onClick={handleBulkSave} disabled={bulkSaving}>{bulkSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</Button>
+          </>
+        }
+      >
+        <div style={{ padding: '0px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
+            Anda akan mengubah hak akses venue untuk <strong>{selectedItems.length} barang</strong> sekaligus.
+          </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Barang Global</span>
+              <InfoTooltip text="Jika aktif, barang tersedia untuk seluruh outlet/venue." />
+            </div>
+            <Toggle size="sm" checked={bulkForm.is_global} onChange={c => setBulkForm(f => ({ ...f, is_global: c, venue_ids: c ? [] : f.venue_ids }))} />
+          </div>
+
+          {!bulkForm.is_global && venues.length > 0 && (
+            <div style={{ background: '#ffffff', padding: '12px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 8 }}>PILIH VENUE / LINGKUNGAN</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {venues.map(v => {
+                  const vid = Number(v.id); // pg BIGINT dikembalikan sebagai string
+                  return (
+                    <label key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={bulkForm.venue_ids.includes(vid)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setBulkForm(f => ({ ...f, venue_ids: [...f.venue_ids.filter(id => id !== vid), vid] }));
+                          } else {
+                            setBulkForm(f => ({ ...f, venue_ids: f.venue_ids.filter(id => id !== vid) }));
+                          }
+                        }}
+                      />
+                      {v.name}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <Toast
         isOpen={toastInfo.show}

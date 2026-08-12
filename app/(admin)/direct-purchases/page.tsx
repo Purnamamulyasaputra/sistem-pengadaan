@@ -25,6 +25,29 @@ export default function DirectPurchasesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState<any>(null);
+
+  const handleOpenDetail = async (id: number) => {
+    setDetailModalOpen(true);
+    setDetailLoading(true);
+    setSelectedDetail(null);
+    try {
+      const res = await fetch(`/api/direct-purchases/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setSelectedDetail(data.data);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+  
   const fetchPurchases = useCallback(async () => {
     setLoading(true);
     try {
@@ -95,6 +118,7 @@ export default function DirectPurchasesPage() {
                     <th className="center">Total Item</th>
                     <th className="right">Total Nominal</th>
                     <th>Catatan</th>
+                    <th className="center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -116,6 +140,11 @@ export default function DirectPurchasesPage() {
                       <td className="muted" style={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {p.notes || '-'}
                       </td>
+                      <td className="center">
+                        <Button variant="outline" size="sm" onClick={() => handleOpenDetail(p.id)}>
+                          Detail
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -124,6 +153,77 @@ export default function DirectPurchasesPage() {
           )}
         </div>
       </div>
+
+      <Modal isOpen={detailModalOpen} onClose={() => setDetailModalOpen(false)} title="Detail Belanja Pasar">
+        {detailLoading ? (
+          <div className="center muted" style={{ padding: 40 }}>Memuat rincian...</div>
+        ) : selectedDetail ? (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20, padding: 16, backgroundColor: 'var(--bg-muted)', borderRadius: 8 }}>
+              <div>
+                <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Tanggal Belanja</p>
+                <div className="font-bold">{new Date(selectedDetail.purchase_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+              <div>
+                <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>No. Referensi / Nota</p>
+                <div className="font-bold text-primary">{selectedDetail.receipt_number || '-'}</div>
+              </div>
+              <div>
+                <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Oleh</p>
+                <div className="font-bold">{selectedDetail.created_by_name}</div>
+              </div>
+              <div>
+                <p className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Catatan Umum</p>
+                <div className="font-bold">{selectedDetail.notes || '-'}</div>
+              </div>
+            </div>
+
+            <h4 style={{ marginBottom: 12 }}>Rincian Barang</h4>
+            <div className="table-responsive">
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Bahan / Barang</th>
+                    <th>Toko / Vendor</th>
+                    <th className="right">Kuantitas</th>
+                    <th className="right">Harga Satuan</th>
+                    <th className="right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedDetail.items?.map((item: any, idx: number) => (
+                    <tr key={idx}>
+                      <td>
+                        <div className="font-bold">{item.item_name}</div>
+                        {item.brand_name && <div className="muted" style={{ fontSize: 12 }}>Merek: {item.brand_name}</div>}
+                      </td>
+                      <td>{item.shop_name}</td>
+                      <td className="right font-bold">
+                        {item.qty} {item.unit}
+                      </td>
+                      <td className="right">Rp {Number(item.unit_price).toLocaleString('id-ID')}</td>
+                      <td className="right font-bold">Rp {Number(item.subtotal).toLocaleString('id-ID')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={4} className="right font-bold">Total Pembelanjaan</td>
+                    <td className="right font-bold text-primary">Rp {Number(selectedDetail.total_amount).toLocaleString('id-ID')}</td>
+                  </tr>
+                </tfoot>
+              </Table>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+              <Button variant="outline" onClick={() => setDetailModalOpen(false)}>Tutup</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="center muted" style={{ padding: 40 }}>Data tidak ditemukan.</div>
+        )}
+      </Modal>
+
     </section>
   );
 }

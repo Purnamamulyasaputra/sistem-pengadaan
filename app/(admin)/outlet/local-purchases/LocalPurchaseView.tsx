@@ -4,7 +4,6 @@ import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ItemSelectWithBrand } from '@/components/shared/ItemSelectWithBrand';
 import { Toast } from '@/components/ui/Toast';
 import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
@@ -279,7 +278,7 @@ export function LocalPurchaseView({ role, outletId }: { role: 'ADMIN_PUSAT' | 'A
               <Button type="button" onClick={handleAddItem} variant="outline" style={{ padding: '4px 12px', fontSize: 13 }}>+ Tambah Barang</Button>
             </div>
             
-            <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+
               <Table>
                 <thead>
                   <tr>
@@ -294,11 +293,12 @@ export function LocalPurchaseView({ role, outletId }: { role: 'ADMIN_PUSAT' | 'A
                   {items.map((item, index) => (
                     <tr key={index}>
                       <td style={{ padding: '8px 12px' }}>
-                        <ItemSelectWithBrand
+                        <Select
+                          searchable
+                          placeholder="Pilih Barang..."
                           value={item.item_id || ''}
                           onChange={(val) => handleUpdateItem(index, 'item_id', Number(val))}
-                          items={masterItems as any}
-                          placeholder="Pilih Barang..."
+                          options={masterItems.map((m: any) => ({ value: m.id, label: m.name }))}
                         />
                       </td>
                       <td style={{ padding: '8px 12px' }}>
@@ -342,7 +342,7 @@ export function LocalPurchaseView({ role, outletId }: { role: 'ADMIN_PUSAT' | 'A
                   )}
                 </tbody>
               </Table>
-            </div>
+
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: 20, marginTop: 4 }}>  

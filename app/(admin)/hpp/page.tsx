@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
@@ -47,7 +48,7 @@ const rp = (v: number | null) =>
 const pct = (v: number | null) =>
   v == null ? '—' : `${(Number(v) * 100).toFixed(1)}%`;
 
-import { CheckCircle2, AlertCircle, XCircle, Calculator, PackageSearch, FileText, ChevronLeft, ChevronRight, X, Pencil, Trash2, Package, Save, Eye } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, Calculator, PackageSearch, FileText, ChevronLeft, ChevronRight, X, Pencil, Trash2, Package, Save, Eye, Download, Upload } from 'lucide-react';
 
 function MarginBadge({ flag }: { flag: string | null }) {
   if (!flag) return <span style={{ color: 'var(--muted)', fontSize: 11 }}>—</span>;
@@ -89,6 +90,73 @@ function MenusTab({ categories }: { categories: Category[] }) {
 
   const [deleteMenuConfirm, setDeleteMenuConfirm] = useState<number | null>(null);
   const [deletingMenu, setDeletingMenu] = useState(false);
+
+  // Import Export Template State
+  const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
+  const [importSummary, setImportSummary] = useState<any>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importingStatus, setImportingStatus] = useState(false);
+
+  const handleUploadExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Clear input
+    e.target.value = '';
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    setToastInfo({ show: true, msg: 'Membaca file Excel...', type: 'info' });
+    
+    try {
+      const res = await fetch('/api/hpp/template/preview', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        setImportPreviewData(data.data || []);
+        setImportSummary(data.summary || null);
+        setIsImportModalOpen(true);
+        setToastInfo({ show: false, msg: '', type: 'info' }); // close loading toast
+      } else {
+        setToastInfo({ show: true, msg: data.error || 'Gagal membaca file', type: 'error' });
+      }
+    } catch (err: any) {
+      setToastInfo({ show: true, msg: err.message || 'Error uploading file', type: 'error' });
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (importPreviewData.length === 0 || !importSummary) return;
+    if (importSummary.error > 0) {
+      return setToastInfo({ show: true, msg: 'Masih ada data error, harap perbaiki file terlebih dahulu', type: 'error' });
+    }
+
+    setImportingStatus(true);
+    try {
+      const res = await fetch('/api/hpp/template/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: importPreviewData })
+      });
+      const resData = await res.json();
+      
+      if (res.ok) {
+        setToastInfo({ show: true, msg: 'Berhasil mengimpor resep', type: 'success' });
+        setIsImportModalOpen(false);
+        load();
+      } else {
+        setToastInfo({ show: true, msg: resData.error || 'Gagal import data', type: 'error' });
+      }
+    } catch (err: any) {
+      setToastInfo({ show: true, msg: err.message || 'Error importing data', type: 'error' });
+    } finally {
+      setImportingStatus(false);
+    }
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -212,6 +280,14 @@ function MenusTab({ categories }: { categories: Category[] }) {
           <a href="/hpp/recipe-builder/new" className="btn btn-sm btn-primary" style={{ textDecoration: 'none' }}>
             + Buat Data Produk
           </a>
+          <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 4px' }} />
+          <button onClick={() => window.open('/api/hpp/template/download', '_blank')} className="btn btn-sm" style={{ background: '#fff', border: '1px solid var(--border)' }}>
+            <Download size={14} /> Download Template
+          </button>
+          <label className="btn btn-sm" style={{ background: '#fff', border: '1px solid var(--border)', cursor: 'pointer', margin: 0 }}>
+            <Upload size={14} /> Upload Excel
+            <input type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleUploadExcel} />
+          </label>
           <div
             className="group"
             style={{ position: 'relative', cursor: 'help', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}
@@ -406,6 +482,80 @@ function MenusTab({ categories }: { categories: Category[] }) {
         onCancel={() => setDeleteMenuConfirm(null)}
         loading={deletingMenu}
       />
+
+      {/* Modal Import Preview */}
+      <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Preview Import Resep Menu" maxWidth={1000}>
+        <div style={{ padding: 20 }}>
+          {importSummary && (
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ padding: 12, borderRadius: 8, background: importSummary.error > 0 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${importSummary.error > 0 ? '#fecaca' : '#bbf7d0'}` }}>
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                  <div><strong>Total Baris:</strong> {importSummary.total}</div>
+                  <div style={{ color: '#15803d' }}><strong>Valid:</strong> {importSummary.valid}</div>
+                  <div style={{ color: '#b91c1c' }}><strong>Error:</strong> {importSummary.error}</div>
+                </div>
+                {importSummary.error > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: '#b91c1c' }}>
+                    Masih terdapat error pada baris data. Harap perbaiki file Excel Anda dan upload kembali.
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                <Button variant="outline" onClick={() => setIsImportModalOpen(false)}>Batal</Button>
+                <Button 
+                  variant="primary" 
+                  onClick={handleConfirmImport} 
+                  disabled={!importSummary || importSummary.error > 0 || importingStatus}
+                >
+                  {importingStatus ? 'Menyimpan...' : 'Proses Import'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ maxHeight: 400, overflowY: 'auto', borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+            <Table>
+              <thead>
+                <tr>
+                  <th style={{ width: 60, textAlign: 'center' }}>Baris</th>
+                  <th>Menu</th>
+                  <th>Bahan</th>
+                  <th style={{ textAlign: 'right' }}>Takaran</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importPreviewData.map((row, i) => (
+                  <tr key={i} style={{ background: row.isValid ? 'transparent' : '#fef2f2' }}>
+                    <td style={{ textAlign: 'center' }}>{row.row_index}</td>
+                    <td>
+                      <div>{row.nama_menu}</div>
+                      <div className="muted" style={{ fontSize: 11 }}>ID: {row.menu_id}</div>
+                    </td>
+                    <td>
+                      <div>{row.nama_bahan}</div>
+                      <div className="muted" style={{ fontSize: 11 }}>ID: {row.bahan_id}</div>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{row.takaran} {row.satuan}</td>
+                    <td>
+                      {row.isValid ? (
+                        <span style={{ color: '#15803d', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                          <CheckCircle2 size={14} /> Valid
+                        </span>
+                      ) : (
+                        <span style={{ color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                          <XCircle size={14} /> {row.errorMessage}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        </div>
+      </Modal>
 
       <Toast isOpen={toastInfo.show} message={toastInfo.msg} type={toastInfo.type} onClose={() => setToastInfo({ ...toastInfo, show: false })} />
     </>

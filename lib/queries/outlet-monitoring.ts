@@ -4,6 +4,7 @@ import { approveAndTransferDeliveryNote } from './delivery-notes';
 export interface OutletMonitoringOutlet {
   id: number;
   name: string;
+  venue_id?: number | null;
   last_request_date: string | null;
   last_do_date: string | null;
   last_sales_sync: string | null;
@@ -16,11 +17,13 @@ export interface OutletMonitoringItem {
   category_id: number;
   purchase_unit: string;
   smallest_unit: string;
-  conversion_ratio: number;
-  minimum_threshold: number;
+  conversion_ratio: string;
+  minimum_threshold: string;
   is_active: boolean;
-  central_stock: number;
-  current_average_price: number;
+  is_global?: boolean;
+  venue_ids?: number[];
+  central_stock: string | number;
+  current_average_price: string | number;
 }
 
 export interface OutletMonitoringCategory {
@@ -44,6 +47,7 @@ export interface OutletStockMatrixCell {
   out_since_opname: number;    // total OUT setelah opname terakhir (satuan terkecil)
   stock_smallest: number;
   stock_package: number;
+  is_applicable?: boolean;
 }
 
 export interface ConsumedMaterial {
@@ -83,6 +87,7 @@ export async function getOutletMonitoringData() {
       SELECT 
         o.id, 
         o.name,
+        o.venue_id,
         (SELECT MAX(created_at) FROM orders WHERE outlet_id = o.id) AS last_request_date,
         (SELECT COALESCE(MAX(delivery_date), MAX(created_at)::date) FROM delivery_notes WHERE outlet_id = o.id AND status != 'DIBATALKAN') AS last_do_date,
         (SELECT MAX(period_end) FROM moka_item_sales WHERE outlet_id = o.id) AS last_sales_sync
@@ -101,6 +106,8 @@ export async function getOutletMonitoringData() {
         i.conversion_ratio,
         i.minimum_threshold,
         i.is_active,
+        i.is_global,
+        (SELECT json_agg(iv.venue_id) FROM item_venues iv WHERE iv.item_id = i.id) AS venue_ids,
         COALESCE((
           SELECT ending_balance 
           FROM inventory_logs 
@@ -269,6 +276,14 @@ export async function getOutletMonitoringData() {
 
       const opnameData = opnameMap[item.id]?.[o.id] ?? null;
 
+      const hasHistory = (balMap[item.id] && o.id in balMap[item.id]) || (inMap[item.id] && o.id in inMap[item.id]) || (outMap[item.id] && o.id in outMap[item.id]) || opnameData !== null;
+      let isApplicable = true;
+      if (item.is_global === false) {
+        if (!item.venue_ids || !o.venue_id || !item.venue_ids.map(Number).includes(Number(o.venue_id))) {
+          isApplicable = hasHistory;
+        }
+      }
+
       let balSmall: number;
       let opnameQty = 0;
       let opnameDate: string | null = null;
@@ -302,7 +317,8 @@ export async function getOutletMonitoringData() {
         in_since_opname: inSince,
         out_since_opname: outSince,
         stock_smallest: balSmall,
-        stock_package: balSmall / ratio
+        stock_package: balSmall / ratio,
+        is_applicable: isApplicable,
       };
     }
   }

@@ -54,6 +54,9 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
     LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = ing.id
     LEFT JOIN recipes r ON r.id = ri.recipe_id
     LEFT JOIN outlet_venues ov ON ov.venue_id = r.venue_id AND ov.outlet_id = $1
+    -- Join untuk filter item non-global berdasarkan venue outlet
+    LEFT JOIN outlets out_venue ON out_venue.id = $1
+    LEFT JOIN item_venues iv ON iv.item_id = i.id AND iv.venue_id = out_venue.venue_id
     -- WARN-03 Fix: JOIN ke subquery agregat (bukan correlated subquery per-baris)
     LEFT JOIN (
       SELECT oi.item_id, SUM(COALESCE(oi.approved_smallest_qty, oi.smallest_unit_qty)) AS incoming_balance
@@ -67,8 +70,13 @@ export async function getOutletStocks(outletId: number): Promise<OutletStockRow[
     WHERE i.is_active = true
       AND i.parent_id IS NULL -- Outlet hanya melihat stok Induk
       AND (
-        os.outlet_id IS NOT NULL 
-        OR ois.outlet_id IS NOT NULL 
+        -- Item global: tampil untuk semua outlet
+        i.is_global = TRUE
+        -- Item non-global: hanya tampil jika venue outlet cocok dengan item_venues
+        OR iv.item_id IS NOT NULL
+        -- Sudah pernah ada stok di outlet ini (tetap tampilkan meski venue berubah)
+        OR os.outlet_id IS NOT NULL
+        OR ois.outlet_id IS NOT NULL
         OR ov.outlet_id IS NOT NULL
       )
     ORDER BY c.name, i.name

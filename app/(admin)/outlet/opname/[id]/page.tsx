@@ -45,6 +45,7 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
   const [limit, setLimit] = useState<number | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' as 'success' | 'error' });
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -164,39 +165,81 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <input
-              type="text"
-              className="input"
-              placeholder="Cari nama barang..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              style={{ width: 180, height: 32, fontSize: 11 }}
-            />
-            <Select
-              value={limit}
-              onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
-              options={[
-                { value: 'all', label: 'Semua' },
-                { value: 8, label: '8' },
-                { value: 32, label: '32' }
-              ]}
-              inputStyle={{ padding: '4px 10px', height: 32, fontSize: 11, minWidth: 90 }}
-              style={{ width: 100 }}
-            />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Button variant="outline" size="sm" onClick={() => setShowMobileFilters(!showMobileFilters)} className="md:hidden" style={{ height: 32, padding: '0 8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            </Button>
+            <div className="hidden md:flex gap-2">
+              <input
+                type="text"
+                className="input"
+                placeholder="Cari nama barang..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                style={{ width: 180, height: 32, fontSize: 11 }}
+              />
+              <Select
+                value={limit}
+                onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
+                options={[
+                  { value: 'all', label: 'Semua' },
+                  { value: 8, label: '8' },
+                  { value: 32, label: '32' }
+                ]}
+                inputStyle={{ padding: '4px 10px', height: 32, fontSize: 11, minWidth: 90 }}
+                style={{ width: 100 }}
+              />
+            </div>
             {!isLocked && (
               <>
-                <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving}>Simpan Draft</Button>
-                <Button variant="primary" size="sm" onClick={() => setShowConfirm(true)} disabled={saving}>
-                  Kunci & Submit
+                <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving} style={{ padding: '0 8px', height: 32 }}>
+                  <span className="hidden md:inline">Simpan Draft</span>
+                  <span className="md:hidden" title="Simpan Draft"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg></span>
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => setShowConfirm(true)} disabled={saving} style={{ padding: '0 8px', height: 32 }}>
+                  <span className="hidden md:inline">Kunci & Submit</span>
+                  <span className="md:hidden" title="Kunci & Submit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
                 </Button>
               </>
             )}
             <Link href="/outlet/opname">
-              <Button variant="outline" size="sm">Kembali</Button>
+              <Button variant="outline" size="sm" style={{ padding: '0 8px', height: 32 }}>
+                <span className="hidden md:inline">Kembali</span>
+                <span className="md:hidden" title="Kembali"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></span>
+              </Button>
             </Link>
           </div>
         </div>
+
+        {showMobileFilters && (
+          <div className="md:hidden" style={{ padding: '12px 24px', borderBottom: '1px solid var(--border)', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div>
+              <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 600 }}>Cari Barang</div>
+              <input
+                type="text"
+                className="input w-full"
+                placeholder="Nama barang..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                style={{ height: 32, fontSize: 12 }}
+              />
+            </div>
+            <div>
+              <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 600 }}>Tampilkan Data</div>
+              <Select
+                value={limit}
+                onChange={(val) => { setLimit(val === 'all' ? 'all' : Number(val)); setCurrentPage(1); }}
+                options={[
+                  { value: 'all', label: 'Semua' },
+                  { value: 8, label: '8' },
+                  { value: 32, label: '32' }
+                ]}
+                inputStyle={{ padding: '4px 10px', height: 32, fontSize: 12, width: '100%' }}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="card-body flush">
           <Table>
@@ -234,14 +277,14 @@ export default function OutletOpnameDetailPage({ params }: { params: Promise<{ i
 
                 return (
                   <tr key={item.item_id}>
-                    <td className="font-bold">
-                      {item.item_name}
-                      <div className="muted font-normal" style={{ fontSize: 10, marginTop: 2 }}>
+                    <td className="font-bold text-[10px] md:text-[12px]">
+                      {item.item_name as string}
+                      <div className="muted font-normal text-[9px] md:text-[10px]" style={{ marginTop: 2 }}>
                         Satuan: {smallUnit}
                       </div>
                     </td>
-                    <td className="muted">{item.category_name}</td>
-                    <td className="right num">
+                    <td className="muted text-[10px] md:text-[11px]">{item.category_name as string}</td>
+                    <td className="right num text-[10px] md:text-[12px]">
                       <div className="font-bold">
                         {sysBal.toLocaleString('id-ID', { maximumFractionDigits: 0 })} {smallUnit}
                       </div>

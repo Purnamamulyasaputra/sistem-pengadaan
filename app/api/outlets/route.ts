@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
       email: body.email,
       phone: body.phone,
       map_location: body.map_location,
-      is_active: body.is_active
+      is_active: body.is_active,
+      venue_id: body.venue_id ? Number(body.venue_id) : null,
     });
     return NextResponse.json({ success: true, message: 'Outlet berhasil ditambahkan', data: outlet }, { status: 201 });
   } catch (err: unknown) {
@@ -56,7 +57,9 @@ export async function PATCH(req: NextRequest) {
       email: body.email,
       phone: body.phone,
       map_location: body.map_location,
-      is_active: body.is_active
+      is_active: body.is_active,
+      // venue_id: null jika dikosongkan, number jika dipilih
+      venue_id: body.venue_id ? Number(body.venue_id) : null,
     });
     return NextResponse.json({ success: true, message: 'Outlet berhasil diperbarui', data: outlet });
   } catch (err: unknown) {

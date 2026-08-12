@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
       is_split_allowed: body.is_split_allowed === true || body.is_split_allowed === 'true',
       min_order_qty: Number(body.min_order_qty ?? 1),
       order_multiple: Number(body.order_multiple ?? 1),
+      is_global: body.is_global !== false && body.is_global !== 'false', // default true
+      venue_ids: Array.isArray(body.venue_ids) ? body.venue_ids.map(Number) : [],
     };
 
     let item;
